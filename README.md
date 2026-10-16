@@ -1,0 +1,313 @@
+# ETS2 Local Radio Native
+
+**English** · [Deutsch](README.de.md)
+
+Local, real-world radio for **Euro Truck Simulator 2**, as a single native plugin DLL.
+While you drive, the plugin works out which region you are in and plays that region's real internet radio stations, with static when reception gets weak and a smooth switch when you cross a border.
+
+By **ScufyKing**. The whole radio runs inside the game:
+
+- no server EXE, no background program
+- no browser, no web page, no local HTTP server
+- no Python or Node.js for players
+- no changes to game files
+
+Copy the DLL and its data folder into the game's `plugins` folder, start ETS2, and the radio plays.
+
+> **Status:** Tested in ETS2 1.61 (Windows x64): the plugin loads, reads the truck position, switches stations by region, plays audio and draws the in-game overlay. American Truck Simulator data is included but ATS is untested.
+
+---
+
+## Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Controls](#controls)
+- [Configuration](#configuration)
+- [Adding your own stations](#adding-your-own-stations)
+- [Troubleshooting](#troubleshooting)
+- [Known limitations](#known-limitations)
+- [How it works](#how-it-works)
+- [Building from source](#building-from-source)
+- [Project structure](#project-structure)
+- [License and credits](#license-and-credits)
+
+---
+
+## Features
+
+- **Stations by location.** About 2,100 internet radio stations, assigned to 2,064 cities on the base map, the DLC maps and many map mods (ProMods, RusMap and others).
+- **Realistic range and switching.** Every city has a broadcast range; regions overlap at borders, and the radio only switches automatically when another region is clearly better received.
+- **Reception and static.** The further you are from a region, the more static you hear, and weak signals drop out now and then.
+- **Smooth transitions** with a tuning sound.
+- **In-game overlay.** On every station change, volume change and so on, a panel appears for a few seconds with the station name, country, signal bars, favourite heart and station logo. Works in fullscreen. Logos are bundled, so nothing is downloaded.
+- **Radio only with the ignition on** (or only with the engine running, or always; your choice).
+- **Keyboard and controller controls**, freely configurable.
+- **Favourites per country.**
+- **Your own stations** in a separate file that survives updates.
+- **Automatic reconnect** when a stream drops.
+- **Plays MP3, AAC and HLS streams** (MP3 with a built-in decoder, AAC/HLS through Windows Media Foundation) and local audio files.
+
+## Installation
+
+**Requirements:** Windows 10 or 11 (64-bit), Euro Truck Simulator 2 (64-bit), an internet connection for the streams.
+
+1. Download the release package and unzip it.
+2. Open your game folder's plugin directory:
+   `…\steamapps\common\Euro Truck Simulator 2\bin\win_x64\plugins\`
+   If the `plugins` folder does not exist, create it.
+3. Copy into it:
+   - `local-radio-native.dll`
+   - the folder `local-radio\` (contains the station data, sounds and later your settings)
+4. Remove any other radio plugin DLL that plays Local Radio (for example a `local-radio.dll`) from this folder, so two radios don't play at once.
+5. Start ETS2. The game asks whether to allow "advanced SDK features"; confirm with **OK**.
+
+The radio starts automatically as soon as the truck has a position and the ignition is on.
+
+The finished folder looks like this:
+
+```
+plugins\
+├── local-radio-native.dll
+└── local-radio\
+    ├── ets2.json                    station and city data (ETS2)
+    ├── ats.json                     station and city data (ATS)
+    ├── custom-stations-ets2.json    your own stations (optional)
+    ├── audio\                       static and tuning sound
+    ├── local-radio.json             settings (created on first start)
+    ├── favourites-ets2.json         your favourites (created automatically)
+    ├── logos\                       downloaded station logos (cache)
+    └── local-radio.log              log file
+```
+
+**Updating:** close ETS2 and replace `local-radio-native.dll`. Your settings, favourites and own stations stay untouched.
+
+**Uninstalling:** delete `local-radio-native.dll` and the `local-radio` folder.
+
+## Controls
+
+| Action | Default key | Setting in `local-radio.json` |
+|---|---|---|
+| Next station | Page Down | `keys.next` |
+| Previous station | Page Up | `keys.previous` |
+| Stop / start | End | `keys.stop` |
+| Volume up | `+` (main keyboard) | `keys.volumeUp` |
+| Volume down | `-` (main keyboard) | `keys.volumeDown` |
+| Save current station as favourite for this country | Pause | `keys.makeFavourite` |
+| Go to favourite | – | `keys.goToFavourite` |
+| Mute | – | `keys.mute` |
+| Show overlay | – | `keys.showOverlay` |
+
+"Next" and "Previous" step through every station of every region you currently receive.
+
+Keys only react while ETS2 is the active window, so they do not interfere with other programs.
+
+**Key names** use the .NET key names: letters `A`–`Z`, digits `0`–`9`, `F1`–`F24`, `NumPad0`–`NumPad9`, `PageUp`, `Next` (= Page Down), `Home`, `End`, `Insert`, `Delete`, `Up`, `Down`, `Left`, `Right`, `Pause`, `Space`, `Oemplus`, `OemMinus`, `Add`, `Subtract`, `MediaNextTrack`, `MediaPlayPause` and more. Combinations work too, e.g. `"Ctrl+Shift+R"`. An empty value `""` disables a key.
+
+**Controller:** set `controllerIndex` (0 = first controller) and give each action a button number under `buttons`, counting from 0. `-1` disables it. The button numbers match those shown in the Windows controller settings minus 1.
+
+## Configuration
+
+All settings are in `local-radio\local-radio.json`. The file is created with default values on first start; change it while the game is closed. Comments (`// …`) are allowed.
+
+### Radio
+
+| Key | Default | Meaning |
+|---|---|---|
+| `radius` | `7500` | Base broadcast range of a city in game metres |
+| `threshold` | `0.15` | How much better another region must be received before the radio switches automatically. `0` = switch immediately, `1` = never |
+| `whitenoise` | `true` | Static when reception is weak |
+| `transitionWhitenoise` | `true` | Tuning sound when changing stations |
+| `volume` | `0.8` | Volume from 0.0 to 1.0 (saved automatically) |
+| `muted` | `false` | Muted (saved automatically) |
+| `autoPlay` | `true` | Start playing automatically |
+| `powerSource` | `"ignition"` | `"ignition"` = only with ignition on, `"engine"` = only with the engine running, `"always"` = always |
+| `dataFile` | `""` | Different station/city file in the `local-radio` folder (empty = `ets2.json` or `ats.json`) |
+| `onlyWhenGameFocused` | `true` | Keys only work while the game is in the foreground |
+| `reconnectMaxSeconds` | `30` | Maximum wait between reconnect attempts after a stream drops |
+
+### Overlay (`"overlay": { … }`)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `mode` | `"auto"` | `"auto"` (recommended), `"d3d11"` (draw in the game image), `"window"` (transparent window over the game), `"off"` |
+| `position` | `"top-center"` | `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right` |
+| `offsetX`, `offsetY` | `0`, `0.07` | Distance from the screen edge as a fraction of screen height (0.07 = 7 %) |
+| `scale` | `1.0` | Size; also scales automatically with your resolution |
+| `durationSeconds` | `6` | How long the panel stays visible |
+| `alwaysVisible` | `false` | Keep the panel on screen all the time |
+| `showLogos` | `true` | Show station logos (bundled in `local-radio\logos\`) |
+| `urlPrefix` | `""` | Optional web address to download missing logos from (`<urlPrefix><logo path>`). Empty = only bundled logos, no network access |
+| `textNowPlaying`, `textVolume`, `textStopped`, `textMuted`, `textFavourite`, `textConnecting`, `textUnavailable`, `textPowerOff` | German texts | All texts on the overlay. For English, use e.g. `"Now playing:"`, `"Volume"`, `"Radio off"`, `"Muted"`, `"Saved as favourite"`, `"connecting…"`, `"Station unavailable"`, `"Ignition off"` |
+
+### Truck screen display (`"display": { … }`, optional)
+
+The plugin can open a native window called "Local Radio Display" that shows the radio as an infotainment screen. The separate plugin [PrismTextureStreamer](https://github.com/Baldywaldy09/PrismTextureStreamer) (not part of this project) can mirror that window onto the truck's GPS or dashboard screen. It is off by default.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `false` | Open the display window |
+| `width`, `height` | `1280`, `720` | Size in pixels |
+| `offscreen` | `true` | Place the window outside the visible desktop. If it stays black in PrismTextureStreamer, set `false` |
+| `title` | `"Local Radio Display"` | Window title |
+
+## Adding your own stations
+
+Put your stations in `local-radio\custom-stations-ets2.json`. That file is never overwritten by updates.
+
+```jsonc
+{
+  // key = region from ets2.json, e.g. "germany" (nationwide), "germany-bw", "germany-br",
+  // "austria", "netherlands", "uk", "france", ...
+  "germany": [
+    {
+      "name": "Radio Bollerwagen",
+      "url": "https://stream.ffn.de/radiobollerwagen/mp3-192",
+      "logo": "stations/images-europe/germany-nds/Radio Bollerwagen.png"
+    }
+  ]
+}
+```
+
+- A station with the **same name** as an existing one in that region replaces it (e.g. to fix a broken stream URL).
+- A station with a **new name** is added to the end of that region's list.
+- `logo` is optional: a full `https://` address of an image (PNG or JPG), or the name of a file you put in `local-radio\logos\`.
+- `url` can also be a local audio file. A relative path is looked up in the `local-radio` folder.
+
+To find the region names, open `ets2.json` and look under `"stations"`. Regions with a hyphen are subregions, e.g. `germany-swr` or `germany-muenchen`. Near the border you often receive several regions at once.
+
+## Troubleshooting
+
+Almost every problem can be diagnosed from `local-radio\local-radio.log`. When asking for help, always attach this file.
+
+| Problem | Cause and solution |
+|---|---|
+| No `local-radio.log` is created | The DLL was not loaded. Check the folder: it must be `bin\win_x64\plugins\`. Did you confirm the "advanced SDK features" message with OK? |
+| "Data file not found" in the log | The `local-radio` folder is missing next to the DLL. |
+| No sound, log shows `Connected:` | Check Windows' default audio device (shown in the log as `Audio device: …`). Ignition on? Muted? |
+| "MP3 decoder init failed" | The stream is not real MP3. Report the URL in the log, or replace it with your own stations. |
+| "Media Foundation cannot open …" | Windows cannot play this format (e.g. some HLS or Ogg streams). Switch to another station or replace the URL. |
+| Overlay says "Station unavailable" | The stream cannot be reached right now. The plugin keeps retrying in the background; usually it is quicker to switch stations. |
+| No overlay | Look for `Overlay:` in the log. `Present hook installed` and `D3D11 renderer ready` mean it is active. If another overlay tool conflicts, try `"mode": "window"`. |
+| Overlay hides part of the HUD | Change `position`, `offsetY` or `scale`. |
+| Keys do nothing | Is the game the active window? Another program may be using the key; pick a different one. |
+| A station I expected is missing | It is not assigned to the region you are in. You only receive regions within range. Add it as your own station. |
+
+## Known limitations
+
+- **No text on the truck's built-in radio display.** The SCS Telemetry SDK can read data and provide input devices, but cannot change the cockpit. Instead there is the overlay, plus the optional display window for PrismTextureStreamer.
+- **The game's own radio is not controlled.** The plugin plays its own audio through Windows.
+- **Not every stream works.** Station URLs change over time. Some AAC/HLS streams cannot be opened by Windows Media Foundation; you can replace any URL with your own stations.
+- **The overlay hooks into the game's DirectX 11 output.** With the OpenGL renderer, the plugin falls back to a transparent window, which is not guaranteed over exclusive fullscreen. Conflicts with other overlay tools (Steam overlay, RTSS, ReShade, multiplayer clients) are possible.
+- **The DLL stays loaded until the game exits** once the overlay is active. This is intentional, so the game never calls into unloaded code.
+- **3 stations have no logo** (their logos only exist as SVG).
+- **American Truck Simulator** data is included and detected automatically, but ATS has not been tested.
+
+## How it works
+
+Everything a radio of this kind needs runs inside the plugin, with no separate program:
+
+| Part | Implementation |
+|---|---|
+| Truck position, ignition, engine | Read directly from the SCS Telemetry SDK (`truck.world.placement`, `truck.electric.enabled`, `truck.engine.enabled`) |
+| Station choice, reception, static | `RadioManager` and `ReceptionCalculator` in C++ |
+| Playback | miniaudio (WASAPI), WinHTTP and Windows Media Foundation |
+| Controls, favourites, settings | Radio thread in the DLL; settings and favourites as JSON files |
+| Display | Own Direct3D 11 overlay |
+
+```
+ETS2 ──scs_telemetry_init──► Plugin.cpp ── stores only position and ignition (atomic, never blocks)
+                                 │
+                                 ▼
+                           radio thread (every 50 ms)
+                           ├─ InputManager        keyboard / controller
+                           ├─ RadioManager        station logic ported from main.js
+                           │   ├─ StationDatabase, Favourites, custom stations
+                           │   └─ ReceptionCalculator
+                           ├─ Overlay             panel rendering, logo cache
+                           │   └─ D3D11Overlay    hook on IDXGISwapChain::Present
+                           ├─ DisplayWindow       optional window for PrismTextureStreamer
+                           └─ AudioEngine         mixer: stream + static + tuning sound
+                               └─ StreamSession   one thread per station, 4 s buffer, reconnect
+```
+
+Design rules:
+
+- `DllMain` does nothing. Threads, audio device and network start only in `scs_telemetry_init`, as the SDK intends.
+- Game callbacks only store values and never wait for audio or network.
+- Stream threads hold a reference on the DLL, so a slow network call cannot crash the game when the plugin is unloaded.
+- The overlay saves and restores the game's complete Direct3D pipeline state (`SwapDeviceContextState`) around its own drawing.
+
+## Building from source
+
+**Requirements:** CMake 3.16 or newer and either Visual Studio 2019/2022 (x64) or a MinGW-w64 / llvm-mingw toolchain. All libraries are included in the repository; nothing has to be downloaded.
+
+**Visual Studio (Windows):**
+
+```bat
+cmake -S . -B build -A x64
+cmake --build build --config Release
+```
+
+**Cross-compile on Linux** (the release DLLs are built this way, with llvm-mingw 20241217):
+
+```sh
+cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=toolchain-mingw.cmake -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
+The output is `local-radio-native.dll` plus a ready-made `local-radio\` folder next to it.
+
+**Regenerating the station data:** `tools/convert_data.js` converts station and city lists in the JavaScript format they were published in into the plugin's JSON format (Node.js is only needed for this step, never by players):
+
+```sh
+git clone <station data repository>
+node tools/convert_data.js <path>/web data
+```
+
+**Regression test for station selection:** `tools/equivalence-test/` runs a JavaScript reference implementation and the C++ code side by side at thousands of positions and compares the results.
+
+### Libraries used
+
+| Library | Version | License | Purpose |
+|---|---|---|---|
+| [miniaudio](https://github.com/mackron/miniaudio) | 0.11.25 | Public domain or MIT-0 | Audio output, MP3 decoding, resampling |
+| [nlohmann/json](https://github.com/nlohmann/json) | 3.11.3 | MIT | Reading the JSON files |
+| SCS Telemetry SDK | 1.x | MIT-style, see `sdk/sdk_license.txt` | Interface to the game |
+| Windows system libraries | – | – | WinHTTP, Media Foundation, Direct3D 11, DXGI, WIC, GDI, WinMM, URLMon; `d3dcompiler_47.dll` at runtime (part of Windows 10/11) |
+
+The DLL is statically linked; no Visual C++ redistributable is needed.
+
+## Project structure
+
+```
+├── CMakeLists.txt             build definition
+├── toolchain-mingw.cmake      toolchain for cross-compiling
+├── src/                       C++ source of the plugin
+│   ├── Plugin.cpp             SDK entry points, telemetry, radio thread
+│   ├── RadioManager.*         station logic (port of main.js)
+│   ├── ReceptionCalculator.*  range and reception
+│   ├── StationDatabase.*      stations, cities, favourites, own stations
+│   ├── AudioEngine.*          mixer and audio device
+│   ├── StreamSource.*         network streams, decoding, reconnect
+│   ├── NetReader.h            makes the start of a live stream rewindable
+│   ├── Overlay.*, OverlayImage.*, D3D11Overlay.*   in-game overlay
+│   ├── DisplayWindow.*        optional display window
+│   ├── InputManager.*         keyboard and controller
+│   ├── Config.*, Logger.*     settings and log
+│   └── MiniaudioImpl.cpp      miniaudio compilation unit
+├── data/                      station/city data, logos and sounds
+├── sdk/                       SCS Telemetry SDK headers
+├── third_party/               miniaudio, nlohmann/json
+└── tools/                     data converter, equivalence test
+```
+
+## License and credits
+
+ETS2 Local Radio Native © 2026 **ScufyKing**. Licensed under the **Mozilla Public License 2.0** (MPL-2.0), see [`LICENSE`](LICENSE).
+
+The station lists, city coordinates, the static and tuning sounds and parts of the station selection logic are taken from MPL-2.0 licensed third-party sources. The license requires their copyright notices to be kept; they are listed in [`NOTICE.md`](NOTICE.md), together with the notices for the libraries used. Station logos and radio streams belong to their respective broadcasters.
+
+This project is not affiliated with or endorsed by SCS Software. Euro Truck Simulator 2 and American Truck Simulator are trademarks of SCS Software.
+
+**Contributing:** Issues and pull requests are welcome. Please attach `local-radio.log` to bug reports, and report broken station URLs together with the station name and region.
