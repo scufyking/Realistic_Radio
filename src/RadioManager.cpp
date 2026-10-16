@@ -40,10 +40,13 @@ OverlayInfo RadioManager::CurrentInfo(const std::wstring& sub) {
     auto it = last_.available.find(currentCountry_);
     i.bars = playing_ ? (it == last_.available.end() ? 0 : ReceptionBars(it->second.whitenoise)) : -1;
     i.favourite = fav_.Get(currentCountry_) == s.name;
-    if (!sub.empty()) i.subtitle = sub;
+    i.lcd = i.title;
+    if (!playing_) i.lcd = Utf8ToWide(cfg_.overlay.textStopped);
+    if (!sub.empty()) { i.subtitle = sub; i.lcd = sub; }
     else {
         i.subtitle = Utf8ToWide(db_.CountryDisplayName(currentCountry_));
         if (playing_ && audio_.StreamFailures() > 0) i.subtitle += L"  \u2022  " + Utf8ToWide(cfg_.overlay.textUnavailable);
+        if (playing_ && audio_.StreamFailures() > 0) i.lcd = i.title + L" - " + Utf8ToWide(cfg_.overlay.textUnavailable);
         else if (playing_ && audio_.IsBuffering()) i.subtitle += L"  \u2022  " + Utf8ToWide(cfg_.overlay.textConnecting);
     }
     return i;
@@ -208,7 +211,7 @@ void RadioManager::NextStation(int amount) {
 
 void RadioManager::OnAction(Action a) {
     if (!powered_ && a != Action::VolumeUp && a != Action::VolumeDown && a != Action::Mute) {
-        overlay_.Show(OverlayInfo{L"", L"Realistic Radio", Utf8ToWide(cfg_.overlay.textPowerOff), -1, false}, "");
+        overlay_.Show(OverlayInfo{L"", L"Realistic Radio", Utf8ToWide(cfg_.overlay.textPowerOff), -1, false, Utf8ToWide(cfg_.overlay.textPowerOff)}, "");
         return;
     }
     switch (a) {

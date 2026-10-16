@@ -12,7 +12,7 @@ By **ScufyKing**. The whole radio runs inside the game:
 - no Python or Node.js for players
 - no changes to game files
 
-Copy the DLL and its data folder into the game's `plugins` folder, start ETS2, and the radio plays.
+Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ETS2, and the radio plays. Station data and sounds are built into the DLL.
 
 > **Status:** Tested in ETS2 1.61 (Windows x64): the plugin loads, reads the truck position, switches stations by region, plays audio and draws the in-game overlay. American Truck Simulator data is included but ATS is untested.
 
@@ -52,38 +52,36 @@ Copy the DLL and its data folder into the game's `plugins` folder, start ETS2, a
 
 **Requirements:** Windows 10 or 11 (64-bit), Euro Truck Simulator 2 (64-bit), an internet connection for the streams.
 
-1. Download the release package and unzip it.
+1. Download `realistic-radio.dll`.
 2. Open your game folder's plugin directory:
    `…\steamapps\common\Euro Truck Simulator 2\bin\win_x64\plugins\`
    If the `plugins` folder does not exist, create it.
-3. Copy into it:
-   - `realistic-radio.dll`
-   - the folder `realistic-radio\` (contains the station data, sounds and later your settings)
+3. Copy `realistic-radio.dll` into it. That is all — no other files are needed.
 4. Remove any other radio plugin DLL from this folder (e.g. an older `local-radio-native.dll` or `local-radio.dll`), so two radios don't play at once.
 5. Start ETS2. The game asks whether to allow "advanced SDK features"; confirm with **OK**.
 
-The radio starts automatically as soon as the truck has a position and the ignition is on.
+On the first start the plugin creates the folder `realistic-radio\` next to the DLL and unpacks its station data and sounds into it. The radio starts automatically as soon as the truck has a position and the ignition is on.
 
-The finished folder looks like this:
+Afterwards the folder looks like this (everything except the DLL is created automatically):
 
 ```
 plugins\
 ├── realistic-radio.dll
 └── realistic-radio\
-    ├── ets2.json                    station and city data (ETS2)
-    ├── ats.json                     station and city data (ATS)
+    ├── ets2.json                    station and city data (ETS2, from the DLL)
+    ├── ats.json                     station and city data (ATS, from the DLL)
     ├── custom-stations-ets2.example.json   example for your own stations
     ├── custom-stations-ets2.json    your own stations (optional, created by you)
-    ├── audio\                       static and tuning sound
+    ├── audio\                       static and tuning sound (from the DLL)
     ├── realistic-radio.json         settings (created on first start)
     ├── favourites-ets2.json         your favourites (created automatically)
     ├── logos\                       downloaded station logos (cache)
     └── realistic-radio.log          log file
 ```
 
-**Updating:** close ETS2 and replace `realistic-radio.dll`. Your settings, favourites and own stations stay untouched.
+**Updating:** close ETS2 and replace `realistic-radio.dll`. If the new DLL contains newer station data, it replaces `ets2.json`, `ats.json` and the sounds on the next start. Your settings, favourites, own stations and logos stay untouched.
 
-**Coming from "ETS2 Local Radio Native"** (the previous name): copy `realistic-radio.dll` and the `realistic-radio\` folder into `plugins`, then delete `local-radio-native.dll`. On the first start, your settings, favourites, own stations and cached logos are copied over from the old `local-radio\` folder automatically; afterwards you can delete that folder too.
+**Coming from "ETS2 Local Radio Native"** (the previous name): copy `realistic-radio.dll` into `plugins` and delete `local-radio-native.dll`. On the first start, your settings, favourites, own stations and cached logos are copied over from the old `local-radio\` folder automatically; afterwards you can delete that folder too.
 
 **Uninstalling:** delete `realistic-radio.dll` and the `realistic-radio` folder.
 
@@ -135,6 +133,7 @@ All settings are in `realistic-radio\realistic-radio.json`. The file is created 
 
 | Key | Default | Meaning |
 |---|---|---|
+| `style` | `"panel"` | `"panel"` = info panel with logo, `"radio"` = car-radio dot-matrix display (see below) |
 | `mode` | `"auto"` | `"auto"` (recommended), `"d3d11"` (draw in the game image), `"window"` (transparent window over the game), `"off"` |
 | `position` | `"top-center"` | `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right` |
 | `offsetX`, `offsetY` | `0`, `0.07` | Distance from the screen edge as a fraction of screen height (0.07 = 7 %) |
@@ -144,6 +143,21 @@ All settings are in `realistic-radio\realistic-radio.json`. The file is created 
 | `showLogos` | `true` | Show station logos |
 | `urlPrefix` | `"https://radio.scufystudio.de/logo/"` | Where missing logos are downloaded from. Downloaded logos are kept in `realistic-radio\logos\` and never downloaded again. Empty = only logos already in that folder, no network access |
 | `textNowPlaying`, `textVolume`, `textStopped`, `textMuted`, `textFavourite`, `textConnecting`, `textUnavailable`, `textPowerOff` | German texts | All texts on the overlay. For English, use e.g. `"Now playing:"`, `"Volume"`, `"Radio off"`, `"Muted"`, `"Saved as favourite"`, `"connecting…"`, `"Station unavailable"`, `"Ignition off"` |
+
+#### Car-radio display (`"style": "radio"`)
+
+Instead of the panel, a narrow dot-matrix display like a real car radio appears above the dashboard: station name in capitals, a scrolling marquee for long names, and a signal indicator. Volume, mute and other messages are shown on the same display. Settings under `"overlay": { "radio": { … } }`:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `position` | `"bottom-center"` | Same values as the panel position |
+| `offsetX`, `offsetY` | `0`, `0.20` | Distance from the screen edge as a fraction of screen height |
+| `scale` | `1.0` | Size |
+| `columns` | `16` | Characters on the display (8–40) |
+| `color` | `"amber"` | `amber`, `green`, `blue`, `white`, `red`, `orange` or `#RRGGBB` |
+| `scrollSeconds` | `0.3` | Marquee speed: seconds per character |
+
+The dot-matrix characters use the classic 5×7 font from the Adafruit GFX Library (BSD license, see `NOTICE.md`); letters it lacks are shown as their base letter (À → A), other scripts such as Cyrillic are drawn with a Windows font.
 
 ### Truck screen display (`"display": { … }`, optional)
 
@@ -189,7 +203,7 @@ Almost every problem can be diagnosed from `realistic-radio\realistic-radio.log`
 |---|---|
 | No `realistic-radio.log` is created | The DLL was not loaded. Check the folder: it must be `bin\win_x64\plugins\`. Did you confirm the "advanced SDK features" message with OK? |
 | Radio still audible at volume 0, or two stations at once | Two copies of the plugin are installed (e.g. `realistic-radio (1).dll`). The log then says `WARNING: another radio plugin DLL is in the plugins folder`; keep only one DLL. A second copy of this version stays inactive by itself. |
-| "Data file not found" in the log | The `realistic-radio` folder is missing next to the DLL. |
+| "Data file not found" in the log | The plugin could not write its folder next to the DLL (e.g. no write permission in the game folder). Check the log for "Could not write". |
 | No sound, log shows `Connected:` | Check Windows' default audio device (shown in the log as `Audio device: …`). Ignition on? Muted? |
 | "MP3 decoder init failed" | The stream is not real MP3. Report the URL in the log, or replace it with your own stations. |
 | "Media Foundation cannot open …" | Windows cannot play this format (e.g. some HLS or Ogg streams). Switch to another station or replace the URL. |
@@ -263,7 +277,7 @@ cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=toolchain-mingw.cmake -DCMAKE_BUILD_T
 cmake --build build
 ```
 
-The output is `realistic-radio.dll` plus a ready-made `realistic-radio\` folder next to it.
+The output is a single `realistic-radio.dll`. The files in `data/` (station lists, sounds, example file) are embedded into it via `src/resources.rc.in`, so after changing station data just rebuild.
 
 **Regenerating the station data:** `tools/convert_data.js` converts station and city lists in the JavaScript format they were published in into the plugin's JSON format (Node.js is only needed for this step, never by players):
 
@@ -280,6 +294,7 @@ node tools/convert_data.js <path>/web data
 |---|---|---|---|
 | [miniaudio](https://github.com/mackron/miniaudio) | 0.11.25 | Public domain or MIT-0 | Audio output, MP3 decoding, resampling |
 | [nlohmann/json](https://github.com/nlohmann/json) | 3.11.3 | MIT | Reading the JSON files |
+| [Adafruit GFX Library](https://github.com/adafruit/Adafruit-GFX-Library) (5×7 font only) | – | BSD | Dot-matrix characters of the car-radio display |
 | SCS Telemetry SDK | 1.x | MIT-style, see `sdk/sdk_license.txt` | Interface to the game |
 | Windows system libraries | – | – | WinHTTP, Media Foundation, Direct3D 11, DXGI, WIC, GDI, WinMM, URLMon; `d3dcompiler_47.dll` at runtime (part of Windows 10/11) |
 
@@ -309,11 +324,12 @@ The folder `server/logo/` contains all logos (downscaled to 200 px) in exactly t
 │   ├── DisplayWindow.*        optional display window
 │   ├── InputManager.*         keyboard and controller
 │   ├── Config.*, Logger.*     settings and log
+│   ├── EmbeddedData.*, resources.rc.in   embedded data files, unpacked on first start
 │   └── MiniaudioImpl.cpp      miniaudio compilation unit
-├── data/                      station/city data and sounds
+├── data/                      station/city data and sounds (embedded into the DLL)
 ├── server/logo/               station logos for the logo server (radio.scufystudio.de/logo/)
 ├── sdk/                       SCS Telemetry SDK headers
-├── third_party/               miniaudio, nlohmann/json
+├── third_party/               miniaudio, nlohmann/json, 5x7 font (Adafruit GFX)
 └── tools/                     data converter, equivalence test
 ```
 

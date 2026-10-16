@@ -1,12 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
-project(realistic_radio CXX C)
+project(realistic_radio CXX C RC)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(realistic-radio SHARED
     src/Plugin.cpp src/Logger.cpp src/Config.cpp src/StationDatabase.cpp src/ReceptionCalculator.cpp
     src/RadioManager.cpp src/AudioEngine.cpp src/StreamSource.cpp src/InputManager.cpp src/MiniaudioImpl.cpp
-    src/Overlay.cpp src/OverlayImage.cpp src/D3D11Overlay.cpp src/DisplayWindow.cpp
+    src/Overlay.cpp src/OverlayImage.cpp src/D3D11Overlay.cpp src/DisplayWindow.cpp src/EmbeddedData.cpp
+    ${CMAKE_BINARY_DIR}/resources.rc
     src/exports.def)
 target_include_directories(realistic-radio PRIVATE src third_party sdk/include)
 target_compile_definitions(realistic-radio PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS)
@@ -19,6 +20,8 @@ else()
 endif()
 set_target_properties(realistic-radio PROPERTIES PREFIX "" OUTPUT_NAME "realistic-radio")
 
-# Copy runtime data next to the DLL: <out>/realistic-radio/{ets2.json, ats.json, audio/*}
-add_custom_command(TARGET realistic-radio POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/data $<TARGET_FILE_DIR:realistic-radio>/realistic-radio)
+# Station data and sounds are embedded into the DLL (src/resources.rc.in) and unpacked by the plugin itself.
+set(RR_DATA ${CMAKE_SOURCE_DIR}/data)
+configure_file(${CMAKE_SOURCE_DIR}/src/resources.rc.in ${CMAKE_BINARY_DIR}/resources.rc @ONLY)
+set_source_files_properties(${CMAKE_BINARY_DIR}/resources.rc PROPERTIES OBJECT_DEPENDS
+    "${RR_DATA}/ets2.json;${RR_DATA}/ats.json;${RR_DATA}/audio/whitestatic.mp3;${RR_DATA}/audio/radio_switch.mp3;${RR_DATA}/custom-stations-ets2.example.json")

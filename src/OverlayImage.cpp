@@ -242,3 +242,134 @@ std::shared_ptr<OverlayImage> RenderDisplay(const DisplayState& st, int W, int H
     DeleteObject(fSmall); DeleteObject(fHead); DeleteObject(fTitle); DeleteObject(fCountry); DeleteObject(fFoot);
     return img;
 }
+
+// ------------------------------------------------------------------------------------------------
+// Car-radio style dot-matrix display (character LCD look: 5x7 dot cells with small gaps between them)
+#include "font5x7.h"
+namespace {
+// Unicode -> index in the CP437 5x7 font, or -1
+int Cp437Index(wchar_t c) {
+    if (c >= 0x20 && c < 0x7F) return (int)c;
+    switch (c) {
+    case L'Ç': return 0x80; case L'ü': return 0x81; case L'é': return 0x82; case L'â': return 0x83;
+    case L'ä': return 0x84; case L'à': return 0x85; case L'å': return 0x86; case L'ç': return 0x87;
+    case L'ê': return 0x88; case L'ë': return 0x89; case L'è': return 0x8A; case L'ï': return 0x8B;
+    case L'î': return 0x8C; case L'ì': return 0x8D; case L'Ä': return 0x8E; case L'Å': return 0x8F;
+    case L'É': return 0x90; case L'æ': return 0x91; case L'Æ': return 0x92; case L'ô': return 0x93;
+    case L'ö': return 0x94; case L'ò': return 0x95; case L'û': return 0x96; case L'ù': return 0x97;
+    case L'ÿ': return 0x98; case L'Ö': return 0x99; case L'Ü': return 0x9A; case L'¢': return 0x9B;
+    case L'£': return 0x9C; case L'¥': return 0x9D; case L'ƒ': return 0x9F; case L'á': return 0xA0;
+    case L'í': return 0xA1; case L'ó': return 0xA2; case L'ú': return 0xA3; case L'ñ': return 0xA4;
+    case L'Ñ': return 0xA5; case L'ª': return 0xA6; case L'º': return 0xA7; case L'¿': return 0xA8;
+    case L'¬': return 0xAA; case L'½': return 0xAB; case L'¼': return 0xAC; case L'¡': return 0xAD;
+    case L'«': return 0xAE; case L'»': return 0xAF; case L'ß': return 0xE1; case L'µ': return 0xE6;
+    case L'±': return 0xF1; case L'÷': return 0xF6; case L'°': return 0xF8; case L'·': return 0xFA;
+    case L'²': return 0xFD; case L'♥': return 0x03; case L'•': return 0x07;
+    case L'–': case L'—': return '-'; case L'‘': case L'’': return '\''; case L'“': case L'”': case L'„': return '"';
+    case L'…': return '.';
+    }
+    return -1;
+}
+// letters with accents the font lacks -> base letter (e.g. A-grave -> A, S-caron -> S)
+int FontIndexFor(wchar_t c) {
+    int i = Cp437Index(c);
+    if (i >= 0) return i;
+    wchar_t buf[8] = {0};
+    if (NormalizeString(NormalizationD, &c, 1, buf, 8) > 0) {
+        i = Cp437Index(buf[0]);
+        if (i >= 0x20) return i;
+    }
+    if (c == L'Ø' || c == L'ø') return 'O';
+    if (c == L'Ł' || c == L'ł') return 'L';
+    if (c == L'Đ' || c == L'đ') return 'D';
+    return -1;
+}
+}
+
+std::shared_ptr<OverlayImage> RenderRadioLcd(const std::wstring& text, int scroll, int columns, int bars, bool favourite,
+                                             int screenH, double scale, uint32_t color) {
+    const float s = (float)std::clamp(screenH / 1080.0 * scale, 0.3, 4.0);
+    auto S = [&](float v) { return std::max(1, (int)std::lround(v * s)); };
+    const float CR = ((color >> 16) & 255) / 255.f, CG = ((color >> 8) & 255) / 255.f, CB = (color & 255) / 255.f;
+    const int CW = 5, CH = 8;   // dots per character cell (7 rows + descender row)
+
+    // text for the visible window: centred if it fits, otherwise a wrapping marquee
+    std::wstring visible;
+    if ((int)text.size() <= columns) visible = std::wstring((columns - (int)text.size()) / 2, L' ') + text;
+    else { std::wstring loop = text + L"     "; for (int i = 0; i < columns; ++i) visible += loop[(scroll + i) % (int)loop.size()]; }
+    visible.resize(columns, L' ');
+
+    // layout: `columns` text cells + 1 empty cell + 1 indicator cell
+    const int totalCells = columns + 2;
+    const int pitch = S(4.2f), dot = std::max(1, pitch - std::max(1, (int)std::lround(pitch * 0.22f)));
+    const int cellGap = std::max(2, pitch - dot + S(2.5f));   // visible gap between character cells
+    const int cellW = CW * pitch - (pitch - dot) + cellGap, cellH = CH * pitch;
+    const int padX = S(16), padY = S(11), bezel = S(7);
+    const int lcdW = totalCells * cellW - cellGap + 2 * padX, lcdH = cellH - (pitch - dot) + 2 * padY;
+    const int W = lcdW + 2 * bezel, H = lcdH + 2 * bezel;
+    auto img = std::make_shared<OverlayImage>();
+    img->width = W; img->height = H; img->renderedForScreenHeight = screenH; img->pixels.assign((size_t)W * H, 0u);
+    auto& px = img->pixels;
+
+    // bezel and tinted glass
+    for (int y = 0; y < H; ++y) for (int x = 0; x < W; ++x) {
+        float cov = RoundedCoverage(x, y, W, H, (float)S(12));
+        if (cov <= 0) continue;
+        float sh = 0.035f + 0.03f * (1.f - (float)y / H);
+        px[(size_t)y * W + x] = Pack(0.94f * cov, sh * 0.94f * cov, sh * 0.94f * cov, (sh + 0.005f) * 0.94f * cov);
+    }
+    for (int y = 0; y < lcdH; ++y) for (int x = 0; x < lcdW; ++x) {
+        float cov = RoundedCoverage(x, y, lcdW, lcdH, (float)S(5));
+        if (cov <= 0) continue;
+        float g = 0.045f + 0.02f * (1.f - (float)y / lcdH);
+        Over(px[(size_t)(y + bezel) * W + x + bezel], cov, (g + CR * 0.04f) * cov, (g + CG * 0.04f) * cov, (g + CB * 0.04f) * cov);
+    }
+    auto putDot = [&](int cell, int col, int row, bool lit) {
+        int x0 = bezel + padX + cell * cellW + col * pitch, y0 = bezel + padY + row * pitch;
+        float a = lit ? 1.f : 0.055f;
+        for (int y = 0; y < dot; ++y) for (int x = 0; x < dot; ++x) {
+            float cov = dot >= 3 ? RoundedCoverage(x, y, dot, dot, dot * 0.3f) : 1.f;
+            if (cov > 0) Over(px[(size_t)(y0 + y) * W + x0 + x], a * cov, CR * a * cov, CG * a * cov, CB * a * cov);
+        }
+        if (lit) for (int y = -1; y <= dot; ++y) for (int x = -1; x <= dot; ++x) {   // soft glow
+            if (y >= 0 && y < dot && x >= 0 && x < dot) continue;
+            int X = x0 + x, Y = y0 + y; if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
+            Over(px[(size_t)Y * W + X], 0.16f, CR * 0.16f, CG * 0.16f, CB * 0.16f);
+        }
+    };
+
+    // GDI fallback for characters the dot font does not have (Cyrillic, Greek, ...): rendered into one cell
+    HFONT fb = nullptr; Gdi* fbDc = nullptr;
+    for (int c = 0; c < totalCells; ++c) {
+        bool on[CW][CH] = {};
+        if (c < columns) {
+            wchar_t ch = visible[c];
+            int fi = FontIndexFor(ch);
+            if (fi >= 0) {
+                for (int x = 0; x < CW; ++x) { unsigned char colBits = kFont5x7[fi * 5 + x]; for (int y = 0; y < CH; ++y) on[x][y] = (colBits >> y) & 1; }
+            } else if (ch != L' ') {
+                if (!fbDc) {
+                    fbDc = new Gdi(CW, CH);
+                    fb = CreateFontW(-8, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                     NONANTIALIASED_QUALITY, FIXED_PITCH, L"Lucida Console");
+                }
+                fbDc->Clear();
+                HGDIOBJ o = SelectObject(fbDc->dc, fb);
+                RECT r{0, 0, CW, CH}; DrawTextW(fbDc->dc, &ch, 1, &r, DT_SINGLELINE | DT_NOPREFIX | DT_CENTER | DT_TOP | DT_NOCLIP);
+                SelectObject(fbDc->dc, o); GdiFlush();
+                for (int x = 0; x < CW; ++x) for (int y = 0; y < CH; ++y) { uint32_t p = fbDc->bits[y * CW + x]; on[x][y] = ((p >> 8) & 255) > 100; }
+            }
+        } else if (c == columns + 1) {   // indicator cell
+            if (bars >= 0) {
+                // 5 bars, 1 dot wide, rising: heights 1..7 rows (bottom row 6)
+                static const int hgt[5] = {1, 2, 4, 5, 7};
+                for (int b = 0; b < 5 && b < bars; ++b) for (int y = 7 - hgt[b]; y < 7; ++y) on[b][y] = true;
+            } else if (favourite) {
+                for (int x = 0; x < CW; ++x) { unsigned char colBits = kFont5x7[0x03 * 5 + x]; for (int y = 0; y < CH; ++y) on[x][y] = (colBits >> y) & 1; }
+            }
+        }
+        for (int x = 0; x < CW; ++x) for (int y = 0; y < CH; ++y) putDot(c, x, y, on[x][y]);
+    }
+    if (fbDc) { delete fbDc; DeleteObject(fb); }
+    return img;
+}

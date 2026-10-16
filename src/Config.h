@@ -10,7 +10,18 @@ enum class Action { Next, Previous, Stop, VolumeUp, VolumeDown, MakeFavourite, G
 
 struct KeyBinding { int vk = 0; bool ctrl = false, shift = false, alt = false; };
 
+struct RadioStyleConfig {
+    std::string position = "bottom-center";
+    double offsetX = 0.0, offsetY = 0.20;
+    double scale = 1.0;
+    int columns = 16;                   // characters on the display
+    std::string color = "amber";        // amber | green | blue | white | red | #RRGGBB
+    double scrollSeconds = 0.3;         // marquee: seconds per character
+};
+
 struct OverlayConfig {
+    std::string style = "panel";        // panel (info panel with logo) | radio (car-radio dot-matrix display)
+    RadioStyleConfig radio;
     std::string mode = "auto";          // auto | d3d11 | window | off
     std::string position = "top-center"; // top-left | top-center | top-right | bottom-left | bottom-center | bottom-right
     double offsetX = 0.0;               // fraction of screen height

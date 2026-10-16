@@ -10,6 +10,7 @@
 #include "Logger.h"
 #include "RadioManager.h"
 #include "InputManager.h"
+#include "EmbeddedData.h"
 #include <scssdk_telemetry.h>
 #include <eurotrucks2/scssdk_eut2.h>
 #include <eurotrucks2/scssdk_telemetry_eut2.h>
@@ -104,6 +105,7 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
     std::wstring dir = PluginDataDir();
     CreateDirectoryW(dir.c_str(), nullptr);
     Log::Init(dir + L"realistic-radio.log");
+    ExtractEmbeddedData(dir);   // only the DLL is needed: station data and sounds are unpacked from it
     MigrateFromLocalRadio(dir);
     std::string gid = p->common.game_id ? p->common.game_id : "";
     g_game = (gid == SCS_GAME_ID_ATS) ? "ats" : "ets2";

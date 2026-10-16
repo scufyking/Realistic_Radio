@@ -12,7 +12,7 @@ Von **ScufyKing**. Das ganze Radio läuft im Spiel:
 - kein Python oder Node.js für Spieler
 - keine Änderung an Spieldateien
 
-DLL und Datenordner in den `plugins`-Ordner des Spiels kopieren, ETS2 starten, das Radio läuft.
+Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels kopieren, ETS2 starten, das Radio läuft. Senderdaten und Sounds stecken in der DLL.
 
 > **Stand:** Getestet in ETS2 1.61 (Windows x64): Das Plugin wird geladen, liest die LKW-Position, wechselt Sender nach Region, spielt Ton ab und zeichnet das Ingame-Overlay. Daten für American Truck Simulator sind enthalten, ATS ist aber ungetestet.
 
@@ -52,38 +52,36 @@ DLL und Datenordner in den `plugins`-Ordner des Spiels kopieren, ETS2 starten, d
 
 **Voraussetzungen:** Windows 10 oder 11 (64 Bit), Euro Truck Simulator 2 (64 Bit), Internetverbindung für die Streams.
 
-1. Release-Paket herunterladen und entpacken.
+1. `realistic-radio.dll` herunterladen.
 2. Den Plugin-Ordner des Spiels öffnen:
    `…\steamapps\common\Euro Truck Simulator 2\bin\win_x64\plugins\`
    Gibt es den Ordner `plugins` noch nicht, lege ihn an.
-3. Hineinkopieren:
-   - `realistic-radio.dll`
-   - den Ordner `realistic-radio\` (enthält Senderdaten, Sounds und später deine Einstellungen)
+3. `realistic-radio.dll` hineinkopieren. Das ist alles – weitere Dateien braucht es nicht.
 4. Andere Radio-Plugin-DLLs aus diesem Ordner entfernen (z. B. eine ältere `local-radio-native.dll` oder `local-radio.dll`), damit nicht zwei Radios gleichzeitig spielen.
 5. ETS2 starten. Das Spiel fragt, ob „erweiterte SDK-Funktionen“ erlaubt werden sollen; mit **OK** bestätigen.
 
-Das Radio startet automatisch, sobald der LKW eine Position hat und die Zündung an ist.
+Beim ersten Start legt das Plugin neben der DLL den Ordner `realistic-radio\` an und entpackt Senderdaten und Sounds dorthin. Das Radio startet automatisch, sobald der LKW eine Position hat und die Zündung an ist.
 
-Der fertige Ordner sieht so aus:
+Danach sieht der Ordner so aus (alles außer der DLL wird automatisch angelegt):
 
 ```
 plugins\
 ├── realistic-radio.dll
 └── realistic-radio\
-    ├── ets2.json                    Sender- und Städtedaten (ETS2)
-    ├── ats.json                     Sender- und Städtedaten (ATS)
+    ├── ets2.json                    Sender- und Städtedaten (ETS2, aus der DLL)
+    ├── ats.json                     Sender- und Städtedaten (ATS, aus der DLL)
     ├── custom-stations-ets2.example.json   Beispiel für eigene Sender
     ├── custom-stations-ets2.json    deine eigenen Sender (optional, legst du selbst an)
-    ├── audio\                       Rauschen und Umschaltgeräusch
+    ├── audio\                       Rauschen und Umschaltgeräusch (aus der DLL)
     ├── realistic-radio.json         Einstellungen (wird beim ersten Start angelegt)
     ├── favourites-ets2.json         deine Favoriten (wird automatisch angelegt)
     ├── logos\                       heruntergeladene Senderlogos (Zwischenspeicher)
     └── realistic-radio.log          Logdatei
 ```
 
-**Aktualisieren:** ETS2 beenden und `realistic-radio.dll` ersetzen. Einstellungen, Favoriten und eigene Sender bleiben erhalten.
+**Aktualisieren:** ETS2 beenden und `realistic-radio.dll` ersetzen. Enthält die neue DLL neuere Senderdaten, ersetzt sie beim nächsten Start `ets2.json`, `ats.json` und die Sounds. Einstellungen, Favoriten, eigene Sender und Logos bleiben unangetastet.
 
-**Umstieg von „ETS2 Local Radio Native“** (der frühere Name): `realistic-radio.dll` und den Ordner `realistic-radio\` nach `plugins` kopieren, dann `local-radio-native.dll` löschen. Beim ersten Start werden Einstellungen, Favoriten, eigene Sender und gespeicherte Logos automatisch aus dem alten Ordner `local-radio\` übernommen; danach kannst du auch diesen Ordner löschen.
+**Umstieg von „ETS2 Local Radio Native“** (der frühere Name): `realistic-radio.dll` nach `plugins` kopieren und `local-radio-native.dll` löschen. Beim ersten Start werden Einstellungen, Favoriten, eigene Sender und gespeicherte Logos automatisch aus dem alten Ordner `local-radio\` übernommen; danach kannst du auch diesen Ordner löschen.
 
 **Deinstallieren:** `realistic-radio.dll` und den Ordner `realistic-radio` löschen.
 
@@ -135,6 +133,7 @@ Alle Einstellungen stehen in `realistic-radio\realistic-radio.json`. Die Datei w
 
 | Schlüssel | Standard | Bedeutung |
 |---|---|---|
+| `style` | `"panel"` | `"panel"` = Info-Panel mit Logo, `"radio"` = Autoradio-Display mit Punktmatrix (siehe unten) |
 | `mode` | `"auto"` | `"auto"` (empfohlen), `"d3d11"` (ins Spielbild zeichnen), `"window"` (transparentes Fenster über dem Spiel), `"off"` |
 | `position` | `"top-center"` | `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right` |
 | `offsetX`, `offsetY` | `0`, `0.07` | Abstand vom Bildschirmrand als Anteil der Bildschirmhöhe (0.07 = 7 %) |
@@ -144,6 +143,21 @@ Alle Einstellungen stehen in `realistic-radio\realistic-radio.json`. Die Datei w
 | `showLogos` | `true` | Senderlogos anzeigen |
 | `urlPrefix` | `"https://radio.scufystudio.de/logo/"` | Woher fehlende Logos geladen werden. Geladene Logos bleiben in `realistic-radio\logos\` und werden nie erneut geladen. Leer = nur Logos, die schon in diesem Ordner liegen, kein Netzzugriff |
 | `textNowPlaying`, `textVolume`, `textStopped`, `textMuted`, `textFavourite`, `textConnecting`, `textUnavailable`, `textPowerOff` | deutsche Texte | Alle Texte im Overlay, frei änderbar |
+
+#### Autoradio-Display (`"style": "radio"`)
+
+Statt des Panels erscheint über dem Armaturenbrett ein schmales Punktmatrix-Display wie bei einem echten Autoradio: Sendername in Großbuchstaben, Laufschrift bei langen Namen und eine Empfangsanzeige. Lautstärke, Stumm und andere Meldungen erscheinen auf demselben Display. Einstellungen unter `"overlay": { "radio": { … } }`:
+
+| Schlüssel | Standard | Bedeutung |
+|---|---|---|
+| `position` | `"bottom-center"` | Gleiche Werte wie bei der Panel-Position |
+| `offsetX`, `offsetY` | `0`, `0.20` | Abstand vom Bildschirmrand als Anteil der Bildschirmhöhe |
+| `scale` | `1.0` | Größe |
+| `columns` | `16` | Zeichen auf dem Display (8–40) |
+| `color` | `"amber"` | `amber`, `green`, `blue`, `white`, `red`, `orange` oder `#RRGGBB` |
+| `scrollSeconds` | `0.3` | Tempo der Laufschrift: Sekunden pro Zeichen |
+
+Die Punktmatrix-Zeichen nutzen die klassische 5×7-Schrift der Adafruit GFX Library (BSD-Lizenz, siehe `NOTICE.md`); fehlende Buchstaben werden als Grundbuchstabe gezeigt (À → A), andere Schriften wie Kyrillisch zeichnet eine Windows-Schrift.
 
 ### Anzeige auf dem LKW-Bildschirm (`"display": { … }`, optional)
 
@@ -189,7 +203,7 @@ Fast jedes Problem lässt sich an `realistic-radio\realistic-radio.log` erkennen
 |---|---|
 | Es wird keine `realistic-radio.log` angelegt | Die DLL wurde nicht geladen. Ordner prüfen: Er muss `bin\win_x64\plugins\` heißen. Wurde die Meldung zu den „erweiterten SDK-Funktionen“ mit OK bestätigt? |
 | Radio bei Lautstärke 0 noch hörbar oder zwei Sender gleichzeitig | Das Plugin ist doppelt installiert (z. B. `realistic-radio (1).dll`). Im Log steht dann `WARNING: another radio plugin DLL is in the plugins folder`; nur eine DLL behalten. Eine zweite Kopie dieser Version bleibt von selbst inaktiv. |
-| „Data file not found“ im Log | Der Ordner `realistic-radio` fehlt neben der DLL. |
+| „Data file not found“ im Log | Das Plugin konnte seinen Ordner neben der DLL nicht schreiben (z. B. keine Schreibrechte im Spielordner). Im Log nach „Could not write“ suchen. |
 | Kein Ton, Log zeigt `Connected:` | Standard-Audiogerät von Windows prüfen (steht im Log als `Audio device: …`). Zündung an? Stumm geschaltet? |
 | „MP3 decoder init failed“ | Der Stream ist kein echtes MP3. URL aus dem Log melden oder über eigene Sender ersetzen. |
 | „Media Foundation cannot open …“ | Windows kann dieses Format nicht abspielen (z. B. manche HLS- oder Ogg-Streams). Anderen Sender wählen oder URL ersetzen. |
@@ -263,7 +277,7 @@ cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=toolchain-mingw.cmake -DCMAKE_BUILD_T
 cmake --build build
 ```
 
-Ergebnis: `realistic-radio.dll` und daneben ein fertiger Ordner `realistic-radio\`.
+Ergebnis ist eine einzige `realistic-radio.dll`. Die Dateien aus `data/` (Senderlisten, Sounds, Beispieldatei) werden über `src/resources.rc.in` eingebettet; nach Änderungen an den Senderdaten einfach neu bauen.
 
 **Senderdaten neu erzeugen:** `tools/convert_data.js` wandelt Sender- und Städtelisten aus dem JavaScript-Format, in dem sie veröffentlicht wurden, in das JSON-Format des Plugins um (Node.js wird nur für diesen Schritt gebraucht, nie von Spielern):
 
@@ -280,6 +294,7 @@ node tools/convert_data.js <Pfad>/web data
 |---|---|---|---|
 | [miniaudio](https://github.com/mackron/miniaudio) | 0.11.25 | Public Domain oder MIT-0 | Audioausgabe, MP3-Decoding, Resampling |
 | [nlohmann/json](https://github.com/nlohmann/json) | 3.11.3 | MIT | Lesen der JSON-Dateien |
+| [Adafruit GFX Library](https://github.com/adafruit/Adafruit-GFX-Library) (nur 5×7-Schrift) | – | BSD | Punktmatrix-Zeichen des Autoradio-Displays |
 | SCS-Telemetrie-SDK | 1.x | MIT-ähnlich, siehe `sdk/sdk_license.txt` | Schnittstelle zum Spiel |
 | Windows-Systembibliotheken | – | – | WinHTTP, Media Foundation, Direct3D 11, DXGI, WIC, GDI, WinMM, URLMon; `d3dcompiler_47.dll` zur Laufzeit (Teil von Windows 10/11) |
 
@@ -309,11 +324,12 @@ Der Ordner `server/logo/` enthält alle Logos (verkleinert auf 200 px) in genau 
 │   ├── DisplayWindow.*        optionales Display-Fenster
 │   ├── InputManager.*         Tastatur und Controller
 │   ├── Config.*, Logger.*     Einstellungen und Log
+│   ├── EmbeddedData.*, resources.rc.in   eingebettete Datendateien, beim ersten Start entpackt
 │   └── MiniaudioImpl.cpp      Übersetzungseinheit für miniaudio
-├── data/                      Sender-/Städtedaten und Sounds
+├── data/                      Sender-/Städtedaten und Sounds (in die DLL eingebettet)
 ├── server/logo/               Senderlogos für den Logo-Server (radio.scufystudio.de/logo/)
 ├── sdk/                       Header des SCS-Telemetrie-SDK
-├── third_party/               miniaudio, nlohmann/json
+├── third_party/               miniaudio, nlohmann/json, 5×7-Schrift (Adafruit GFX)
 └── tools/                     Datenkonverter, Vergleichstest
 ```
 

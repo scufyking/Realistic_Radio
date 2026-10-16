@@ -99,6 +99,16 @@ static const char* kDefaultConfig = R"({
     "title": "Realistic Radio Display"
   },
   "overlay": {
+    "style": "panel",
+    "radio": {
+      "position": "bottom-center",
+      "offsetX": 0.0,
+      "offsetY": 0.20,
+      "scale": 1.0,
+      "columns": 16,
+      "color": "amber",
+      "scrollSeconds": 0.3
+    },
     "mode": "auto",
     "position": "top-center",
     "offsetX": 0.0,
@@ -151,6 +161,16 @@ bool Config::Load(const std::wstring& path) {
         }
         if (j.contains("overlay")) {
             auto& o = j["overlay"]; OverlayConfig& c = overlay;
+            c.style = o.value("style", c.style);
+            if (o.contains("radio")) {
+                auto& r = o["radio"]; RadioStyleConfig& rc = c.radio;
+                rc.position = r.value("position", rc.position);
+                rc.offsetX = r.value("offsetX", rc.offsetX); rc.offsetY = r.value("offsetY", rc.offsetY);
+                rc.scale = std::clamp(r.value("scale", rc.scale), 0.3, 4.0);
+                rc.columns = std::clamp(r.value("columns", rc.columns), 8, 40);
+                rc.color = r.value("color", rc.color);
+                rc.scrollSeconds = std::clamp(r.value("scrollSeconds", rc.scrollSeconds), 0.05, 2.0);
+            }
             c.mode = o.value("mode", c.mode); c.position = o.value("position", c.position);
             c.offsetX = o.value("offsetX", c.offsetX); c.offsetY = o.value("offsetY", c.offsetY);
             c.scale = std::clamp(o.value("scale", c.scale), 0.3, 4.0); c.durationSeconds = o.value("durationSeconds", c.durationSeconds);
@@ -172,14 +192,31 @@ bool Config::Load(const std::wstring& path) {
             if (j.contains("buttons") && j["buttons"].contains(kActionNames[i]))
                 buttons[i] = j["buttons"][kActionNames[i]].get<int>();
         }
-        if (migratedUrlPrefix) {   // write the new logo address back so the file matches what is used
+        // Earlier versions wrote PageUp / Next / Oemplus / OemMinus as defaults. If the file still has exactly
+        // those (i.e. the user never changed them), switch to the new default: arrow keys.
+        bool migratedKeys = false;
+        if (j.contains("keys")) {
+            auto& k = j["keys"];
+            auto is = [&](const char* name, const char* val) { return k.contains(name) && k[name].is_string() && k[name].get<std::string>() == val; };
+            if (is("previous", "PageUp") && is("next", "Next") && is("volumeUp", "Oemplus") && is("volumeDown", "OemMinus")) {
+                keys[(int)Action::Previous] = ParseKeyBinding("Left");
+                keys[(int)Action::Next] = ParseKeyBinding("Right");
+                keys[(int)Action::VolumeUp] = ParseKeyBinding("Up");
+                keys[(int)Action::VolumeDown] = ParseKeyBinding("Down");
+                migratedKeys = true;
+            }
+        }
+        if (migratedUrlPrefix || migratedKeys) {   // write the changes back so the file matches what is used
             f.close();
             try {
                 std::ifstream in{std::filesystem::path(path)};
                 json k = json::parse(in, nullptr, true, true); in.close();
-                k["overlay"]["urlPrefix"] = overlay.urlPrefix;
+                if (migratedUrlPrefix) { k["overlay"]["urlPrefix"] = overlay.urlPrefix; Log::Write("Logo address updated to %s", overlay.urlPrefix.c_str()); }
+                if (migratedKeys) {
+                    k["keys"]["previous"] = "Left"; k["keys"]["next"] = "Right"; k["keys"]["volumeUp"] = "Up"; k["keys"]["volumeDown"] = "Down";
+                    Log::Write("Keys updated to the new defaults: Left/Right = station, Up/Down = volume");
+                }
                 std::ofstream o{std::filesystem::path(path)}; o << k.dump(2);
-                Log::Write("Logo address updated to %s", overlay.urlPrefix.c_str());
             } catch (...) {}
         }
         return true;

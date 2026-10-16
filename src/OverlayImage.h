@@ -20,7 +20,8 @@ struct OverlayInfo {
     std::wstring subtitle;   // country / volume / state
     int bars = -1;           // 0..5 reception, -1 = hidden
     bool favourite = false;
-    bool operator==(const OverlayInfo& o) const { return headline == o.headline && title == o.title && subtitle == o.subtitle && bars == o.bars && favourite == o.favourite; }
+    std::wstring lcd;        // one-line text for the car-radio style display (empty = title)
+    bool operator==(const OverlayInfo& o) const { return headline == o.headline && title == o.title && subtitle == o.subtitle && bars == o.bars && favourite == o.favourite && lcd == o.lcd; }
 };
 
 // Draws the panel with GDI (text, full Unicode incl. Cyrillic/Greek/Arabic via font fallback) + optional logo.
@@ -38,6 +39,11 @@ struct DisplayState {
 };
 // Full-screen "infotainment" picture (opaque BGRA) for the radio display window.
 std::shared_ptr<OverlayImage> RenderDisplay(const DisplayState& st, int width, int height, const OverlayImage* logo);
+
+// Car-radio style dot-matrix display: one line of `columns` characters starting at character `scroll`
+// of `text` (wrapping with a gap, for marquee), plus a 5-step signal indicator. color = 0xRRGGBB.
+std::shared_ptr<OverlayImage> RenderRadioLcd(const std::wstring& text, int scroll, int columns, int bars, bool favourite,
+                                             int screenHeight, double scale, uint32_t color);
 
 // Decodes PNG/JPG/BMP via WIC to premultiplied BGRA (nullptr on failure). COM must be initialised.
 std::shared_ptr<OverlayImage> LoadImageFile(const std::wstring& path);

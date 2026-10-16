@@ -35,10 +35,23 @@ void Overlay::Init(const OverlayConfig& cfg, const std::wstring& dataDir) {
     cfg_ = cfg; start_ = GetTickCount64();
     logoDir_ = dataDir + L"logos\\";
     CreateDirectoryW(logoDir_.c_str(), nullptr);
-    anchor_ = AnchorFromName(cfg.position);
+    radioStyle_ = cfg.style == "radio";
+    anchor_ = AnchorFromName(radioStyle_ ? cfg.radio.position : cfg.position);
+    offX_ = (float)(radioStyle_ ? cfg.radio.offsetX : cfg.offsetX);
+    offY_ = (float)(radioStyle_ ? cfg.radio.offsetY : cfg.offsetY);
+    scale_ = radioStyle_ ? cfg.radio.scale : cfg.scale;
+    {
+        std::string c = cfg.radio.color; for (auto& ch : c) ch = (char)tolower((unsigned char)ch);
+        static const std::map<std::string, uint32_t> named = {{"amber", 0xFFB000}, {"green", 0x5CFF6A}, {"blue", 0x4FC3FF},
+                                                              {"white", 0xF2F4FF}, {"red", 0xFF4A3D}, {"orange", 0xFF8A1E}};
+        auto it = named.find(c);
+        if (it != named.end()) lcdColor_ = it->second;
+        else if (c.size() == 7 && c[0] == '#') lcdColor_ = (uint32_t)strtoul(c.c_str() + 1, nullptr, 16);
+    }
+    if (radioStyle_) Log::Write("Overlay style: car radio display");
     off_ = cfg.mode == "off";
     if (off_) { Log::Write("Overlay disabled"); return; }
-    D3D11Overlay::SetPlacement(anchor_, (float)cfg.offsetX, (float)cfg.offsetY);
+    D3D11Overlay::SetPlacement(anchor_, offX_, offY_);
     if (cfg.mode != "window") d3d_ = D3D11Overlay::Install();
     if (cfg.mode == "window" || (cfg.mode == "auto" && !d3d_)) UseWindow(true);
 }
@@ -55,8 +68,14 @@ void Overlay::Show(const OverlayInfo& info, const std::string& logoPath) {
     if (off_) return;
     ULONGLONG now = GetTickCount64();
     if (!Visible()) shownAt_ = now;
-    visibleUntil_ = now + (ULONGLONG)(cfg_.durationSeconds * 1000);
     info_ = info;
+    double secs = cfg_.durationSeconds;
+    if (radioStyle_) {   // restart the marquee and keep the display on for at least one full pass
+        scroll_ = 0; nextScrollAt_ = now + 1200;
+        int len = (int)LcdText().size();
+        if (len > cfg_.radio.columns) secs = std::max(secs, 1.2 + (len + 5) * cfg_.radio.scrollSeconds + 1.0);
+    }
+    visibleUntil_ = now + (ULONGLONG)(secs * 1000);
     Rerender();
 }
 
@@ -125,7 +144,8 @@ void Overlay::Rerender() {
     if (!h && window_) { if (!game_ || !IsWindow(game_)) game_ = FindGameWindow(); RECT r{}; if (game_ && GetClientRect(game_, &r)) h = r.bottom - r.top; }
     if (h < 200) h = 1080;
     renderedH_ = h;
-    image_ = RenderOverlay(info_, h, cfg_.scale, logo_.get());
+    if (radioStyle_) image_ = RenderRadioLcd(LcdText(), scroll_, cfg_.radio.columns, info_.bars, info_.favourite, h, scale_, lcdColor_);
+    else image_ = RenderOverlay(info_, h, cfg_.scale, logo_.get());
     D3D11Overlay::SetImage(image_);
 }
 
@@ -153,7 +173,7 @@ void Overlay::UpdateWindow(float alpha) {
     float sh = (float)(cr.bottom - cr.top), sw = (float)(cr.right - cr.left);
     float k = sh / std::max(1, image_->renderedForScreenHeight);
     if (std::abs(k - 1.f) > 0.02f) { Rerender(); k = 1.f; }
-    float w = (float)image_->width, h = (float)image_->height, ox = (float)cfg_.offsetX * sh, oy = (float)cfg_.offsetY * sh;
+    float w = (float)image_->width, h = (float)image_->height, ox = offX_ * sh, oy = offY_ * sh;
     int a = anchor_;
     int x = tl.x + (int)((a % 3 == 0) ? ox : (a % 3 == 1) ? (sw - w) / 2 + ox : sw - w - ox);
     int y = tl.y + (int)((a < 3) ? oy : sh - h - oy);
@@ -205,6 +225,11 @@ void Overlay::Tick() {
     }
     int h = D3D11Overlay::ScreenHeight();
     if (image_ && h >= 200 && std::abs(h - renderedH_) > 2) Rerender();   // resolution changed -> crisp text again
+    if (radioStyle_ && Visible() && (int)LcdText().size() > cfg_.radio.columns && now >= nextScrollAt_) {   // marquee step
+        ++scroll_;
+        nextScrollAt_ = now + (ULONGLONG)(cfg_.radio.scrollSeconds * 1000);
+        Rerender();
+    }
 
     float alpha = 1.f;
     if (!cfg_.alwaysVisible) {
@@ -213,4 +238,10 @@ void Overlay::Tick() {
     }
     D3D11Overlay::SetAlpha(d3d_ && !window_ ? alpha : 0.f);
     if (window_) UpdateWindow(alpha);
+}
+
+std::wstring Overlay::LcdText() const {
+    std::wstring t = info_.lcd.empty() ? info_.title : info_.lcd;
+    if (!t.empty()) CharUpperBuffW(&t[0], (DWORD)t.size());   // car radios show capitals
+    return t;
 }

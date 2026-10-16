@@ -32,6 +32,13 @@ private:
     std::wstring logoDir_;
     bool d3d_ = false, window_ = false, off_ = true;
     int anchor_ = 1;
+    bool radioStyle_ = false;
+    float offX_ = 0, offY_ = 0;
+    double scale_ = 1.0;
+    uint32_t lcdColor_ = 0xFFB000;
+    int scroll_ = 0;
+    ULONGLONG nextScrollAt_ = 0;
+    std::wstring LcdText() const;
     ULONGLONG start_ = 0, shownAt_ = 0, visibleUntil_ = 0;
     OverlayInfo info_;
     std::string logoKey_;

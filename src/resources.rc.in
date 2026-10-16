@@ -1,0 +1,6 @@
+// Data files embedded into realistic-radio.dll (extracted to <plugins>\realistic-radio\ on first start)
+101 RCDATA "@RR_DATA@/ets2.json"
+102 RCDATA "@RR_DATA@/ats.json"
+103 RCDATA "@RR_DATA@/audio/whitestatic.mp3"
+104 RCDATA "@RR_DATA@/audio/radio_switch.mp3"
+105 RCDATA "@RR_DATA@/custom-stations-ets2.example.json"
