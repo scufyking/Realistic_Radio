@@ -1,0 +1,14 @@
+// Eigene Sender (wie "stations_custom" in custom.js des Originals).
+// Schluessel = Gebiet aus ets2.json, z. B. "germany" (bundesweit), "germany-bw", "germany-br",
+// "germany-swr", "germany-muenchen", "austria", "netherlands" ...
+// Gleicher Name wie ein vorhandener Sender in diesem Gebiet -> ersetzt ihn, sonst wird er angehaengt.
+// "logo" ist optional (Pfad relativ zu urlPrefix oder volle https-URL).
+{
+  "germany": [
+    {
+      "name": "Radio Bollerwagen",
+      "url": "https://stream.ffn.de/radiobollerwagen/mp3-192",
+      "logo": "stations/images-europe/germany-nds/Radio Bollerwagen.png"
+    }
+  ]
+}
