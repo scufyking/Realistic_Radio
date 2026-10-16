@@ -1,4 +1,4 @@
-// ETS2 Local Radio Native
+// Realistic Radio
 // Copyright (c) 2026 ScufyKing
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
@@ -112,7 +112,7 @@ HWND Overlay::FindGameWindow() {
         auto* c = (Ctx*)lp; DWORD pid = 0; GetWindowThreadProcessId(h, &pid);
         if (pid != c->pid || !IsWindowVisible(h)) return TRUE;
         wchar_t cls[64]; GetClassNameW(h, cls, 64);
-        if (wcscmp(cls, L"LocalRadioOverlay") == 0) return TRUE;
+        if (wcscmp(cls, L"RealisticRadioOverlay") == 0) return TRUE;
         RECT r; GetClientRect(h, &r); long a = (r.right - r.left) * (r.bottom - r.top);
         if (a > c->area) { c->area = a; c->best = h; }
         return TRUE;
@@ -133,10 +133,10 @@ void Overlay::UseWindow(bool on) {
     if (on == window_) return;
     window_ = on;
     if (on) {
-        WNDCLASSEXW wc{sizeof(wc)}; wc.lpfnWndProc = DefWindowProcW; wc.hInstance = GetModuleHandleW(nullptr); wc.lpszClassName = L"LocalRadioOverlay";
+        WNDCLASSEXW wc{sizeof(wc)}; wc.lpfnWndProc = DefWindowProcW; wc.hInstance = GetModuleHandleW(nullptr); wc.lpszClassName = L"RealisticRadioOverlay";
         RegisterClassExW(&wc);
         wnd_ = CreateWindowExW(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
-                               wc.lpszClassName, L"Local Radio", WS_POPUP, 0, 0, 1, 1, nullptr, nullptr, wc.hInstance, nullptr);
+                               wc.lpszClassName, L"Realistic Radio", WS_POPUP, 0, 0, 1, 1, nullptr, nullptr, wc.hInstance, nullptr);
         Log::Write(wnd_ ? "Overlay: window mode active" : "Overlay: window creation failed");
         if (image_) Rerender();
     } else if (wnd_) { DestroyWindow(wnd_); wnd_ = nullptr; }

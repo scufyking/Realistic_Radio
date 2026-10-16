@@ -1,4 +1,4 @@
-// ETS2 Local Radio Native
+// Realistic Radio
 // Copyright (c) 2026 ScufyKing
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
@@ -42,7 +42,7 @@ bool HttpOpen(Http& h, const std::string& url) {
     uc.lpszHostName = host; uc.dwHostNameLength = 512; uc.lpszUrlPath = path; uc.dwUrlPathLength = 4096;
     wchar_t extra[4096]; uc.lpszExtraInfo = extra; uc.dwExtraInfoLength = 4096;
     if (!WinHttpCrackUrl(w.c_str(), 0, 0, &uc)) { Log::Write("Invalid URL: %s", url.c_str()); return false; }
-    h.session = WinHttpOpen(L"ETS2LocalRadioNative/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    h.session = WinHttpOpen(L"RealisticRadio/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!h.session) return false;
     WinHttpSetTimeouts(h.session, 10000, 10000, 10000, 15000);
     DWORD policy = WINHTTP_OPTION_REDIRECT_POLICY_ALWAYS;

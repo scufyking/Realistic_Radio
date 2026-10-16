@@ -1,4 +1,4 @@
-// ETS2 Local Radio Native
+// Realistic Radio
 // Copyright (c) 2026 ScufyKing
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
@@ -10,7 +10,7 @@
 #include <algorithm>
 
 bool RadioManager::Init(const std::wstring& dir, const std::string& game) {
-    dir_ = dir; cfgPath_ = dir + L"local-radio.json";
+    dir_ = dir; cfgPath_ = dir + L"realistic-radio.json";
     cfg_.Load(cfgPath_);
     std::string file = cfg_.dataFile.empty() ? game + ".json" : cfg_.dataFile;
     if (!db_.Load(dir + Utf8ToWide(file))) return false;
@@ -28,12 +28,12 @@ void RadioManager::Shutdown() { display_.Stop(); overlay_.Shutdown(); audio_.Shu
 
 std::string RadioManager::ResolveUrl(const std::string& url) const {
     if (url.empty() || url.find("://") != std::string::npos || (url.size() > 1 && url[1] == ':')) return url;
-    return WideToUtf8(dir_) + url;   // relative local file -> local-radio folder
+    return WideToUtf8(dir_) + url;   // relative local file -> realistic-radio folder
 }
 OverlayInfo RadioManager::CurrentInfo(const std::wstring& sub) {
     OverlayInfo i;
     auto* st = db_.StationsOf(currentCountry_);
-    if (!st || currentIndex_ < 0 || currentIndex_ >= (int)st->size()) { i.title = L"Local Radio"; i.subtitle = sub; return i; }
+    if (!st || currentIndex_ < 0 || currentIndex_ >= (int)st->size()) { i.title = L"Realistic Radio"; i.subtitle = sub; return i; }
     const Station& s = (*st)[currentIndex_];
     i.headline = playing_ ? Utf8ToWide(cfg_.overlay.textNowPlaying) : Utf8ToWide(cfg_.overlay.textStopped);
     i.title = Utf8ToWide(s.name);
@@ -120,7 +120,7 @@ void RadioManager::UpdateDisplay() {
         else if (audio_.StreamFailures() > 0) d.status = Utf8ToWide(cfg_.overlay.textUnavailable);
         else if (audio_.IsBuffering() || swapAt_) d.status = Utf8ToWide(cfg_.overlay.textConnecting);
     } else {
-        d.title = L"Local Radio"; d.headline.clear(); d.bars = -1;
+        d.title = L"Realistic Radio"; d.headline.clear(); d.bars = -1;
         d.status = Utf8ToWide(cfg_.overlay.textConnecting);
     }
     // neighbours in the same order as Next/Previous
@@ -208,7 +208,7 @@ void RadioManager::NextStation(int amount) {
 
 void RadioManager::OnAction(Action a) {
     if (!powered_ && a != Action::VolumeUp && a != Action::VolumeDown && a != Action::Mute) {
-        overlay_.Show(OverlayInfo{L"", L"Local Radio", Utf8ToWide(cfg_.overlay.textPowerOff), -1, false}, "");
+        overlay_.Show(OverlayInfo{L"", L"Realistic Radio", Utf8ToWide(cfg_.overlay.textPowerOff), -1, false}, "");
         return;
     }
     switch (a) {

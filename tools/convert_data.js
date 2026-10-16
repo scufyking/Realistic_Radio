@@ -1,8 +1,8 @@
-// ETS2 Local Radio Native
+// Realistic Radio
 // Copyright (c) 2026 ScufyKing
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
-// Converts the original ETS2 Local Radio web data (cities-*.js, stations-*.js) into plain JSON
+// Converts ETS2 Local Radio web data (cities-*.js, stations-*.js) into plain JSON
 // for the native DLL. Build-time only; end users never need Node.js.
 // Usage: node convert_data.js <web-dir> <out-dir>
 const fs = require('fs'), path = require('path'), vm = require('vm');

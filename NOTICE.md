@@ -1,6 +1,6 @@
 # Third-party notices / Hinweise zu Drittkomponenten
 
-ETS2 Local Radio Native © 2026 ScufyKing, licensed under the Mozilla Public License 2.0 (see `LICENSE`).
+Realistic Radio © 2026 ScufyKing, licensed under the Mozilla Public License 2.0 (see `LICENSE`).
 
 This project contains or is derived from the following third-party works. Their notices are reproduced here as required by their licenses.
 Dieses Projekt enthält folgende Drittkomponenten bzw. ist teilweise davon abgeleitet. Die Hinweise stehen hier, weil die jeweiligen Lizenzen es verlangen.

@@ -1,4 +1,4 @@
-// ETS2 Local Radio Native
+// Realistic Radio
 // Copyright (c) 2026 ScufyKing
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
@@ -48,7 +48,7 @@ DWORD WINAPI RadioThread(LPVOID) {
         CoUninitialize();
         return 1;
     }
-    { Config c; c.Load(dir + L"local-radio.json"); input.Init(c); }
+    { Config c; c.Load(dir + L"realistic-radio.json"); input.Init(c); }
     Log::Write("Radio thread running");
     while (!g_quit) {
         input.Poll([&](Action a) { Log::Write("Action: %s", ActionName(a)); radio.OnAction(a); });
@@ -61,24 +61,53 @@ DWORD WINAPI RadioThread(LPVOID) {
 }
 }
 
+// Earlier releases were called "ETS2 Local Radio Native" and kept their files in "<plugins>\\local-radio\\".
+// Copy the user's own files over once (never overwrites anything that already exists in the new folder).
+static void MigrateFromLocalRadio(const std::wstring& dir) {
+    std::wstring base = dir.substr(0, dir.size() - 1);
+    base = base.substr(0, base.find_last_of(L"\\/") + 1);
+    std::wstring old = base + L"local-radio\\";
+    if (GetFileAttributesW(old.c_str()) == INVALID_FILE_ATTRIBUTES) return;
+    auto copy = [&](const std::wstring& from, const std::wstring& to) {
+        if (GetFileAttributesW(from.c_str()) == INVALID_FILE_ATTRIBUTES) return;
+        if (CopyFileW(from.c_str(), to.c_str(), TRUE)) Log::Write("Migrated %s", WideToUtf8(to).c_str());
+    };
+    copy(old + L"local-radio.json", dir + L"realistic-radio.json");
+    for (const wchar_t* g : {L"ets2", L"ats"}) {
+        copy(old + L"favourites-" + g + L".json", dir + L"favourites-" + g + L".json");
+        copy(old + L"custom-stations-" + g + L".json", dir + L"custom-stations-" + g + L".json");
+    }
+    CreateDirectoryW((dir + L"logos").c_str(), nullptr);
+    WIN32_FIND_DATAW fd; HANDLE h = FindFirstFileW((old + L"logos\\*").c_str(), &fd);
+    int n = 0;
+    if (h != INVALID_HANDLE_VALUE) {
+        do { if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && CopyFileW((old + L"logos\\" + fd.cFileName).c_str(), (dir + L"logos\\" + fd.cFileName).c_str(), TRUE)) ++n; }
+        while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    if (n) Log::Write("Migrated %d cached logos", n);
+    Log::Write("Old folder %s found - after checking your settings you can delete it and the old local-radio-native.dll", WideToUtf8(old).c_str());
+}
+
 SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_init_params_t* const params) {
     if (version != SCS_TELEMETRY_VERSION_1_00 && version != SCS_TELEMETRY_VERSION_1_01) return SCS_RESULT_unsupported;
     const auto* p = static_cast<const scs_telemetry_init_params_v100_t*>(params);
-    // Only one copy may run per game process: a second DLL (e.g. "local-radio-native (1).dll") would play a second
+    // Only one copy may run per game process: a second DLL (e.g. "realistic-radio (1).dll") would play a second
     // radio with its own volume. The copy that comes second stays inactive and does not touch the shared log file.
-    wchar_t mtxName[80]; swprintf(mtxName, 80, L"Local\\ETS2LocalRadioNative-%lu", GetCurrentProcessId());
+    wchar_t mtxName[80]; swprintf(mtxName, 80, L"Local\\ETS2LocalRadioNative-%lu", GetCurrentProcessId());   // name kept from the previous release, so old and new DLL exclude each other
     g_instance = CreateMutexW(nullptr, FALSE, mtxName);
     if (g_instance && GetLastError() == ERROR_ALREADY_EXISTS) {
         CloseHandle(g_instance); g_instance = nullptr;
-        p->common.log(SCS_LOG_TYPE_warning, "[local-radio] another copy of the Local Radio plugin is already loaded - this copy stays inactive. Remove duplicate DLLs from the plugins folder.");
+        p->common.log(SCS_LOG_TYPE_warning, "[realistic-radio] another copy of the Realistic Radio plugin is already loaded - this copy stays inactive. Remove duplicate DLLs from the plugins folder.");
         return SCS_RESULT_ok;
     }
     std::wstring dir = PluginDataDir();
     CreateDirectoryW(dir.c_str(), nullptr);
-    Log::Init(dir + L"local-radio.log");
+    Log::Init(dir + L"realistic-radio.log");
+    MigrateFromLocalRadio(dir);
     std::string gid = p->common.game_id ? p->common.game_id : "";
     g_game = (gid == SCS_GAME_ID_ATS) ? "ats" : "ets2";
-    Log::Write("ETS2 Local Radio Native loaded by %s (game id '%s', telemetry 0x%x)", p->common.game_name ? p->common.game_name : "?", gid.c_str(), version);
+    Log::Write("Realistic Radio loaded by %s (game id '%s', telemetry 0x%x)", p->common.game_name ? p->common.game_name : "?", gid.c_str(), version);
     {   // warn about other radio plugin DLLs in the same folder
         HMODULE self = nullptr; wchar_t me[MAX_PATH] = {0};
         GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)&scs_telemetry_init, &self);
@@ -89,7 +118,7 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
         if (h != INVALID_HANDLE_VALUE) {
             do {
                 std::wstring n = fd.cFileName, l = n; for (auto& ch : l) ch = towlower(ch);
-                if (folder + n != mine && l.find(L"local-radio") != std::wstring::npos)
+                if (folder + n != mine && (l.find(L"local-radio") != std::wstring::npos || l.find(L"realistic-radio") != std::wstring::npos))
                     Log::Write("WARNING: another radio plugin DLL is in the plugins folder: %s - remove it, otherwise two radios may play", WideToUtf8(n).c_str());
             } while (FindNextFileW(h, &fd));
             FindClose(h);
@@ -97,7 +126,7 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
     }
     if (p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_world_placement, SCS_U32_NIL, SCS_VALUE_TYPE_dplacement,
                                 SCS_TELEMETRY_CHANNEL_FLAG_none, OnPlacement, nullptr) != SCS_RESULT_ok) {
-        p->common.log(SCS_LOG_TYPE_error, "[local-radio] cannot register truck.world.placement");
+        p->common.log(SCS_LOG_TYPE_error, "[realistic-radio] cannot register truck.world.placement");
         return SCS_RESULT_generic_error;
     }
     // ignition / engine state (radio only plays while the truck is powered, see "powerSource")
@@ -105,7 +134,7 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnBool, nullptr);
     p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_engine_enabled, SCS_U32_NIL, SCS_VALUE_TYPE_bool,
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnBool, (scs_context_t)1);
-    p->common.log(SCS_LOG_TYPE_message, "[local-radio] native Local Radio plugin initialised");
+    p->common.log(SCS_LOG_TYPE_message, "[realistic-radio] Realistic Radio plugin initialised");
     g_quit = false;
     g_thread = CreateThread(nullptr, 0, RadioThread, nullptr, 0, nullptr);
     return g_thread ? SCS_RESULT_ok : SCS_RESULT_generic_error;

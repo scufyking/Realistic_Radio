@@ -1,4 +1,4 @@
-// ETS2 Local Radio Native
+// Realistic Radio
 // Copyright (c) 2026 ScufyKing
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
@@ -186,7 +186,7 @@ std::shared_ptr<OverlayImage> RenderDisplay(const DisplayState& st, int W, int H
         uint32_t v = Pack(1.f, c0, c0, c0 + 0.012f);
         std::fill(px.begin() + (size_t)y * W, px.begin() + (size_t)(y + 1) * W, v);
     }
-    const float OR = 1.f, OG = 0.682f, OB = 0.f;   // original Local Radio orange #FFAE00
+    const float OR = 1.f, OG = 0.682f, OB = 0.f;   // accent orange #FFAE00
     HFONT fSmall = MakeFont(S(26), FW_NORMAL), fHead = MakeFont(S(30), FW_NORMAL), fTitle = MakeFont(S(64), FW_BOLD),
           fCountry = MakeFont(S(34), FW_NORMAL), fFoot = MakeFont(S(28), FW_SEMIBOLD);
     Gdi mask(W, H);
@@ -194,7 +194,7 @@ std::shared_ptr<OverlayImage> RenderDisplay(const DisplayState& st, int W, int H
     const int headH = S(64);
     FillRect(px, W, H, 0, 0, W, headH, 1.f, 0.05f, 0.05f, 0.06f);
     FillRect(px, W, H, 0, headH - S(3), W, headH, 1.f, OR, OG, OB);
-    DrawText(mask, px, fHead, L"Local Radio", RECT{S(28), 0, W / 2, headH - S(3)}, 0.95f, 0.95f, 0.95f);
+    DrawText(mask, px, fHead, L"Realistic Radio", RECT{S(28), 0, W / 2, headH - S(3)}, 0.95f, 0.95f, 0.95f);
     std::wstring vol = st.muted ? std::wstring(L"Stumm") : std::to_wstring(st.volume) + L" %";
     DrawText(mask, px, fSmall, vol, RECT{W / 2, 0, W - S(28), headH - S(3)}, 0.85f, 0.85f, 0.88f, DT_RIGHT);
     if (st.volume >= 0 && !st.muted) {   // volume bar under header text

@@ -1,4 +1,4 @@
-// ETS2 Local Radio Native
+// Realistic Radio
 // Copyright (c) 2026 ScufyKing
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
@@ -19,7 +19,7 @@ struct OverlayConfig {
     double durationSeconds = 6.0;
     bool alwaysVisible = false;
     bool showLogos = true;
-    std::string urlPrefix = "https://radio.scufystudio.de/logo/";   // logos: <urlPrefix><logo path>, cached in local-radio\\logos\\; empty = local only
+    std::string urlPrefix = "https://radio.scufystudio.de/logo/";   // logos: <urlPrefix><logo path>, cached in realistic-radio\\logos\\; empty = local only
     std::string textNowPlaying = "Jetzt l\u00e4uft:";
     std::string textVolume = "Lautst\u00e4rke";
     std::string textStopped = "Radio aus";

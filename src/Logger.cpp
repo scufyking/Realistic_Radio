@@ -1,4 +1,4 @@
-// ETS2 Local Radio Native
+// Realistic Radio
 // Copyright (c) 2026 ScufyKing
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
@@ -35,7 +35,7 @@ std::wstring PluginDataDir() {
     std::wstring p(buf, n);
     size_t slash = p.find_last_of(L"\\/");
     p = (slash == std::wstring::npos) ? L"" : p.substr(0, slash + 1);
-    return p + L"local-radio\\";
+    return p + L"realistic-radio\\";
 }
 
 namespace Log {
@@ -52,7 +52,7 @@ void Write(const char* fmt, ...) {
         fprintf(g_file, "[%02d:%02d:%02d.%03d] %s\n", st.wHour, st.wMinute, st.wSecond, st.wMilliseconds, msg);
         fflush(g_file);
     }
-    OutputDebugStringA(("[local-radio] " + std::string(msg) + "\n").c_str());
+    OutputDebugStringA(("[realistic-radio] " + std::string(msg) + "\n").c_str());
 }
 void Shutdown() {
     std::lock_guard<std::mutex> l(g_mtx);

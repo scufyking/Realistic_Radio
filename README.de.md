@@ -1,4 +1,4 @@
-# ETS2 Local Radio Native
+# Realistic Radio
 
 [English](README.md) · **Deutsch**
 
@@ -57,9 +57,9 @@ DLL und Datenordner in den `plugins`-Ordner des Spiels kopieren, ETS2 starten, d
    `…\steamapps\common\Euro Truck Simulator 2\bin\win_x64\plugins\`
    Gibt es den Ordner `plugins` noch nicht, lege ihn an.
 3. Hineinkopieren:
-   - `local-radio-native.dll`
-   - den Ordner `local-radio\` (enthält Senderdaten, Sounds und später deine Einstellungen)
-4. Eine eventuell vorhandene andere Local-Radio-Plugin-DLL (z. B. `local-radio.dll`) aus diesem Ordner entfernen, damit nicht zwei Radios gleichzeitig spielen.
+   - `realistic-radio.dll`
+   - den Ordner `realistic-radio\` (enthält Senderdaten, Sounds und später deine Einstellungen)
+4. Andere Radio-Plugin-DLLs aus diesem Ordner entfernen (z. B. eine ältere `local-radio-native.dll` oder `local-radio.dll`), damit nicht zwei Radios gleichzeitig spielen.
 5. ETS2 starten. Das Spiel fragt, ob „erweiterte SDK-Funktionen“ erlaubt werden sollen; mit **OK** bestätigen.
 
 Das Radio startet automatisch, sobald der LKW eine Position hat und die Zündung an ist.
@@ -68,25 +68,28 @@ Der fertige Ordner sieht so aus:
 
 ```
 plugins\
-├── local-radio-native.dll
-└── local-radio\
+├── realistic-radio.dll
+└── realistic-radio\
     ├── ets2.json                    Sender- und Städtedaten (ETS2)
     ├── ats.json                     Sender- und Städtedaten (ATS)
-    ├── custom-stations-ets2.json    deine eigenen Sender (optional)
+    ├── custom-stations-ets2.example.json   Beispiel für eigene Sender
+    ├── custom-stations-ets2.json    deine eigenen Sender (optional, legst du selbst an)
     ├── audio\                       Rauschen und Umschaltgeräusch
-    ├── local-radio.json             Einstellungen (wird beim ersten Start angelegt)
+    ├── realistic-radio.json         Einstellungen (wird beim ersten Start angelegt)
     ├── favourites-ets2.json         deine Favoriten (wird automatisch angelegt)
     ├── logos\                       heruntergeladene Senderlogos (Zwischenspeicher)
-    └── local-radio.log              Logdatei
+    └── realistic-radio.log          Logdatei
 ```
 
-**Aktualisieren:** ETS2 beenden und `local-radio-native.dll` ersetzen. Einstellungen, Favoriten und eigene Sender bleiben erhalten.
+**Aktualisieren:** ETS2 beenden und `realistic-radio.dll` ersetzen. Einstellungen, Favoriten und eigene Sender bleiben erhalten.
 
-**Deinstallieren:** `local-radio-native.dll` und den Ordner `local-radio` löschen.
+**Umstieg von „ETS2 Local Radio Native“** (der frühere Name): `realistic-radio.dll` und den Ordner `realistic-radio\` nach `plugins` kopieren, dann `local-radio-native.dll` löschen. Beim ersten Start werden Einstellungen, Favoriten, eigene Sender und gespeicherte Logos automatisch aus dem alten Ordner `local-radio\` übernommen; danach kannst du auch diesen Ordner löschen.
+
+**Deinstallieren:** `realistic-radio.dll` und den Ordner `realistic-radio` löschen.
 
 ## Bedienung
 
-| Aktion | Standardtaste | Einstellung in `local-radio.json` |
+| Aktion | Standardtaste | Einstellung in `realistic-radio.json` |
 |---|---|---|
 | Nächster Sender | → (Pfeil rechts) | `keys.next` |
 | Vorheriger Sender | ← (Pfeil links) | `keys.previous` |
@@ -110,7 +113,7 @@ Sind die Pfeiltasten in ETS2 auch zum Fahren oder für Menüs belegt, passiert b
 
 ## Einstellungen
 
-Alle Einstellungen stehen in `local-radio\local-radio.json`. Die Datei wird beim ersten Start mit Standardwerten angelegt; ändere sie bei geschlossenem Spiel. Kommentare (`// …`) sind erlaubt.
+Alle Einstellungen stehen in `realistic-radio\realistic-radio.json`. Die Datei wird beim ersten Start mit Standardwerten angelegt; ändere sie bei geschlossenem Spiel. Kommentare (`// …`) sind erlaubt.
 
 ### Radio
 
@@ -124,7 +127,7 @@ Alle Einstellungen stehen in `local-radio\local-radio.json`. Die Datei wird beim
 | `muted` | `false` | Stumm (wird automatisch gespeichert) |
 | `autoPlay` | `true` | Automatisch losspielen |
 | `powerSource` | `"ignition"` | `"ignition"` = nur bei Zündung an, `"engine"` = nur bei laufendem Motor, `"always"` = immer |
-| `dataFile` | `""` | Andere Sender-/Städtedatei im Ordner `local-radio` (leer = `ets2.json` bzw. `ats.json`) |
+| `dataFile` | `""` | Andere Sender-/Städtedatei im Ordner `realistic-radio` (leer = `ets2.json` bzw. `ats.json`) |
 | `onlyWhenGameFocused` | `true` | Tasten wirken nur, wenn das Spiel im Vordergrund ist |
 | `reconnectMaxSeconds` | `30` | Maximale Wartezeit zwischen Verbindungsversuchen nach einem Stream-Abbruch |
 
@@ -139,23 +142,23 @@ Alle Einstellungen stehen in `local-radio\local-radio.json`. Die Datei wird beim
 | `durationSeconds` | `6` | Wie lange das Panel sichtbar bleibt |
 | `alwaysVisible` | `false` | Panel dauerhaft anzeigen |
 | `showLogos` | `true` | Senderlogos anzeigen |
-| `urlPrefix` | `"https://radio.scufystudio.de/logo/"` | Woher fehlende Logos geladen werden. Geladene Logos bleiben in `local-radio\logos\` und werden nie erneut geladen. Leer = nur Logos, die schon in diesem Ordner liegen, kein Netzzugriff |
+| `urlPrefix` | `"https://radio.scufystudio.de/logo/"` | Woher fehlende Logos geladen werden. Geladene Logos bleiben in `realistic-radio\logos\` und werden nie erneut geladen. Leer = nur Logos, die schon in diesem Ordner liegen, kein Netzzugriff |
 | `textNowPlaying`, `textVolume`, `textStopped`, `textMuted`, `textFavourite`, `textConnecting`, `textUnavailable`, `textPowerOff` | deutsche Texte | Alle Texte im Overlay, frei änderbar |
 
 ### Anzeige auf dem LKW-Bildschirm (`"display": { … }`, optional)
 
-Das Plugin kann ein natives Fenster „Local Radio Display“ öffnen, das das Radio als Infotainment-Bildschirm zeigt. Das separate Plugin [PrismTextureStreamer](https://github.com/Baldywaldy09/PrismTextureStreamer) (nicht Teil dieses Projekts) kann dieses Fenster auf den GPS- oder Dashboard-Bildschirm im LKW spiegeln. Standardmäßig ist es aus.
+Das Plugin kann ein natives Fenster „Realistic Radio Display“ öffnen, das das Radio als Infotainment-Bildschirm zeigt. Das separate Plugin [PrismTextureStreamer](https://github.com/Baldywaldy09/PrismTextureStreamer) (nicht Teil dieses Projekts) kann dieses Fenster auf den GPS- oder Dashboard-Bildschirm im LKW spiegeln. Standardmäßig ist es aus.
 
 | Schlüssel | Standard | Bedeutung |
 |---|---|---|
 | `enabled` | `false` | Display-Fenster öffnen |
 | `width`, `height` | `1280`, `720` | Größe in Pixeln |
 | `offscreen` | `true` | Fenster außerhalb des sichtbaren Desktops platzieren. Bleibt es in PrismTextureStreamer schwarz, auf `false` setzen |
-| `title` | `"Local Radio Display"` | Fenstertitel |
+| `title` | `"Realistic Radio Display"` | Fenstertitel |
 
 ## Eigene Sender hinzufügen
 
-Trage deine Sender in `local-radio\custom-stations-ets2.json` ein. Diese Datei wird bei Updates nie überschrieben.
+Kopiere `realistic-radio\custom-stations-ets2.example.json` im selben Ordner nach `custom-stations-ets2.json` und trage dort deine Sender ein. Updates enthalten nie eine `custom-stations-ets2.json`, deine Datei wird also nie überschrieben.
 
 ```jsonc
 {
@@ -173,20 +176,20 @@ Trage deine Sender in `local-radio\custom-stations-ets2.json` ein. Diese Datei w
 
 - Ein Sender mit **gleichem Namen** wie ein vorhandener in dieser Region ersetzt ihn (z. B. um eine kaputte Stream-URL zu korrigieren).
 - Ein Sender mit **neuem Namen** wird ans Ende der Liste dieser Region angehängt.
-- `logo` ist optional: eine vollständige `https://`-Adresse eines Bildes (PNG oder JPG) oder ein Dateiname. Ein Dateiname wird zuerst in `local-radio\logos\` gesucht und sonst von `urlPrefix` geladen.
-- `url` kann auch eine lokale Audiodatei sein. Ein relativer Pfad wird im Ordner `local-radio` gesucht.
+- `logo` ist optional: eine vollständige `https://`-Adresse eines Bildes (PNG oder JPG) oder ein Dateiname. Ein Dateiname wird zuerst in `realistic-radio\logos\` gesucht und sonst von `urlPrefix` geladen.
+- `url` kann auch eine lokale Audiodatei sein. Ein relativer Pfad wird im Ordner `realistic-radio` gesucht.
 
 Die Regionsnamen findest du in `ets2.json` unter `"stations"`. Regionen mit Bindestrich sind Teilgebiete, z. B. `germany-swr` oder `germany-muenchen`. In Grenznähe empfängst du oft mehrere Regionen gleichzeitig.
 
 ## Fehlersuche
 
-Fast jedes Problem lässt sich an `local-radio\local-radio.log` erkennen. Wenn du um Hilfe bittest, häng diese Datei immer an.
+Fast jedes Problem lässt sich an `realistic-radio\realistic-radio.log` erkennen. Wenn du um Hilfe bittest, häng diese Datei immer an.
 
 | Problem | Ursache und Lösung |
 |---|---|
-| Es wird keine `local-radio.log` angelegt | Die DLL wurde nicht geladen. Ordner prüfen: Er muss `bin\win_x64\plugins\` heißen. Wurde die Meldung zu den „erweiterten SDK-Funktionen“ mit OK bestätigt? |
-| Radio bei Lautstärke 0 noch hörbar oder zwei Sender gleichzeitig | Das Plugin ist doppelt installiert (z. B. `local-radio-native (1).dll`). Im Log steht dann `WARNING: another radio plugin DLL is in the plugins folder`; nur eine DLL behalten. Eine zweite Kopie dieser Version bleibt von selbst inaktiv. |
-| „Data file not found“ im Log | Der Ordner `local-radio` fehlt neben der DLL. |
+| Es wird keine `realistic-radio.log` angelegt | Die DLL wurde nicht geladen. Ordner prüfen: Er muss `bin\win_x64\plugins\` heißen. Wurde die Meldung zu den „erweiterten SDK-Funktionen“ mit OK bestätigt? |
+| Radio bei Lautstärke 0 noch hörbar oder zwei Sender gleichzeitig | Das Plugin ist doppelt installiert (z. B. `realistic-radio (1).dll`). Im Log steht dann `WARNING: another radio plugin DLL is in the plugins folder`; nur eine DLL behalten. Eine zweite Kopie dieser Version bleibt von selbst inaktiv. |
+| „Data file not found“ im Log | Der Ordner `realistic-radio` fehlt neben der DLL. |
 | Kein Ton, Log zeigt `Connected:` | Standard-Audiogerät von Windows prüfen (steht im Log als `Audio device: …`). Zündung an? Stumm geschaltet? |
 | „MP3 decoder init failed“ | Der Stream ist kein echtes MP3. URL aus dem Log melden oder über eigene Sender ersetzen. |
 | „Media Foundation cannot open …“ | Windows kann dieses Format nicht abspielen (z. B. manche HLS- oder Ogg-Streams). Anderen Sender wählen oder URL ersetzen. |
@@ -260,7 +263,7 @@ cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=toolchain-mingw.cmake -DCMAKE_BUILD_T
 cmake --build build
 ```
 
-Ergebnis: `local-radio-native.dll` und daneben ein fertiger Ordner `local-radio\`.
+Ergebnis: `realistic-radio.dll` und daneben ein fertiger Ordner `realistic-radio\`.
 
 **Senderdaten neu erzeugen:** `tools/convert_data.js` wandelt Sender- und Städtelisten aus dem JavaScript-Format, in dem sie veröffentlicht wurden, in das JSON-Format des Plugins um (Node.js wird nur für diesen Schritt gebraucht, nie von Spielern):
 
@@ -287,7 +290,7 @@ Die DLL ist statisch gelinkt; ein Visual-C++-Redistributable wird nicht benötig
 Das Plugin lädt das Logo eines Senders von `<urlPrefix><Logo-Pfad>`. Der Logo-Pfad ist der `logo`-Wert aus den Senderdaten, z. B.
 `stations/images-europe/germany/80s80s.png` → `https://radio.scufystudio.de/logo/stations/images-europe/germany/80s80s.png`.
 Leerzeichen und Sonderzeichen werden URL-kodiert (UTF-8), z. B. `Radio Bollerwagen.png` → `Radio%20Bollerwagen.png`.
-Der Ordner `server/logo/` enthält alle Logos (verkleinert auf 200 px) in genau dieser Ordnerstruktur. Geladene Logos werden lokal in `local-radio\logos\` gespeichert und nicht erneut geladen.
+Der Ordner `server/logo/` enthält alle Logos (verkleinert auf 200 px) in genau dieser Ordnerstruktur. Geladene Logos werden lokal in `realistic-radio\logos\` gespeichert und nicht erneut geladen.
 
 ## Projektstruktur
 
@@ -296,7 +299,7 @@ Der Ordner `server/logo/` enthält alle Logos (verkleinert auf 200 px) in genau 
 ├── toolchain-mingw.cmake      Toolchain für Cross-Kompilierung
 ├── src/                       C++-Quellcode des Plugins
 │   ├── Plugin.cpp             SDK-Einstiegspunkte, Telemetrie, Radio-Thread
-│   ├── RadioManager.*         Senderlogik (Portierung von main.js)
+│   ├── RadioManager.*         Senderlogik
 │   ├── ReceptionCalculator.*  Reichweite und Empfang
 │   ├── StationDatabase.*      Sender, Städte, Favoriten, eigene Sender
 │   ├── AudioEngine.*          Mischer und Audiogerät
@@ -316,10 +319,10 @@ Der Ordner `server/logo/` enthält alle Logos (verkleinert auf 200 px) in genau 
 
 ## Lizenz und Danksagung
 
-ETS2 Local Radio Native © 2026 **ScufyKing**. Lizenziert unter der **Mozilla Public License 2.0** (MPL-2.0), siehe [`LICENSE`](LICENSE).
+Realistic Radio © 2026 **ScufyKing**. Lizenziert unter der **Mozilla Public License 2.0** (MPL-2.0), siehe [`LICENSE`](LICENSE).
 
 Die Senderlisten, Städtekoordinaten, das Rausch- und Umschaltgeräusch sowie Teile der Senderwahl-Logik stammen aus Drittquellen unter MPL-2.0. Die Lizenz verlangt, deren Urheberhinweise beizubehalten; sie stehen in [`NOTICE.md`](NOTICE.md), zusammen mit den Hinweisen zu den verwendeten Bibliotheken. Senderlogos und Radiostreams gehören den jeweiligen Sendern.
 
 Dieses Projekt steht in keiner Verbindung zu SCS Software und wird nicht von SCS Software unterstützt. Euro Truck Simulator 2 und American Truck Simulator sind Marken von SCS Software.
 
-**Mitmachen:** Issues und Pull Requests sind willkommen. Bitte hänge bei Fehlermeldungen die `local-radio.log` an und melde kaputte Sender-URLs mit Sendername und Region.
+**Mitmachen:** Issues und Pull Requests sind willkommen. Bitte hänge bei Fehlermeldungen die `realistic-radio.log` an und melde kaputte Sender-URLs mit Sendername und Region.

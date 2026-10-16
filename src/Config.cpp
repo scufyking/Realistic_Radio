@@ -1,4 +1,4 @@
-// ETS2 Local Radio Native
+// Realistic Radio
 // Copyright (c) 2026 ScufyKing
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
@@ -96,7 +96,7 @@ static const char* kDefaultConfig = R"({
     "width": 1280,
     "height": 720,
     "offscreen": true,
-    "title": "Local Radio Display"
+    "title": "Realistic Radio Display"
   },
   "overlay": {
     "mode": "auto",
