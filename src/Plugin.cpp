@@ -29,6 +29,7 @@ SCSAPI_VOID OnBool(const scs_string_t, const scs_u32_t, const scs_value_t* const
 }
 std::atomic<bool> g_quit{false};
 HANDLE g_thread = nullptr;
+HANDLE g_instance = nullptr;   // per-process single-instance mutex
 std::string g_game = "ets2";
 
 SCSAPI_VOID OnPlacement(const scs_string_t, const scs_u32_t, const scs_value_t* const value, const scs_context_t) {
@@ -63,12 +64,37 @@ DWORD WINAPI RadioThread(LPVOID) {
 SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_init_params_t* const params) {
     if (version != SCS_TELEMETRY_VERSION_1_00 && version != SCS_TELEMETRY_VERSION_1_01) return SCS_RESULT_unsupported;
     const auto* p = static_cast<const scs_telemetry_init_params_v100_t*>(params);
+    // Only one copy may run per game process: a second DLL (e.g. "local-radio-native (1).dll") would play a second
+    // radio with its own volume. The copy that comes second stays inactive and does not touch the shared log file.
+    wchar_t mtxName[80]; swprintf(mtxName, 80, L"Local\\ETS2LocalRadioNative-%lu", GetCurrentProcessId());
+    g_instance = CreateMutexW(nullptr, FALSE, mtxName);
+    if (g_instance && GetLastError() == ERROR_ALREADY_EXISTS) {
+        CloseHandle(g_instance); g_instance = nullptr;
+        p->common.log(SCS_LOG_TYPE_warning, "[local-radio] another copy of the Local Radio plugin is already loaded - this copy stays inactive. Remove duplicate DLLs from the plugins folder.");
+        return SCS_RESULT_ok;
+    }
     std::wstring dir = PluginDataDir();
     CreateDirectoryW(dir.c_str(), nullptr);
     Log::Init(dir + L"local-radio.log");
     std::string gid = p->common.game_id ? p->common.game_id : "";
     g_game = (gid == SCS_GAME_ID_ATS) ? "ats" : "ets2";
     Log::Write("ETS2 Local Radio Native loaded by %s (game id '%s', telemetry 0x%x)", p->common.game_name ? p->common.game_name : "?", gid.c_str(), version);
+    {   // warn about other radio plugin DLLs in the same folder
+        HMODULE self = nullptr; wchar_t me[MAX_PATH] = {0};
+        GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)&scs_telemetry_init, &self);
+        GetModuleFileNameW(self, me, MAX_PATH);
+        std::wstring mine = me, folder = mine.substr(0, mine.find_last_of(L"\\/") + 1);
+        Log::Write("Plugin file: %s", WideToUtf8(mine).c_str());
+        WIN32_FIND_DATAW fd; HANDLE h = FindFirstFileW((folder + L"*.dll").c_str(), &fd);
+        if (h != INVALID_HANDLE_VALUE) {
+            do {
+                std::wstring n = fd.cFileName, l = n; for (auto& ch : l) ch = towlower(ch);
+                if (folder + n != mine && l.find(L"local-radio") != std::wstring::npos)
+                    Log::Write("WARNING: another radio plugin DLL is in the plugins folder: %s - remove it, otherwise two radios may play", WideToUtf8(n).c_str());
+            } while (FindNextFileW(h, &fd));
+            FindClose(h);
+        }
+    }
     if (p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_world_placement, SCS_U32_NIL, SCS_VALUE_TYPE_dplacement,
                                 SCS_TELEMETRY_CHANNEL_FLAG_none, OnPlacement, nullptr) != SCS_RESULT_ok) {
         p->common.log(SCS_LOG_TYPE_error, "[local-radio] cannot register truck.world.placement");
@@ -86,11 +112,13 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
 }
 
 SCSAPI_VOID scs_telemetry_shutdown(void) {
+    if (!g_instance) return;   // inactive duplicate copy
     g_quit = true;
     if (g_thread) { WaitForSingleObject(g_thread, 10000); CloseHandle(g_thread); g_thread = nullptr; }
     g_havePos = false; g_electric = false; g_engine = false;
     Log::Write("Plugin shut down");
     Log::Shutdown();
+    CloseHandle(g_instance); g_instance = nullptr;
 }
 
 BOOL APIENTRY DllMain(HMODULE, DWORD, LPVOID) { return TRUE; }

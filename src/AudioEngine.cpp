@@ -5,6 +5,7 @@
 #include "AudioEngine.h"
 #include "Logger.h"
 #include <algorithm>
+#include <cmath>
 
 std::vector<float> AudioEngine::LoadClip(const std::wstring& path) {
     std::vector<float> v;
@@ -74,15 +75,21 @@ void AudioEngine::Mix(float* out, ma_uint32 frames) {
         std::unique_lock<std::mutex> l(sessMtx_, std::try_to_lock);
         if (l.owns_lock() && session_) got = session_->Read(tmp_.data(), frames);
     }
-    float master = muted_ ? 0.f : master_.load();
+    const float masterTarget = muted_ ? 0.f : master_.load();
+    const float masterStep = 1.f / (0.08f * kRate);   // full range in 80 ms
     for (ma_uint32 i = 0; i < frames; ++i) {
+        if (masterCur_ < masterTarget) masterCur_ = std::min(masterTarget, masterCur_ + masterStep);
+        else if (masterCur_ > masterTarget) masterCur_ = std::max(masterTarget, masterCur_ - masterStep);
+        const float master = masterCur_;
         float gs = gStream_.Next(), gn = gStatic_.Next(), gw = gSwitch_.Next();
         for (ma_uint32 c = 0; c < kChannels; ++c) {
             float v = 0;
             if (i < got) v += tmp_[i * kChannels + c] * gs;
             if (!static_.empty()) v += static_[(staticPos_ + c) % static_.size()] * gn;
             if (!switch_.empty()) v += switch_[(switchPos_ + c) % switch_.size()] * gw;
-            out[i * kChannels + c] = std::clamp(v * master, -1.f, 1.f);
+            float o = v * master;
+            if (!std::isfinite(o) || master <= 0.f) o = 0.f;   // volume 0 is always silence; never pass NaN/Inf to the device
+            out[i * kChannels + c] = std::clamp(o, -1.f, 1.f);
         }
         if (!static_.empty()) staticPos_ = (staticPos_ + kChannels) % static_.size();
         if (!switch_.empty()) switchPos_ = gw > 0 ? (switchPos_ + kChannels) % switch_.size() : 0;

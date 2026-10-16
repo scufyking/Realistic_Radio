@@ -15,18 +15,19 @@ int AnchorFromName(const std::string& p) {
     for (int i = 0; i < 6; ++i) if (p == names[i]) return i;
     return 1;
 }
-std::string UrlEncodePath(const std::string& s) {
+std::string SafeNameUtf8(const std::string& logo) {
+    std::string n = logo;
+    for (char& c : n) if (strchr("/\\:*?\"<>|", c)) c = '_';
+    return n;
+}
+std::wstring SafeFileName(const std::string& logo) { return Utf8ToWide(SafeNameUtf8(logo)); }
+std::string UrlEncodePath(const std::string& s) {   // percent-encode, keep RFC 3986 unreserved and '/'
     static const char* hex = "0123456789ABCDEF"; std::string o;
     for (unsigned char c : s) {
-        if (isalnum(c) || strchr("-_.~/:", c)) o += (char)c;
+        if (isalnum(c) || strchr("-_.~/", c)) o += (char)c;
         else { o += '%'; o += hex[c >> 4]; o += hex[c & 15]; }
     }
     return o;
-}
-std::wstring SafeFileName(const std::string& logo) {
-    std::string n = logo;
-    for (char& c : n) if (strchr("/\\:*?\"<>|", c)) c = '_';
-    return Utf8ToWide(n);
 }
 }
 
@@ -75,12 +76,15 @@ void Overlay::RequestLogo(const std::string& logoPath) {
         if (logo_) { logoCache_[logoPath] = logo_; return; }
     }
     if (logoPath.rfind("http", 0) != 0 && cfg_.urlPrefix.empty()) return;   // bundled logos only, no network
+    { auto f = logoFailedAt_.find(logoPath); if (f != logoFailedAt_.end() && GetTickCount64() - f->second < 600000) return; }
     if (job_ && !job_->done) return;   // a download is running; this logo is fetched next time it is shown
     std::string lower = logoPath; std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
     if (lower.size() > 4 && lower.compare(lower.size() - 4, 4, ".svg") == 0) return;   // SVG logos are not supported
     job_ = std::make_shared<LogoJob>();
-    job_->url = (logoPath.rfind("http", 0) == 0 ? logoPath : cfg_.urlPrefix + UrlEncodePath(logoPath));
-    job_->file = file;
+    // server layout: <urlPrefix><logo path>, e.g. https://radio.scufystudio.de/logo/stations/images-europe/germany/80s80s.png
+    std::string rel = logoPath; while (!rel.empty() && rel[0] == '/') rel.erase(0, 1);
+    job_->url = (logoPath.rfind("http", 0) == 0 ? logoPath : cfg_.urlPrefix + UrlEncodePath(rel));
+    job_->file = file; job_->key = logoPath;
     HMODULE self = nullptr;
     GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCWSTR)&Overlay::LogoThread, &self);
     auto* holder = new std::shared_ptr<LogoJob>(job_);
@@ -180,6 +184,7 @@ void Overlay::Tick() {
     if (off_) {   // overlay off: still finish logo downloads for the infotainment display
         if (job_ && job_->done) {
             auto j = job_; job_.reset();
+            if (!j->ok) logoFailedAt_[j->key] = GetTickCount64();
             if (j->ok && SafeFileName(logoKey_) == j->file.substr(logoDir_.size())) { logo_ = LoadImageFile(j->file); if (logo_) logoCache_[logoKey_] = logo_; }
         }
         return;
@@ -192,6 +197,7 @@ void Overlay::Tick() {
     }
     if (job_ && job_->done) {
         auto j = job_; job_.reset();
+        if (!j->ok) logoFailedAt_[j->key] = GetTickCount64();
         if (j->ok && SafeFileName(logoKey_) == j->file.substr(logoDir_.size())) {
             logo_ = LoadImageFile(j->file);
             if (logo_) { logoCache_[logoKey_] = logo_; if (Visible()) Rerender(); }

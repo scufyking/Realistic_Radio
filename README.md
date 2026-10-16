@@ -40,7 +40,7 @@ Copy the DLL and its data folder into the game's `plugins` folder, start ETS2, a
 - **Realistic range and switching.** Every city has a broadcast range; regions overlap at borders, and the radio only switches automatically when another region is clearly better received.
 - **Reception and static.** The further you are from a region, the more static you hear, and weak signals drop out now and then.
 - **Smooth transitions** with a tuning sound.
-- **In-game overlay.** On every station change, volume change and so on, a panel appears for a few seconds with the station name, country, signal bars, favourite heart and station logo. Works in fullscreen. Logos are bundled, so nothing is downloaded.
+- **In-game overlay.** On every station change, volume change and so on, a panel appears for a few seconds with the station name, country, signal bars, favourite heart and station logo. Works in fullscreen. Logos are loaded from `radio.scufystudio.de` once and then kept locally.
 - **Radio only with the ignition on** (or only with the engine running, or always; your choice).
 - **Keyboard and controller controls**, freely configurable.
 - **Favourites per country.**
@@ -88,11 +88,11 @@ plugins\
 
 | Action | Default key | Setting in `local-radio.json` |
 |---|---|---|
-| Next station | Page Down | `keys.next` |
-| Previous station | Page Up | `keys.previous` |
+| Next station | → (Right arrow) | `keys.next` |
+| Previous station | ← (Left arrow) | `keys.previous` |
 | Stop / start | End | `keys.stop` |
-| Volume up | `+` (main keyboard) | `keys.volumeUp` |
-| Volume down | `-` (main keyboard) | `keys.volumeDown` |
+| Volume up (5 % steps) | ↑ (Up arrow) | `keys.volumeUp` |
+| Volume down (5 % steps) | ↓ (Down arrow) | `keys.volumeDown` |
 | Save current station as favourite for this country | Pause | `keys.makeFavourite` |
 | Go to favourite | – | `keys.goToFavourite` |
 | Mute | – | `keys.mute` |
@@ -101,6 +101,8 @@ plugins\
 "Next" and "Previous" step through every station of every region you currently receive.
 
 Keys only react while ETS2 is the active window, so they do not interfere with other programs.
+
+If the arrow keys are also bound to driving or menus in ETS2, both happen at the same time. In that case use other keys or a combination such as `"Ctrl+Right"`.
 
 **Key names** use the .NET key names: letters `A`–`Z`, digits `0`–`9`, `F1`–`F24`, `NumPad0`–`NumPad9`, `PageUp`, `Next` (= Page Down), `Home`, `End`, `Insert`, `Delete`, `Up`, `Down`, `Left`, `Right`, `Pause`, `Space`, `Oemplus`, `OemMinus`, `Add`, `Subtract`, `MediaNextTrack`, `MediaPlayPause` and more. Combinations work too, e.g. `"Ctrl+Shift+R"`. An empty value `""` disables a key.
 
@@ -118,7 +120,7 @@ All settings are in `local-radio\local-radio.json`. The file is created with def
 | `threshold` | `0.15` | How much better another region must be received before the radio switches automatically. `0` = switch immediately, `1` = never |
 | `whitenoise` | `true` | Static when reception is weak |
 | `transitionWhitenoise` | `true` | Tuning sound when changing stations |
-| `volume` | `0.8` | Volume from 0.0 to 1.0 (saved automatically) |
+| `volume` | `0.6` | Volume from 0.0 to 1.0 (saved automatically). The scale is perceptual: 50 % is clearly quieter than full, 10 % is very quiet, 0 is always silent |
 | `muted` | `false` | Muted (saved automatically) |
 | `autoPlay` | `true` | Start playing automatically |
 | `powerSource` | `"ignition"` | `"ignition"` = only with ignition on, `"engine"` = only with the engine running, `"always"` = always |
@@ -136,8 +138,8 @@ All settings are in `local-radio\local-radio.json`. The file is created with def
 | `scale` | `1.0` | Size; also scales automatically with your resolution |
 | `durationSeconds` | `6` | How long the panel stays visible |
 | `alwaysVisible` | `false` | Keep the panel on screen all the time |
-| `showLogos` | `true` | Show station logos (bundled in `local-radio\logos\`) |
-| `urlPrefix` | `""` | Optional web address to download missing logos from (`<urlPrefix><logo path>`). Empty = only bundled logos, no network access |
+| `showLogos` | `true` | Show station logos |
+| `urlPrefix` | `"https://radio.scufystudio.de/logo/"` | Where missing logos are downloaded from. Downloaded logos are kept in `local-radio\logos\` and never downloaded again. Empty = only logos already in that folder, no network access |
 | `textNowPlaying`, `textVolume`, `textStopped`, `textMuted`, `textFavourite`, `textConnecting`, `textUnavailable`, `textPowerOff` | German texts | All texts on the overlay. For English, use e.g. `"Now playing:"`, `"Volume"`, `"Radio off"`, `"Muted"`, `"Saved as favourite"`, `"connecting…"`, `"Station unavailable"`, `"Ignition off"` |
 
 ### Truck screen display (`"display": { … }`, optional)
@@ -171,7 +173,7 @@ Put your stations in `local-radio\custom-stations-ets2.json`. That file is never
 
 - A station with the **same name** as an existing one in that region replaces it (e.g. to fix a broken stream URL).
 - A station with a **new name** is added to the end of that region's list.
-- `logo` is optional: a full `https://` address of an image (PNG or JPG), or the name of a file you put in `local-radio\logos\`.
+- `logo` is optional: a full `https://` address of an image (PNG or JPG), or a file name. A file name is looked up in `local-radio\logos\` first and otherwise downloaded from `urlPrefix`.
 - `url` can also be a local audio file. A relative path is looked up in the `local-radio` folder.
 
 To find the region names, open `ets2.json` and look under `"stations"`. Regions with a hyphen are subregions, e.g. `germany-swr` or `germany-muenchen`. Near the border you often receive several regions at once.
@@ -183,6 +185,7 @@ Almost every problem can be diagnosed from `local-radio\local-radio.log`. When a
 | Problem | Cause and solution |
 |---|---|
 | No `local-radio.log` is created | The DLL was not loaded. Check the folder: it must be `bin\win_x64\plugins\`. Did you confirm the "advanced SDK features" message with OK? |
+| Radio still audible at volume 0, or two stations at once | Two copies of the plugin are installed (e.g. `local-radio-native (1).dll`). The log then says `WARNING: another radio plugin DLL is in the plugins folder`; keep only one DLL. A second copy of this version stays inactive by itself. |
 | "Data file not found" in the log | The `local-radio` folder is missing next to the DLL. |
 | No sound, log shows `Connected:` | Check Windows' default audio device (shown in the log as `Audio device: …`). Ignition on? Muted? |
 | "MP3 decoder init failed" | The stream is not real MP3. Report the URL in the log, or replace it with your own stations. |
@@ -190,6 +193,7 @@ Almost every problem can be diagnosed from `local-radio\local-radio.log`. When a
 | Overlay says "Station unavailable" | The stream cannot be reached right now. The plugin keeps retrying in the background; usually it is quicker to switch stations. |
 | No overlay | Look for `Overlay:` in the log. `Present hook installed` and `D3D11 renderer ready` mean it is active. If another overlay tool conflicts, try `"mode": "window"`. |
 | Overlay hides part of the HUD | Change `position`, `offsetY` or `scale`. |
+| No station logo | Logos are downloaded from `radio.scufystudio.de` on first use; without internet, or if the server is down, the panel is shown without a logo and the download is retried after 10 minutes. |
 | Keys do nothing | Is the game the active window? Another program may be using the key; pick a different one. |
 | A station I expected is missing | It is not assigned to the region you are in. You only receive regions within range. Add it as your own station. |
 
@@ -278,6 +282,13 @@ node tools/convert_data.js <path>/web data
 
 The DLL is statically linked; no Visual C++ redistributable is needed.
 
+### Logo server
+
+The plugin downloads a station's logo from `<urlPrefix><logo path>`, where the logo path is the `logo` value from the station data, e.g.
+`stations/images-europe/germany/80s80s.png` → `https://radio.scufystudio.de/logo/stations/images-europe/germany/80s80s.png`.
+Spaces and special characters are URL-encoded (UTF-8), e.g. `Radio Bollerwagen.png` → `Radio%20Bollerwagen.png`.
+The folder `server/logo/` contains all logos (downscaled to 200 px) in exactly this folder structure. Downloaded logos are stored locally in `local-radio\logos\` and are not downloaded again.
+
 ## Project structure
 
 ```
@@ -296,7 +307,8 @@ The DLL is statically linked; no Visual C++ redistributable is needed.
 │   ├── InputManager.*         keyboard and controller
 │   ├── Config.*, Logger.*     settings and log
 │   └── MiniaudioImpl.cpp      miniaudio compilation unit
-├── data/                      station/city data, logos and sounds
+├── data/                      station/city data and sounds
+├── server/logo/               station logos for the logo server (radio.scufystudio.de/logo/)
 ├── sdk/                       SCS Telemetry SDK headers
 ├── third_party/               miniaudio, nlohmann/json
 └── tools/                     data converter, equivalence test

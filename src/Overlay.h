@@ -40,7 +40,8 @@ private:
     HWND wnd_ = nullptr, game_ = nullptr;
     float lastAlpha_ = -1; const OverlayImage* lastImg_ = nullptr; POINT lastPos_{-99999, -99999};
     // logo download (one background thread at a time)
-    struct LogoJob { std::string url; std::wstring file; std::atomic<bool> done{false}; bool ok = false; };
+    struct LogoJob { std::string key, url; std::wstring file; std::atomic<bool> done{false}; bool ok = false; };
     std::shared_ptr<LogoJob> job_;
     std::map<std::string, std::shared_ptr<OverlayImage>> logoCache_;
+    std::map<std::string, ULONGLONG> logoFailedAt_;
 };

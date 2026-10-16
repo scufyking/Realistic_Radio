@@ -17,12 +17,12 @@ const char* ActionName(Action a) { return kActionNames[(int)a]; }
 
 Config::Config() {
     for (auto& b : buttons) b = -1;
-    // Defaults identical to the original server (Settings.cs, .NET Keys names)
-    keys[(int)Action::Previous] = ParseKeyBinding("PageUp");
-    keys[(int)Action::Next] = ParseKeyBinding("Next");
+    // Default keys: arrows for station/volume (.NET Keys names)
+    keys[(int)Action::Previous] = ParseKeyBinding("Left");
+    keys[(int)Action::Next] = ParseKeyBinding("Right");
     keys[(int)Action::Stop] = ParseKeyBinding("End");
-    keys[(int)Action::VolumeUp] = ParseKeyBinding("Oemplus");
-    keys[(int)Action::VolumeDown] = ParseKeyBinding("OemMinus");
+    keys[(int)Action::VolumeUp] = ParseKeyBinding("Up");
+    keys[(int)Action::VolumeDown] = ParseKeyBinding("Down");
     keys[(int)Action::MakeFavourite] = ParseKeyBinding("Pause");
 }
 
@@ -68,7 +68,7 @@ static const char* kDefaultConfig = R"({
   "threshold": 0.15,
   "whitenoise": true,
   "transitionWhitenoise": true,
-  "volume": 0.8,
+  "volume": 0.6,
   "muted": false,
   "autoPlay": true,
   "powerSource": "ignition",
@@ -76,11 +76,11 @@ static const char* kDefaultConfig = R"({
   "onlyWhenGameFocused": true,
   "reconnectMaxSeconds": 30,
   "keys": {
-    "previous": "PageUp",
-    "next": "Next",
+    "previous": "Left",
+    "next": "Right",
     "stop": "End",
-    "volumeUp": "Oemplus",
-    "volumeDown": "OemMinus",
+    "volumeUp": "Up",
+    "volumeDown": "Down",
     "makeFavourite": "Pause",
     "goToFavourite": "",
     "mute": "",
@@ -107,7 +107,7 @@ static const char* kDefaultConfig = R"({
     "durationSeconds": 6,
     "alwaysVisible": false,
     "showLogos": true,
-    "urlPrefix": "",
+    "urlPrefix": "https://radio.scufystudio.de/logo/",
     "textNowPlaying": "Jetzt l\u00e4uft:",
     "textVolume": "Lautst\u00e4rke",
     "textStopped": "Radio aus",
@@ -156,6 +156,10 @@ bool Config::Load(const std::wstring& path) {
             c.scale = std::clamp(o.value("scale", c.scale), 0.3, 4.0); c.durationSeconds = o.value("durationSeconds", c.durationSeconds);
             c.alwaysVisible = o.value("alwaysVisible", c.alwaysVisible); c.showLogos = o.value("showLogos", c.showLogos);
             c.urlPrefix = o.value("urlPrefix", c.urlPrefix);
+            if (c.urlPrefix.find("localradio.koenvh.nl") != std::string::npos) {   // old default from earlier versions
+                c.urlPrefix = OverlayConfig().urlPrefix;
+                migratedUrlPrefix = true;
+            }
             c.textNowPlaying = o.value("textNowPlaying", c.textNowPlaying); c.textVolume = o.value("textVolume", c.textVolume);
             c.textStopped = o.value("textStopped", c.textStopped); c.textMuted = o.value("textMuted", c.textMuted);
             c.textFavourite = o.value("textFavourite", c.textFavourite); c.textConnecting = o.value("textConnecting", c.textConnecting);
@@ -167,6 +171,16 @@ bool Config::Load(const std::wstring& path) {
                 keys[i] = ParseKeyBinding(j["keys"][kActionNames[i]].get<std::string>());
             if (j.contains("buttons") && j["buttons"].contains(kActionNames[i]))
                 buttons[i] = j["buttons"][kActionNames[i]].get<int>();
+        }
+        if (migratedUrlPrefix) {   // write the new logo address back so the file matches what is used
+            f.close();
+            try {
+                std::ifstream in{std::filesystem::path(path)};
+                json k = json::parse(in, nullptr, true, true); in.close();
+                k["overlay"]["urlPrefix"] = overlay.urlPrefix;
+                std::ofstream o{std::filesystem::path(path)}; o << k.dump(2);
+                Log::Write("Logo address updated to %s", overlay.urlPrefix.c_str());
+            } catch (...) {}
         }
         return true;
     } catch (const std::exception& e) {

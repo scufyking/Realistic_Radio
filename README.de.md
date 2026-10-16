@@ -40,7 +40,7 @@ DLL und Datenordner in den `plugins`-Ordner des Spiels kopieren, ETS2 starten, d
 - **Realistische Reichweite und Umschaltung.** Jede Stadt hat eine Sendereichweite; an Grenzen überlappen Regionen, und das Radio wechselt nur automatisch, wenn eine andere Region deutlich besser empfangen wird.
 - **Empfang und Rauschen.** Je weiter du von einer Region entfernt bist, desto mehr rauscht es, und bei schwachem Signal setzt der Ton ab und zu aus.
 - **Sanfte Übergänge** mit Umschaltgeräusch.
-- **Ingame-Overlay.** Bei jedem Senderwechsel, bei Lautstärke usw. erscheint für einige Sekunden ein Panel mit Sendername, Land, Empfangsbalken, Favoriten-Herz und Senderlogo. Funktioniert auch im Vollbild. Die Logos sind im Paket enthalten, es wird nichts heruntergeladen.
+- **Ingame-Overlay.** Bei jedem Senderwechsel, bei Lautstärke usw. erscheint für einige Sekunden ein Panel mit Sendername, Land, Empfangsbalken, Favoriten-Herz und Senderlogo. Funktioniert auch im Vollbild. Die Logos werden einmal von `radio.scufystudio.de` geladen und danach lokal gespeichert.
 - **Radio nur bei eingeschalteter Zündung** (oder nur bei laufendem Motor, oder immer; einstellbar).
 - **Steuerung per Tastatur und Controller**, frei belegbar.
 - **Favoriten pro Land.**
@@ -88,11 +88,11 @@ plugins\
 
 | Aktion | Standardtaste | Einstellung in `local-radio.json` |
 |---|---|---|
-| Nächster Sender | Bild ↓ | `keys.next` |
-| Vorheriger Sender | Bild ↑ | `keys.previous` |
+| Nächster Sender | → (Pfeil rechts) | `keys.next` |
+| Vorheriger Sender | ← (Pfeil links) | `keys.previous` |
 | Stopp / Start | Ende | `keys.stop` |
-| Lauter | `+` (Haupttastatur) | `keys.volumeUp` |
-| Leiser | `-` (Haupttastatur) | `keys.volumeDown` |
+| Lauter (5-%-Schritte) | ↑ (Pfeil hoch) | `keys.volumeUp` |
+| Leiser (5-%-Schritte) | ↓ (Pfeil runter) | `keys.volumeDown` |
 | Aktuellen Sender als Favorit für dieses Land speichern | Pause | `keys.makeFavourite` |
 | Zum Favoriten | – | `keys.goToFavourite` |
 | Stumm | – | `keys.mute` |
@@ -101,6 +101,8 @@ plugins\
 „Nächster“ und „Vorheriger“ schalten durch alle Sender aller Regionen, die du gerade empfängst.
 
 Tasten reagieren nur, wenn ETS2 das aktive Fenster ist. So stören sie keine anderen Programme.
+
+Sind die Pfeiltasten in ETS2 auch zum Fahren oder für Menüs belegt, passiert beides gleichzeitig. Dann andere Tasten oder eine Kombination wie `"Ctrl+Right"` verwenden.
 
 **Tastennamen** sind die .NET-Tastennamen: Buchstaben `A`–`Z`, Ziffern `0`–`9`, `F1`–`F24`, `NumPad0`–`NumPad9`, `PageUp`, `Next` (= Bild ↓), `Home`, `End`, `Insert`, `Delete`, `Up`, `Down`, `Left`, `Right`, `Pause`, `Space`, `Oemplus`, `OemMinus`, `Add`, `Subtract`, `MediaNextTrack`, `MediaPlayPause` und weitere. Kombinationen gehen auch, z. B. `"Ctrl+Shift+R"`. Ein leerer Wert `""` schaltet eine Taste ab.
 
@@ -118,7 +120,7 @@ Alle Einstellungen stehen in `local-radio\local-radio.json`. Die Datei wird beim
 | `threshold` | `0.15` | Wie viel besser eine andere Region empfangen werden muss, bevor automatisch gewechselt wird. `0` = sofort wechseln, `1` = nie |
 | `whitenoise` | `true` | Rauschen bei schwachem Empfang |
 | `transitionWhitenoise` | `true` | Umschaltgeräusch beim Senderwechsel |
-| `volume` | `0.8` | Lautstärke von 0.0 bis 1.0 (wird automatisch gespeichert) |
+| `volume` | `0.6` | Lautstärke von 0.0 bis 1.0 (wird automatisch gespeichert). Die Skala ist gehörgerecht: 50 % ist deutlich leiser als voll, 10 % sehr leise, 0 ist immer stumm |
 | `muted` | `false` | Stumm (wird automatisch gespeichert) |
 | `autoPlay` | `true` | Automatisch losspielen |
 | `powerSource` | `"ignition"` | `"ignition"` = nur bei Zündung an, `"engine"` = nur bei laufendem Motor, `"always"` = immer |
@@ -136,8 +138,8 @@ Alle Einstellungen stehen in `local-radio\local-radio.json`. Die Datei wird beim
 | `scale` | `1.0` | Größe; passt sich zusätzlich automatisch an die Auflösung an |
 | `durationSeconds` | `6` | Wie lange das Panel sichtbar bleibt |
 | `alwaysVisible` | `false` | Panel dauerhaft anzeigen |
-| `showLogos` | `true` | Senderlogos anzeigen (liegen in `local-radio\logos\`) |
-| `urlPrefix` | `""` | Optionale Webadresse, von der fehlende Logos geladen werden (`<urlPrefix><Logo-Pfad>`). Leer = nur mitgelieferte Logos, kein Netzzugriff |
+| `showLogos` | `true` | Senderlogos anzeigen |
+| `urlPrefix` | `"https://radio.scufystudio.de/logo/"` | Woher fehlende Logos geladen werden. Geladene Logos bleiben in `local-radio\logos\` und werden nie erneut geladen. Leer = nur Logos, die schon in diesem Ordner liegen, kein Netzzugriff |
 | `textNowPlaying`, `textVolume`, `textStopped`, `textMuted`, `textFavourite`, `textConnecting`, `textUnavailable`, `textPowerOff` | deutsche Texte | Alle Texte im Overlay, frei änderbar |
 
 ### Anzeige auf dem LKW-Bildschirm (`"display": { … }`, optional)
@@ -171,7 +173,7 @@ Trage deine Sender in `local-radio\custom-stations-ets2.json` ein. Diese Datei w
 
 - Ein Sender mit **gleichem Namen** wie ein vorhandener in dieser Region ersetzt ihn (z. B. um eine kaputte Stream-URL zu korrigieren).
 - Ein Sender mit **neuem Namen** wird ans Ende der Liste dieser Region angehängt.
-- `logo` ist optional: eine vollständige `https://`-Adresse eines Bildes (PNG oder JPG) oder der Name einer Datei, die du in `local-radio\logos\` legst.
+- `logo` ist optional: eine vollständige `https://`-Adresse eines Bildes (PNG oder JPG) oder ein Dateiname. Ein Dateiname wird zuerst in `local-radio\logos\` gesucht und sonst von `urlPrefix` geladen.
 - `url` kann auch eine lokale Audiodatei sein. Ein relativer Pfad wird im Ordner `local-radio` gesucht.
 
 Die Regionsnamen findest du in `ets2.json` unter `"stations"`. Regionen mit Bindestrich sind Teilgebiete, z. B. `germany-swr` oder `germany-muenchen`. In Grenznähe empfängst du oft mehrere Regionen gleichzeitig.
@@ -183,6 +185,7 @@ Fast jedes Problem lässt sich an `local-radio\local-radio.log` erkennen. Wenn d
 | Problem | Ursache und Lösung |
 |---|---|
 | Es wird keine `local-radio.log` angelegt | Die DLL wurde nicht geladen. Ordner prüfen: Er muss `bin\win_x64\plugins\` heißen. Wurde die Meldung zu den „erweiterten SDK-Funktionen“ mit OK bestätigt? |
+| Radio bei Lautstärke 0 noch hörbar oder zwei Sender gleichzeitig | Das Plugin ist doppelt installiert (z. B. `local-radio-native (1).dll`). Im Log steht dann `WARNING: another radio plugin DLL is in the plugins folder`; nur eine DLL behalten. Eine zweite Kopie dieser Version bleibt von selbst inaktiv. |
 | „Data file not found“ im Log | Der Ordner `local-radio` fehlt neben der DLL. |
 | Kein Ton, Log zeigt `Connected:` | Standard-Audiogerät von Windows prüfen (steht im Log als `Audio device: …`). Zündung an? Stumm geschaltet? |
 | „MP3 decoder init failed“ | Der Stream ist kein echtes MP3. URL aus dem Log melden oder über eigene Sender ersetzen. |
@@ -190,6 +193,7 @@ Fast jedes Problem lässt sich an `local-radio\local-radio.log` erkennen. Wenn d
 | Overlay zeigt „Sender nicht erreichbar“ | Der Stream ist gerade nicht erreichbar. Das Plugin versucht es im Hintergrund weiter; meist ist Weiterschalten schneller. |
 | Kein Overlay | Im Log nach `Overlay:` suchen. `Present hook installed` und `D3D11 renderer ready` bedeuten, dass es aktiv ist. Bei Konflikten mit einem anderen Overlay-Tool `"mode": "window"` probieren. |
 | Overlay verdeckt einen Teil des HUD | `position`, `offsetY` oder `scale` ändern. |
+| Kein Senderlogo | Logos werden beim ersten Gebrauch von `radio.scufystudio.de` geladen; ohne Internet oder bei Serverausfall erscheint das Panel ohne Logo, und nach 10 Minuten wird es erneut versucht. |
 | Tasten tun nichts | Ist das Spiel das aktive Fenster? Eventuell belegt ein anderes Programm die Taste; eine andere wählen. |
 | Ein erwarteter Sender fehlt | Er ist der Region, in der du bist, nicht zugeordnet. Du empfängst nur Regionen in Reichweite. Als eigenen Sender ergänzen. |
 
@@ -278,6 +282,13 @@ node tools/convert_data.js <Pfad>/web data
 
 Die DLL ist statisch gelinkt; ein Visual-C++-Redistributable wird nicht benötigt.
 
+### Logo-Server
+
+Das Plugin lädt das Logo eines Senders von `<urlPrefix><Logo-Pfad>`. Der Logo-Pfad ist der `logo`-Wert aus den Senderdaten, z. B.
+`stations/images-europe/germany/80s80s.png` → `https://radio.scufystudio.de/logo/stations/images-europe/germany/80s80s.png`.
+Leerzeichen und Sonderzeichen werden URL-kodiert (UTF-8), z. B. `Radio Bollerwagen.png` → `Radio%20Bollerwagen.png`.
+Der Ordner `server/logo/` enthält alle Logos (verkleinert auf 200 px) in genau dieser Ordnerstruktur. Geladene Logos werden lokal in `local-radio\logos\` gespeichert und nicht erneut geladen.
+
 ## Projektstruktur
 
 ```
@@ -296,7 +307,8 @@ Die DLL ist statisch gelinkt; ein Visual-C++-Redistributable wird nicht benötig
 │   ├── InputManager.*         Tastatur und Controller
 │   ├── Config.*, Logger.*     Einstellungen und Log
 │   └── MiniaudioImpl.cpp      Übersetzungseinheit für miniaudio
-├── data/                      Sender-/Städtedaten, Logos und Sounds
+├── data/                      Sender-/Städtedaten und Sounds
+├── server/logo/               Senderlogos für den Logo-Server (radio.scufystudio.de/logo/)
 ├── sdk/                       Header des SCS-Telemetrie-SDK
 ├── third_party/               miniaudio, nlohmann/json
 └── tools/                     Datenkonverter, Vergleichstest

@@ -219,9 +219,9 @@ void RadioManager::OnAction(Action a) {
         else if (currentIndex_ >= 0) { auto it = last_.available.find(currentCountry_); SetRadioStation(currentCountry_, currentIndex_, it == last_.available.end() ? 0 : it->second.whitenoise); }
         else { playing_ = true; initialReceived_ = false; currentCountry_.clear(); lastNearestCountry_.clear(); }
         break;
-    case Action::VolumeUp: case Action::VolumeDown: {   // same curve as volumeChange() in main.js
-        double v = cfg_.volume * 100; v += (v / 50 + 0.1) * (a == Action::VolumeUp ? 5 : -5);
-        cfg_.volume = std::clamp(v, 0.0, 100.0) / 100.0; audio_.SetMaster((float)cfg_.volume);
+    case Action::VolumeUp: case Action::VolumeDown: {
+        double v = std::round(cfg_.volume * 20.0) + (a == Action::VolumeUp ? 1 : -1);   // 5 % steps
+        cfg_.volume = std::clamp(v, 0.0, 20.0) / 20.0; audio_.SetMaster((float)cfg_.volume);
         Log::Write("Volume %.0f%%", cfg_.volume * 100);
         ShowCurrent(Utf8ToWide(cfg_.overlay.textVolume) + L" " + std::to_wstring((int)std::lround(cfg_.volume * 100)) + L" %");
         break; }

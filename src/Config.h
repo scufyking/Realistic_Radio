@@ -19,7 +19,7 @@ struct OverlayConfig {
     double durationSeconds = 6.0;
     bool alwaysVisible = false;
     bool showLogos = true;
-    std::string urlPrefix;   // optional: download missing logos from <urlPrefix><logo path>; empty = bundled logos only
+    std::string urlPrefix = "https://radio.scufystudio.de/logo/";   // logos: <urlPrefix><logo path>, cached in local-radio\\logos\\; empty = local only
     std::string textNowPlaying = "Jetzt l\u00e4uft:";
     std::string textVolume = "Lautst\u00e4rke";
     std::string textStopped = "Radio aus";
@@ -39,7 +39,7 @@ struct Config {
     bool whitenoise = true;
     bool transitionWhitenoise = true;
     // Playback
-    double volume = 0.8;          // 0..1 (original g_volume)
+    double volume = 0.6;          // 0..1 slider position; output gain = volume^2
     bool muted = false;
     bool autoPlay = true;
     std::string powerSource = "ignition";   // ignition (truck.electric.enabled) | engine (truck.engine.enabled) | always
@@ -51,6 +51,7 @@ struct Config {
     bool onlyWhenGameFocused = true;
     int reconnectMaxSeconds = 30;
 
+    bool migratedUrlPrefix = false;
     Config();
     bool Load(const std::wstring& path);   // creates default file if missing
     void SaveVolume(const std::wstring& path) const;

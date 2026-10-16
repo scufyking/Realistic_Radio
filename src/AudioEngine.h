@@ -18,7 +18,7 @@ public:
     void SetStaticGain(float g, float seconds);
     void SetSwitchGain(float g, float seconds);
     float StreamGain() const;
-    void SetMaster(float v) { master_ = v; }
+    void SetMaster(float v) { float c = std::clamp(v, 0.f, 1.f); master_ = c * c; }   // perceptual: 50 % slider = -12 dB, 10 % = -40 dB
     void SetMuted(bool m) { muted_ = m; }
     bool Running() const { return device_ok_; }
     bool IsBuffering();
@@ -36,7 +36,8 @@ private:
     std::vector<float> static_, switch_;
     size_t staticPos_ = 0, switchPos_ = 0;
     Ramp gStream_, gStatic_, gSwitch_;
-    std::atomic<float> master_{0.8f};
+    std::atomic<float> master_{0.f};
+    float masterCur_ = 0.f;   // audio thread only: smoothed master (no sudden jumps)
     std::atomic<bool> muted_{false};
     std::mutex sessMtx_;
     std::shared_ptr<StreamSession> session_;

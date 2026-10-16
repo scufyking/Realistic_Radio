@@ -9,7 +9,7 @@ Dieses Projekt enthält folgende Drittkomponenten bzw. ist teilweise davon abgel
 
 ## Station data, city data, sounds and station selection logic
 
-Files: `data/ets2.json`, `data/ats.json`, `data/audio/whitestatic.mp3`, `data/audio/radio_switch.mp3`, `data/logos/*`;
+Files: `data/ets2.json`, `data/ats.json`, `data/audio/whitestatic.mp3`, `data/audio/radio_switch.mp3`, `server/logo/*`;
 logic in `src/RadioManager.*`, `src/ReceptionCalculator.*`, `src/StationDatabase.*`.
 
 Derived from **ETS2 Local Radio**
