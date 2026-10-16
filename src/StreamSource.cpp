@@ -1,0 +1,289 @@
+// ETS2 Local Radio Native
+// Copyright (c) 2026 ScufyKing
+// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+// If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#include "StreamSource.h"
+#include "Logger.h"
+#include <winhttp.h>
+#include <mfapi.h>
+#include <mfidl.h>
+#include <mfreadwrite.h>
+#include <mferror.h>
+#include <algorithm>
+#include <cstring>
+#include "NetReader.h"
+
+namespace {
+struct Http {
+    HINTERNET session = nullptr, connect = nullptr, request = nullptr;
+    std::string contentType;
+    StreamSession* owner = nullptr;
+    ~Http() { Close(); }
+    void Close() {
+        if (owner) owner->req_.store(nullptr);
+        if (request) WinHttpCloseHandle(request);
+        if (connect) WinHttpCloseHandle(connect);
+        if (session) WinHttpCloseHandle(session);
+        request = connect = session = nullptr;
+    }
+    // returns bytes read, 0 on end/error
+    DWORD Read(void* buf, DWORD size) {
+        DWORD got = 0;
+        if (!request || owner->stop_) return 0;
+        if (!WinHttpReadData(request, buf, size, &got)) return 0;
+        return got;
+    }
+};
+
+bool HttpOpen(Http& h, const std::string& url) {
+    std::wstring w = Utf8ToWide(url);
+    URL_COMPONENTS uc{}; uc.dwStructSize = sizeof(uc);
+    wchar_t host[512], path[4096];
+    uc.lpszHostName = host; uc.dwHostNameLength = 512; uc.lpszUrlPath = path; uc.dwUrlPathLength = 4096;
+    wchar_t extra[4096]; uc.lpszExtraInfo = extra; uc.dwExtraInfoLength = 4096;
+    if (!WinHttpCrackUrl(w.c_str(), 0, 0, &uc)) { Log::Write("Invalid URL: %s", url.c_str()); return false; }
+    h.session = WinHttpOpen(L"ETS2LocalRadioNative/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!h.session) return false;
+    WinHttpSetTimeouts(h.session, 10000, 10000, 10000, 15000);
+    DWORD policy = WINHTTP_OPTION_REDIRECT_POLICY_ALWAYS;
+    WinHttpSetOption(h.session, WINHTTP_OPTION_REDIRECT_POLICY, &policy, sizeof(policy));
+    DWORD protocols = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 | 0x00002000 /*TLS1_3*/;
+    if (!WinHttpSetOption(h.session, WINHTTP_OPTION_SECURE_PROTOCOLS, &protocols, sizeof(protocols))) {
+        protocols = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2;
+        WinHttpSetOption(h.session, WINHTTP_OPTION_SECURE_PROTOCOLS, &protocols, sizeof(protocols));
+    }
+    h.connect = WinHttpConnect(h.session, std::wstring(host, uc.dwHostNameLength).c_str(), uc.nPort, 0);
+    if (!h.connect) return false;
+    std::wstring obj = std::wstring(path, uc.dwUrlPathLength) + std::wstring(extra, uc.dwExtraInfoLength);
+    if (obj.empty()) obj = L"/";
+    h.request = WinHttpOpenRequest(h.connect, L"GET", obj.c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
+                                   uc.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0);
+    if (!h.request) return false;
+    h.owner->req_.store(h.request);
+    // No "Icy-MetaData: 1" header -> servers send pure audio without interleaved metadata.
+    if (!WinHttpSendRequest(h.request, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
+        !WinHttpReceiveResponse(h.request, nullptr)) {
+        Log::Write("HTTP request failed for %s (error %lu)", url.c_str(), GetLastError());
+        return false;
+    }
+    DWORD status = 0, sz = sizeof(status);
+    WinHttpQueryHeaders(h.request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &status, &sz, WINHTTP_NO_HEADER_INDEX);
+    if (status >= 400) { Log::Write("HTTP %lu for %s", status, url.c_str()); return false; }
+    wchar_t ct[256] = {0}; sz = sizeof(ct);
+    if (WinHttpQueryHeaders(h.request, WINHTTP_QUERY_CONTENT_TYPE, WINHTTP_HEADER_NAME_BY_INDEX, ct, &sz, WINHTTP_NO_HEADER_INDEX))
+        h.contentType = WideToUtf8(ct);
+    std::transform(h.contentType.begin(), h.contentType.end(), h.contentType.begin(), ::tolower);
+    return true;
+}
+
+bool EndsWithI(std::string s, const std::string& suffix) {
+    size_t q = s.find('?'); if (q != std::string::npos) s = s.substr(0, q);
+    std::transform(s.begin(), s.end(), s.begin(), ::tolower);
+    return s.size() >= suffix.size() && s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+// --- miniaudio decoder callbacks: WinHTTP wrapped in NetReader (rewindable start of stream) --------
+ma_result McbRead(ma_decoder* d, void* out, size_t n, size_t* read) {
+    *read = ((NetReader*)d->pUserData)->Read(out, n);
+    return *read == 0 ? MA_AT_END : MA_SUCCESS;
+}
+ma_result McbSeek(ma_decoder* d, ma_int64 off, ma_seek_origin origin) {
+    return ((NetReader*)d->pUserData)->Seek(off, (int)origin) ? MA_SUCCESS : MA_NOT_IMPLEMENTED;   // seek-to-end is refused: live stream
+}
+} // namespace
+
+StreamSession::StreamSession(const std::string& url, int reconnectMaxSeconds) : url_(url), reconnectMax_(reconnectMaxSeconds) {
+    ma_pcm_rb_init(ma_format_f32, kChannels, kRate * 4, nullptr, nullptr, &rb_);   // 4 s buffer
+    done_ = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+}
+StreamSession::~StreamSession() {
+    ma_pcm_rb_uninit(&rb_);
+    if (thread_) CloseHandle(thread_);
+    if (done_) CloseHandle(done_);
+}
+
+void StreamSession::Start() {
+    HMODULE self = nullptr;   // add a reference to the DLL for the lifetime of the thread
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCWSTR)&StreamSession::ThreadProc, &self);
+    auto* holder = new std::shared_ptr<StreamSession>(shared_from_this());
+    thread_ = CreateThread(nullptr, 0, ThreadProc, holder, 0, nullptr);
+    if (!thread_) { delete holder; FreeLibrary(self); SetEvent(done_); }
+}
+
+DWORD WINAPI StreamSession::ThreadProc(LPVOID p) {
+    {
+        std::shared_ptr<StreamSession> s = *(std::shared_ptr<StreamSession>*)p;
+        delete (std::shared_ptr<StreamSession>*)p;
+        CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        s->Run();
+        CoUninitialize();
+        SetEvent(s->done_);
+    }
+    HMODULE self = nullptr;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)&StreamSession::ThreadProc, &self);
+    FreeLibraryAndExitThread(self, 0);
+}
+
+void StreamSession::Stop() {
+    stop_ = true;
+    HANDLE r = req_.exchange(nullptr);
+    if (r) WinHttpCloseHandle(r);   // aborts a blocking WinHttpReadData
+}
+bool StreamSession::WaitFinished(DWORD ms) { return WaitForSingleObject(done_, ms) == WAIT_OBJECT_0; }
+
+bool StreamSession::Write(const float* frames, ma_uint32 count) {
+    while (count > 0 && !stop_) {
+        ma_uint32 n = count; void* buf;
+        if (ma_pcm_rb_acquire_write(&rb_, &n, &buf) != MA_SUCCESS) return false;
+        if (n == 0) { Sleep(20); continue; }
+        memcpy(buf, frames, n * kChannels * sizeof(float));
+        ma_pcm_rb_commit_write(&rb_, n);
+        frames += n * kChannels; count -= n;
+        if (!ready_ && ma_pcm_rb_available_read(&rb_) >= kRate) { ready_ = true; failures_ = 0; }   // 1 s pre-buffer
+    }
+    return !stop_;
+}
+
+ma_uint32 StreamSession::Read(float* out, ma_uint32 frames) {
+    if (!ready_) return 0;
+    ma_uint32 total = 0;
+    while (total < frames) {
+        ma_uint32 n = frames - total; void* buf;
+        if (ma_pcm_rb_acquire_read(&rb_, &n, &buf) != MA_SUCCESS || n == 0) break;
+        memcpy(out + total * kChannels, buf, n * kChannels * sizeof(float));
+        ma_pcm_rb_commit_read(&rb_, n);
+        total += n;
+    }
+    if (total < frames) ready_ = false;   // underrun -> re-buffer
+    return total;
+}
+
+void StreamSession::Run() {
+    int backoff = 2;
+    while (!stop_) {
+        bool played = PlayOnce(url_, 0);
+        if (stop_) break;
+        if (played) backoff = 2; else ++failures_;
+        Log::Write("Stream ended/failed, reconnecting in %d s: %s", backoff, url_.c_str());
+        for (int i = 0; i < backoff * 10 && !stop_; ++i) Sleep(100);
+        backoff = std::min(backoff * 2, std::max(2, reconnectMax_));
+    }
+}
+
+bool StreamSession::PlayOnce(const std::string& url, int depth) {
+    if (url.empty()) return false;
+    std::string lower = url; std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+    if (lower.rfind("http://", 0) != 0 && lower.rfind("https://", 0) != 0) return PlayLocalFile(url);
+    if (lower.find(".m3u8") != std::string::npos) return PlayMediaFoundation(url);   // HLS -> Media Foundation
+
+    Http h; h.owner = this;
+    if (!HttpOpen(h, url)) return false;
+    const std::string& ct = h.contentType;
+    Log::Write("Connected: %s (Content-Type: %s)", url.c_str(), ct.c_str());
+    bool isPlaylist = ct.find("mpegurl") != std::string::npos || ct.find("scpls") != std::string::npos ||
+                      EndsWithI(url, ".m3u") || EndsWithI(url, ".pls");
+    if (isPlaylist && depth < 3) {
+        std::string body; char buf[4096];
+        while (body.size() < 65536) { DWORD n = h.Read(buf, sizeof(buf)); if (!n) break; body.append(buf, n); }
+        h.Close();
+        if (body.find("#EXT-X-") != std::string::npos) return PlayMediaFoundation(url);   // it is HLS after all
+        size_t p = body.find("http");
+        if (p == std::string::npos) { Log::Write("Playlist without URL: %s", url.c_str()); return false; }
+        size_t e = body.find_first_of("\r\n \t", p);
+        return PlayOnce(body.substr(p, e == std::string::npos ? std::string::npos : e - p), depth + 1);
+    }
+    if (ct.find("mpeg") != std::string::npos || ct.find("mp3") != std::string::npos || (ct.empty() && EndsWithI(url, ".mp3")))
+        return PlayMp3(&h);
+    h.Close();
+    return PlayMediaFoundation(url);   // AAC / AAC+ / anything else Windows can decode
+}
+
+bool StreamSession::PlayMp3(void* httpPtr) {
+    Http* h = (Http*)httpPtr;
+    ma_decoder_config cfg = ma_decoder_config_init(ma_format_f32, kChannels, kRate);
+    cfg.encodingFormat = ma_encoding_format_mp3;
+    ma_decoder dec;
+    NetReader reader([h](void* buf, size_t n) -> size_t { return h->Read(buf, (DWORD)std::min<size_t>(n, 1 << 20)); });
+    ma_result r0 = ma_decoder_init(McbRead, McbSeek, &reader, &cfg, &dec);
+    if (r0 != MA_SUCCESS) { Log::Write("MP3 decoder init failed (%s)", ma_result_description(r0)); return false; }
+    Log::Write("MP3 decoder ready");
+    float buf[2048 * kChannels]; bool any = false;
+    while (!stop_) {
+        ma_uint64 got = 0;
+        ma_result r = ma_decoder_read_pcm_frames(&dec, buf, 2048, &got);
+        if (got) { any = true; if (!Write(buf, (ma_uint32)got)) break; }
+        if (r != MA_SUCCESS || got == 0) break;
+    }
+    ma_decoder_uninit(&dec);
+    return any;
+}
+
+bool StreamSession::PlayLocalFile(const std::string& path) {
+    std::wstring w = Utf8ToWide(path);
+    ma_decoder_config cfg = ma_decoder_config_init(ma_format_f32, kChannels, kRate);
+    ma_decoder dec;
+    if (ma_decoder_init_file_w(w.c_str(), &cfg, &dec) != MA_SUCCESS) return PlayMediaFoundation(path);
+    float buf[2048 * kChannels]; bool any = false;
+    while (!stop_) {   // local files loop forever
+        ma_uint64 got = 0;
+        ma_decoder_read_pcm_frames(&dec, buf, 2048, &got);
+        if (got == 0) { if (!any) break; ma_decoder_seek_to_pcm_frame(&dec, 0); continue; }
+        any = true;
+        if (!Write(buf, (ma_uint32)got)) break;
+    }
+    ma_decoder_uninit(&dec);
+    return any;
+}
+
+bool StreamSession::PlayMediaFoundation(const std::string& url) {
+    if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) return false;
+    bool any = false;
+    IMFSourceReader* reader = nullptr; IMFMediaType* type = nullptr; IMFMediaType* actual = nullptr;
+    ma_data_converter conv; bool convInit = false;
+    do {
+        HRESULT hr = MFCreateSourceReaderFromURL(Utf8ToWide(url).c_str(), nullptr, &reader);
+        if (FAILED(hr)) { Log::Write("Media Foundation cannot open %s (hr=0x%08lx)", url.c_str(), (unsigned long)hr); break; }
+        reader->SetStreamSelection((DWORD)MF_SOURCE_READER_ALL_STREAMS, FALSE);
+        reader->SetStreamSelection((DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM, TRUE);
+        MFCreateMediaType(&type);
+        type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio);
+        type->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_Float);
+        if (FAILED(reader->SetCurrentMediaType((DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM, nullptr, type))) { Log::Write("MF: no float output for %s", url.c_str()); break; }
+        if (FAILED(reader->GetCurrentMediaType((DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM, &actual))) break;
+        UINT32 ch = 0, rate = 0;
+        actual->GetUINT32(MF_MT_AUDIO_NUM_CHANNELS, &ch); actual->GetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND, &rate);
+        if (!ch || !rate) break;
+        Log::Write("Media Foundation playing %s (%u Hz, %u ch)", url.c_str(), rate, ch);
+        ma_data_converter_config cc = ma_data_converter_config_init(ma_format_f32, ma_format_f32, ch, kChannels, rate, kRate);
+        if (ma_data_converter_init(&cc, nullptr, &conv) != MA_SUCCESS) break;
+        convInit = true;
+        std::vector<float> outBuf;
+        while (!stop_) {
+            DWORD flags = 0; IMFSample* sample = nullptr;
+            hr = reader->ReadSample((DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM, 0, nullptr, &flags, nullptr, &sample);
+            if (FAILED(hr) || (flags & (MF_SOURCE_READERF_ENDOFSTREAM | MF_SOURCE_READERF_ERROR))) { if (sample) sample->Release(); break; }
+            if (!sample) continue;
+            IMFMediaBuffer* mb = nullptr;
+            if (SUCCEEDED(sample->ConvertToContiguousBuffer(&mb))) {
+                BYTE* data = nullptr; DWORD len = 0;
+                if (SUCCEEDED(mb->Lock(&data, nullptr, &len))) {
+                    ma_uint64 inFrames = len / (sizeof(float) * ch), outFrames = 0;
+                    ma_data_converter_get_expected_output_frame_count(&conv, inFrames, &outFrames);
+                    outBuf.resize((size_t)(outFrames + 16) * kChannels);
+                    ma_uint64 outCap = outFrames + 16;
+                    ma_data_converter_process_pcm_frames(&conv, data, &inFrames, outBuf.data(), &outCap);
+                    mb->Unlock();
+                    if (outCap) { any = true; Write(outBuf.data(), (ma_uint32)outCap); }
+                }
+                mb->Release();
+            }
+            sample->Release();
+        }
+    } while (false);
+    if (convInit) ma_data_converter_uninit(&conv, nullptr);
+    if (actual) actual->Release();
+    if (type) type->Release();
+    if (reader) reader->Release();
+    MFShutdown();
+    return any;
+}
