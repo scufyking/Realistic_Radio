@@ -31,8 +31,8 @@ std::string UrlEncodePath(const std::string& s) {   // percent-encode, keep RFC 
 }
 }
 
-void Overlay::Init(const OverlayConfig& cfg, const std::wstring& dataDir) {
-    cfg_ = cfg; start_ = GetTickCount64();
+void Overlay::Init(const OverlayConfig& cfg, const ScreenConfig& screen, const std::wstring& dataDir) {
+    cfg_ = cfg; scfg_ = screen; start_ = GetTickCount64();
     logoDir_ = dataDir + L"logos\\";
     CreateDirectoryW(logoDir_.c_str(), nullptr);
     radioStyle_ = cfg.style == "radio";
@@ -50,9 +50,23 @@ void Overlay::Init(const OverlayConfig& cfg, const std::wstring& dataDir) {
     }
     if (radioStyle_) Log::Write("Overlay style: car radio display");
     off_ = cfg.mode == "off";
-    if (off_) { Log::Write("Overlay disabled"); return; }
+    if (scfg_.enabled) {
+        D3D11Overlay::EnableScreenHook(true);
+        D3D11Overlay::SetScreenArea((float)scfg_.areaX, (float)scfg_.areaY, (float)scfg_.areaW, (float)scfg_.areaH, scfg_.flipY, scfg_.flipX);
+        collecting_ = scfg_.probe || scfg_.width <= 0 || scfg_.height <= 0;
+        D3D11Overlay::SetCollectTargets(collecting_);
+        nextStatAt_ = start_ + 15000; nextProbeAt_ = start_ + 20000;
+        Log::Write("Screen mode (experimental): %s", scfg_.probe ? "PROBE - test patterns will be drawn into candidate screens"
+                   : (collecting_ ? "no target size set - logging render targets, set screen.probe = true to find the screen"
+                                  : "drawing into the configured render target"));
+        if (!scfg_.probe && !collecting_) D3D11Overlay::SetScreenTarget(scfg_.width, scfg_.height, scfg_.format);
+    }
+    if (off_) Log::Write("Overlay panel disabled");
+    if (off_ && !scfg_.enabled) return;
     D3D11Overlay::SetPlacement(anchor_, offX_, offY_);
-    if (cfg.mode != "window") d3d_ = D3D11Overlay::Install();
+    if (cfg.mode != "window" || scfg_.enabled) d3d_ = D3D11Overlay::Install();
+    screenOn_ = scfg_.enabled && D3D11Overlay::ScreenHookActive();
+    if (off_) return;
     if (cfg.mode == "window" || (cfg.mode == "auto" && !d3d_)) UseWindow(true);
 }
 
@@ -65,6 +79,13 @@ void Overlay::Shutdown() {
 void Overlay::Show(const OverlayInfo& info, const std::string& logoPath) {
     if (cfg_.showLogos && !logoPath.empty()) { if (logoPath != logoKey_) RequestLogo(logoPath); }
     else if (!logoPath.empty() || !cfg_.showLogos) { logoKey_.clear(); logo_.reset(); }
+    if (screenOn_ && !scfg_.probe && !scfg_.grid && scfg_.width > 0 && scfg_.height > 0) {
+        ULONGLONG t = GetTickCount64();
+        if (t >= scrUntil_) scrShownAt_ = t;
+        scrUntil_ = t + (ULONGLONG)(scfg_.durationSeconds * 1000);
+        scrInfo_ = info;
+        RenderScreen();
+    }
     if (off_) return;
     ULONGLONG now = GetTickCount64();
     if (!Visible()) shownAt_ = now;
@@ -199,6 +220,7 @@ void Overlay::UpdateWindow(float alpha) {
 
 void Overlay::Tick() {
     ULONGLONG now = GetTickCount64();
+    if (screenOn_) TickScreen(now);
     // pump messages for the overlay window (it lives on this thread)
     MSG m; while (PeekMessageW(&m, nullptr, 0, 0, PM_REMOVE)) { TranslateMessage(&m); DispatchMessageW(&m); }
     if (off_) {   // overlay off: still finish logo downloads for the infotainment display
@@ -220,7 +242,7 @@ void Overlay::Tick() {
         if (!j->ok) logoFailedAt_[j->key] = GetTickCount64();
         if (j->ok && SafeFileName(logoKey_) == j->file.substr(logoDir_.size())) {
             logo_ = LoadImageFile(j->file);
-            if (logo_) { logoCache_[logoKey_] = logo_; if (Visible()) Rerender(); }
+            if (logo_) { logoCache_[logoKey_] = logo_; if (Visible()) Rerender(); if (screenOn_ && now < scrUntil_) RenderScreen(); }
         }
     }
     int h = D3D11Overlay::ScreenHeight();
@@ -244,4 +266,55 @@ std::wstring Overlay::LcdText() const {
     std::wstring t = info_.lcd.empty() ? info_.title : info_.lcd;
     if (!t.empty()) CharUpperBuffW(&t[0], (DWORD)t.size());   // car radios show capitals
     return t;
+}
+
+// ---------------------------------------------------------------------------------------------
+// In-cab screen (experimental)
+void Overlay::RenderScreen() {
+    std::shared_ptr<OverlayImage> logo = (cfg_.showLogos && scrInfo_.volume < 0) ? logo_ : nullptr;
+    // render at the pixel size of the visible area, so the card is not stretched
+    int w = std::max(64, (int)std::lround(scfg_.width * std::clamp(scfg_.areaW, 0.01, 1.0)));
+    int h = std::max(64, (int)std::lround(scfg_.height * std::clamp(scfg_.areaH, 0.01, 1.0)));
+    D3D11Overlay::SetScreenImage(RenderScreenCard(scrInfo_, logo.get(), w, h));
+    D3D11Overlay::SetScreenTarget(scfg_.width, scfg_.height, scfg_.format);
+}
+
+void Overlay::TickScreen(ULONGLONG now) {
+    if (collecting_ && now >= nextStatAt_) {   // merge and log the render targets the game used
+        nextStatAt_ = now + 15000;
+        for (auto& s : D3D11Overlay::TakeTargetStats()) {
+            auto it = std::find_if(cands_.begin(), cands_.end(), [&](const Cand& c) { return c.w == s.w && c.h == s.h && c.fmt == s.format; });
+            if (it == cands_.end()) cands_.push_back({s.w, s.h, s.format, s.binds}); else it->binds += s.binds;
+        }
+        std::string list;
+        for (auto& c : cands_) { char b[64]; snprintf(b, sizeof(b), " %dx%d(fmt %d)", c.w, c.h, c.fmt); list += b; }
+        Log::Write("Screen: %lld render-target changes so far; targets seen:%s", D3D11Overlay::RenderTargetCalls(), list.empty() ? " none yet" : list.c_str());
+    }
+    if (scfg_.grid && scfg_.width > 0 && scfg_.height > 0) {   // coordinate grid permanently on the configured target
+        if (probeIdx_ != -2) {
+            probeIdx_ = -2;
+            D3D11Overlay::SetScreenImage(RenderScreenGrid(scfg_.width, scfg_.height, scfg_.flipX, scfg_.flipY));
+            D3D11Overlay::SetScreenTarget(scfg_.width, scfg_.height, scfg_.format);
+            Log::Write("Screen grid: showing coordinates on %dx%d (format %d)", scfg_.width, scfg_.height, scfg_.format);
+        }
+        D3D11Overlay::SetScreenAlpha(1.f);
+        return;
+    }
+    if (scfg_.probe) {
+        if (now < nextProbeAt_ || cands_.empty()) return;
+        nextProbeAt_ = now + (ULONGLONG)(scfg_.probeSeconds * 1000);
+        probeIdx_ = (probeIdx_ + 1) % (int)cands_.size();
+        const Cand& c = cands_[probeIdx_];
+        wchar_t label[96];
+        swprintf(label, 96, L"%d/%d  %dx%d  f%d", probeIdx_ + 1, (int)cands_.size(), c.w, c.h, c.fmt);
+        D3D11Overlay::SetScreenImage(RenderScreenProbe(label, c.w, c.h));
+        D3D11Overlay::SetScreenTarget(c.w, c.h, c.fmt);
+        D3D11Overlay::SetScreenAlpha(1.f);
+        Log::Write("Screen probe %d/%d: marking render target %dx%d (format %d) - is it visible on a truck screen?",
+                   probeIdx_ + 1, (int)cands_.size(), c.w, c.h, c.fmt);
+        return;
+    }
+    float a = 0.f;
+    if (now < scrUntil_) a = std::min({1.f, (now - scrShownAt_) / 200.f, (scrUntil_ - now) / 400.f});
+    D3D11Overlay::SetScreenAlpha(a);
 }

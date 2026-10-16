@@ -14,7 +14,7 @@ By **ScufyKing**. The whole radio runs inside the game:
 
 Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ETS2, and the radio plays. Station data and sounds are built into the DLL.
 
-> **Status:** Tested in ETS2 1.61 (Windows x64): the plugin loads, reads the truck position, switches stations by region, plays audio and draws the in-game overlay. American Truck Simulator data is included but ATS is untested.
+> **Status:** Tested in ETS2 1.61 (Windows x64) with the MAN TGX: the plugin loads, reads the truck position, switches stations by region, plays audio and shows station and volume on the navigation screen. American Truck Simulator data is included but ATS is untested.
 
 ---
 
@@ -40,7 +40,8 @@ Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ET
 - **Realistic range and switching.** Every city has a broadcast range; regions overlap at borders, and the radio only switches automatically when another region is clearly better received.
 - **Reception and static.** The further you are from a region, the more static you hear, and weak signals drop out now and then.
 - **Smooth transitions** with a tuning sound.
-- **In-game overlay.** On every station change, volume change and so on, a panel appears for a few seconds with the station name, country, signal bars, favourite heart and station logo. Works in fullscreen. Logos are loaded from `radio.scufystudio.de` once and then kept locally.
+- **Display on the truck's navigation screen.** On every station change the logo, station name, country and signal appear on the in-cab navigation screen for a few seconds, on volume changes a volume bar with percentage; then the navigation is back. Set up for the MAN TGX by default (see "In-cab screen").
+- **Optional pop-up overlay** (off by default): a panel at the top of the screen or a car-radio style dot-matrix display. Works in fullscreen.
 - **Radio only with the ignition on** (or only with the engine running, or always; your choice).
 - **Keyboard and controller controls**, freely configurable.
 - **Favourites per country.**
@@ -134,7 +135,7 @@ All settings are in `realistic-radio\realistic-radio.json`. The file is created 
 | Key | Default | Meaning |
 |---|---|---|
 | `style` | `"panel"` | `"panel"` = info panel with logo, `"radio"` = car-radio dot-matrix display (see below) |
-| `mode` | `"auto"` | `"auto"` (recommended), `"d3d11"` (draw in the game image), `"window"` (transparent window over the game), `"off"` |
+| `mode` | `"off"` | `"off"` = no pop-up (default; the in-cab screen still works), `"auto"` = turn the pop-up on (recommended), `"d3d11"` (draw in the game image), `"window"` (transparent window over the game) |
 | `position` | `"top-center"` | `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right` |
 | `offsetX`, `offsetY` | `0`, `0.07` | Distance from the screen edge as a fraction of screen height (0.07 = 7 %) |
 | `scale` | `1.0` | Size; also scales automatically with your resolution |
@@ -158,6 +159,33 @@ Instead of the panel, a narrow dot-matrix display like a real car radio appears 
 | `scrollSeconds` | `0.3` | Marquee speed: seconds per character |
 
 The dot-matrix characters use the classic 5×7 font from the Adafruit GFX Library (BSD license, see `NOTICE.md`); letters it lacks are shown as their base letter (À → A), other scripts such as Cyrillic are drawn with a Windows font.
+
+### In-cab screen (`"screen": { … }`, experimental)
+
+Shows the station change (logo, name, country, signal) or a volume bar with percentage **on the truck's own infotainment/GPS screen** for a few seconds; afterwards the navigation is visible again. It needs no other plugin: the game renders each cab screen into its own render target, and when the game has finished drawing into the matching one, the plugin draws its card on top of it.
+
+Because every truck and mod uses different render targets, the right one must be found once:
+
+1. Set `"enabled": true` and `"probe": true`, start the game and sit in the cab (with the navigation visible).
+2. After about 20 s the plugin marks one candidate after another with a magenta checkerboard and a label such as `3/7  1024x600  f28` (every 5 s, also written to the log).
+3. When the pattern appears on the screen you want, note width, height and format, then set `"probe": false`, `"width"`, `"height"` and `"format"` accordingly.
+4. If the text is upside down, set `"flipY": true`. If the screen texture holds several screens, limit the area with `areaX`, `areaY`, `areaW`, `areaH` (fractions 0–1).
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `true` | Turn the in-cab screen display on |
+| `width`, `height`, `format` | `1024`, `1024`, `29` | Render target to draw into (from the probe; default = MAN TGX navigation screen) |
+| `probe` | `false` | Search mode with test patterns |
+| `probeSeconds` | `5` | Time per candidate in search mode |
+| `durationSeconds` | `4` | How long the card stays on the screen before the navigation returns |
+| `areaX`, `areaY`, `areaW`, `areaH` | `0.1, 0.3, 0.8, 0.4` | Part of the render target to cover |
+| `flipY` | `true` | Turn the card upside down |
+| `flipX` | `false` | Mirror horizontally (`flipX` + `flipY` = rotated by 180°) |
+| `grid` | `false` | Show a 10×10 coordinate grid on the configured target. The labels are render-target coordinates in tenths; read the top-left and bottom-right labels visible on the screen to get `areaX/Y/W/H` |
+
+Example (MAN TGX, ETS2 1.61, navigation screen): `"width": 1024, "height": 1024, "format": 29, "flipY": true, "areaX": 0.1, "areaY": 0.3, "areaW": 0.8, "areaH": 0.4`. Other trucks use other render targets.
+
+Independent of the pop-up overlay, which is off by default (`"overlay": { "mode": "auto" }` turns it on in addition). This mode hooks into the game's Direct3D 11 rendering; in probe mode the test pattern can briefly appear on other surfaces too. Untested combinations with other graphics mods are possible.
 
 ### Truck screen display (`"display": { … }`, optional)
 
@@ -208,7 +236,7 @@ Almost every problem can be diagnosed from `realistic-radio\realistic-radio.log`
 | "MP3 decoder init failed" | The stream is not real MP3. Report the URL in the log, or replace it with your own stations. |
 | "Media Foundation cannot open …" | Windows cannot play this format (e.g. some HLS or Ogg streams). Switch to another station or replace the URL. |
 | Overlay says "Station unavailable" | The stream cannot be reached right now. The plugin keeps retrying in the background; usually it is quicker to switch stations. |
-| No overlay | Look for `Overlay:` in the log. `Present hook installed` and `D3D11 renderer ready` mean it is active. If another overlay tool conflicts, try `"mode": "window"`. |
+| No pop-up overlay | It is off by default: set `"overlay": { "mode": "auto" }`. If it is on but not visible, look for `Overlay:` in the log; `Present hook installed` and `D3D11 renderer ready` mean it is active. If another overlay tool conflicts, try `"mode": "window"`. |
 | Overlay hides part of the HUD | Change `position`, `offsetY` or `scale`. |
 | No station logo | Logos are downloaded from `radio.scufystudio.de` on first use; without internet, or if the server is down, the panel is shown without a logo and the download is retried after 10 minutes. |
 | Keys do nothing | Is the game the active window? Another program may be using the key; pick a different one. |
@@ -216,7 +244,7 @@ Almost every problem can be diagnosed from `realistic-radio\realistic-radio.log`
 
 ## Known limitations
 
-- **No text on the truck's built-in radio display.** The SCS Telemetry SDK can read data and provide input devices, but cannot change the cockpit. Instead there is the overlay, plus the optional display window for PrismTextureStreamer.
+- **The in-cab screen display is set up for one truck.** The default values fit the navigation screen of the MAN TGX (ETS2 1.61). Other trucks render their screens into other render targets; use the probe and grid modes to set them up, or turn the screen display off. The SCS Telemetry SDK itself offers no way to write to cab screens; this works by hooking the game's Direct3D 11 rendering.
 - **The game's own radio is not controlled.** The plugin plays its own audio through Windows.
 - **Not every stream works.** Station URLs change over time. Some AAC/HLS streams cannot be opened by Windows Media Foundation; you can replace any URL with your own stations.
 - **The overlay hooks into the game's DirectX 11 output.** With the OpenGL renderer, the plugin falls back to a transparent window, which is not guaranteed over exclusive fullscreen. Conflicts with other overlay tools (Steam overlay, RTSS, ReShade, multiplayer clients) are possible.

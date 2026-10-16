@@ -24,7 +24,7 @@ private:
     void NextStation(int amount);
     std::string ResolveUrl(const std::string& url) const;
     OverlayInfo CurrentInfo(const std::wstring& subtitleOverride = L"");
-    void ShowCurrent(const std::wstring& subtitleOverride = L"");
+    void ShowCurrent(const std::wstring& subtitleOverride = L"", bool volumeMessage = false);
     int StationIndexByName(const std::string& country, const std::string& name) const;
 
     Config cfg_;

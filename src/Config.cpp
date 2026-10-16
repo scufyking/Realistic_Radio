@@ -91,6 +91,22 @@ static const char* kDefaultConfig = R"({
     "previous": -1, "next": -1, "stop": -1, "volumeUp": -1,
     "volumeDown": -1, "makeFavourite": -1, "goToFavourite": -1, "mute": -1, "showOverlay": -1
   },
+  "screen": {
+    "enabled": true,
+    "probe": false,
+    "grid": false,
+    "width": 1024,
+    "height": 1024,
+    "format": 29,
+    "flipY": true,
+    "flipX": false,
+    "areaX": 0.1,
+    "areaY": 0.3,
+    "areaW": 0.8,
+    "areaH": 0.4,
+    "durationSeconds": 4,
+    "probeSeconds": 5
+  },
   "display": {
     "enabled": false,
     "width": 1280,
@@ -99,6 +115,7 @@ static const char* kDefaultConfig = R"({
     "title": "Realistic Radio Display"
   },
   "overlay": {
+    "mode": "off",
     "style": "panel",
     "radio": {
       "position": "bottom-center",
@@ -109,7 +126,6 @@ static const char* kDefaultConfig = R"({
       "color": "amber",
       "scrollSeconds": 0.3
     },
-    "mode": "auto",
     "position": "top-center",
     "offsetX": 0.0,
     "offsetY": 0.07,
@@ -151,6 +167,16 @@ bool Config::Load(const std::wstring& path) {
         onlyWhenGameFocused = j.value("onlyWhenGameFocused", onlyWhenGameFocused);
         reconnectMaxSeconds = j.value("reconnectMaxSeconds", reconnectMaxSeconds);
         controllerIndex = j.value("controllerIndex", controllerIndex);
+        if (j.contains("screen")) {
+            auto& sc = j["screen"]; ScreenConfig& c = screen;
+            c.enabled = sc.value("enabled", c.enabled);
+            c.width = sc.value("width", c.width); c.height = sc.value("height", c.height); c.format = sc.value("format", c.format);
+            c.probe = sc.value("probe", c.probe); c.probeSeconds = std::clamp(sc.value("probeSeconds", c.probeSeconds), 1.0, 30.0);
+            c.durationSeconds = std::clamp(sc.value("durationSeconds", c.durationSeconds), 0.5, 60.0);
+            c.areaX = sc.value("areaX", c.areaX); c.areaY = sc.value("areaY", c.areaY);
+            c.areaW = sc.value("areaW", c.areaW); c.areaH = sc.value("areaH", c.areaH);
+            c.flipY = sc.value("flipY", c.flipY); c.flipX = sc.value("flipX", c.flipX); c.grid = sc.value("grid", c.grid);
+        }
         if (j.contains("display")) {
             auto& d = j["display"];
             display.enabled = d.value("enabled", display.enabled);

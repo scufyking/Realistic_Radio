@@ -21,7 +21,10 @@ struct OverlayInfo {
     int bars = -1;           // 0..5 reception, -1 = hidden
     bool favourite = false;
     std::wstring lcd;        // one-line text for the car-radio style display (empty = title)
-    bool operator==(const OverlayInfo& o) const { return headline == o.headline && title == o.title && subtitle == o.subtitle && bars == o.bars && favourite == o.favourite && lcd == o.lcd; }
+    int volume = -1;         // >= 0: this is a volume message (0..100)
+    bool muted = false;
+    std::wstring volumeLabel;   // label above the volume bar on the in-cab screen
+    bool operator==(const OverlayInfo& o) const { return headline == o.headline && title == o.title && subtitle == o.subtitle && bars == o.bars && favourite == o.favourite && lcd == o.lcd && volume == o.volume && muted == o.muted; }
 };
 
 // Draws the panel with GDI (text, full Unicode incl. Cyrillic/Greek/Arabic via font fallback) + optional logo.
@@ -44,6 +47,13 @@ std::shared_ptr<OverlayImage> RenderDisplay(const DisplayState& st, int width, i
 // of `text` (wrapping with a gap, for marquee), plus a 5-step signal indicator. color = 0xRRGGBB.
 std::shared_ptr<OverlayImage> RenderRadioLcd(const std::wstring& text, int scroll, int columns, int bars, bool favourite,
                                              int screenHeight, double scale, uint32_t color);
+
+// In-cab screen card (drawn over the navigation for a few seconds): station or volume
+std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const OverlayImage* logo, int width, int height);
+// Coordinate grid (10 x 10 cells labelled with their x/y position in tenths) for finding the visible area
+std::shared_ptr<OverlayImage> RenderScreenGrid(int width, int height, bool flipX = false, bool flipY = false);
+// Test pattern for finding the right render target
+std::shared_ptr<OverlayImage> RenderScreenProbe(const std::wstring& label, int width, int height);
 
 // Decodes PNG/JPG/BMP via WIC to premultiplied BGRA (nullptr on failure). COM must be initialised.
 std::shared_ptr<OverlayImage> LoadImageFile(const std::wstring& path);

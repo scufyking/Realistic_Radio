@@ -19,10 +19,24 @@ struct RadioStyleConfig {
     double scrollSeconds = 0.3;         // marquee: seconds per character
 };
 
+struct ScreenConfig {
+    bool enabled = true;                // show station/volume on the in-cab screen over the navigation
+    // defaults: navigation screen of the MAN TGX in ETS2 1.61 (found with "probe" + "grid"); other trucks may differ
+    int width = 1024, height = 1024;    // size of the screen's render target (find it with "probe")
+    int format = 29;                    // DXGI format of that target (29 = R8G8B8A8_UNORM_SRGB), 0 = any
+    bool probe = false;                 // mark all candidate render targets one after another with a test pattern
+    double probeSeconds = 5.0;
+    double durationSeconds = 4.0;
+    double areaX = 0.1, areaY = 0.3, areaW = 0.8, areaH = 0.4;   // part of the render target to draw into (0..1)
+    bool flipY = true;
+    bool flipX = false;                 // flipX + flipY = rotated by 180 degrees
+    bool grid = false;                  // show a coordinate grid on the configured target (to find areaX/Y/W/H)
+};
+
 struct OverlayConfig {
     std::string style = "panel";        // panel (info panel with logo) | radio (car-radio dot-matrix display)
     RadioStyleConfig radio;
-    std::string mode = "auto";          // auto | d3d11 | window | off
+    std::string mode = "off";           // off (default) | auto | d3d11 | window
     std::string position = "top-center"; // top-left | top-center | top-right | bottom-left | bottom-center | bottom-right
     double offsetX = 0.0;               // fraction of screen height
     double offsetY = 0.07;
@@ -43,6 +57,7 @@ struct OverlayConfig {
 
 struct Config {
     OverlayConfig overlay;
+    ScreenConfig screen;
     DisplayConfig display;
     // Reception (original web/config.js)
     double radius = 7500.0;

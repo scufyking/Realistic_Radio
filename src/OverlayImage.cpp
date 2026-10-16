@@ -373,3 +373,117 @@ std::shared_ptr<OverlayImage> RenderRadioLcd(const std::wstring& text, int scrol
     if (fbDc) { delete fbDc; DeleteObject(fb); }
     return img;
 }
+
+// ------------------------------------------------------------------------------------------------
+// In-cab screen card
+std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const OverlayImage* logo, int W, int H) {
+    auto img = std::make_shared<OverlayImage>();
+    img->width = W; img->height = H; img->renderedForScreenHeight = H;
+    img->pixels.assign((size_t)W * H, 0u);
+    auto& px = img->pixels;
+    const float u = std::min(W / 16.f, H / 9.f) / 40.f;   // layout unit (1.0 at 640x360)
+    auto U = [&](float v) { return std::max(1, (int)std::lround(v * u)); };
+    const float OR = 1.f, OG = 0.682f, OB = 0.f;
+    for (int y = 0; y < H; ++y) {   // opaque dark background with a slight gradient
+        float c = 0.07f + 0.035f * (1.f - (float)y / H);
+        uint32_t v = Pack(1.f, c, c, c + 0.01f);
+        std::fill(px.begin() + (size_t)y * W, px.begin() + (size_t)(y + 1) * W, v);
+    }
+    FillRect(px, W, H, 0, 0, W, U(5), 1.f, OR, OG, OB);   // accent line on top
+    Gdi mask(W, H);
+    if (info.volume >= 0) {
+        HFONT fLabel = MakeFont(U(26), FW_NORMAL), fPct = MakeFont(U(84), FW_BOLD);
+        int cy = H / 2;
+        std::wstring label = info.volumeLabel.empty() ? L"Volume" : info.volumeLabel;
+        DrawText(mask, px, fLabel, label, RECT{0, cy - U(120), W, cy - U(80)}, 0.85f, 0.85f, 0.88f, DT_CENTER);
+        std::wstring pct = info.muted ? L"—" : std::to_wstring(info.volume) + L" %";
+        DrawText(mask, px, fPct, pct, RECT{0, cy - U(78), W, cy + U(22)}, OR, OG, OB, DT_CENTER);
+        int bw = W * 70 / 100, bh = U(18), bx = (W - bw) / 2, by = cy + U(52);
+        for (int y = 0; y < bh; ++y) for (int x = 0; x < bw; ++x) {   // rounded track + fill
+            float cov = RoundedCoverage(x, y, bw, bh, bh / 2.f);
+            if (cov <= 0) continue;
+            bool filled = !info.muted && x < bw * std::clamp(info.volume, 0, 100) / 100;
+            if (filled) Over(px[(size_t)(by + y) * W + bx + x], cov, OR * cov, OG * cov, OB * cov);
+            else Over(px[(size_t)(by + y) * W + bx + x], cov, 0.22f * cov, 0.22f * cov, 0.25f * cov);
+        }
+        DeleteObject(fLabel); DeleteObject(fPct);
+        return img;
+    }
+    HFONT fHead = MakeFont(U(22), FW_NORMAL), fTitle = MakeFont(U(46), FW_BOLD), fSub = MakeFont(U(26), FW_NORMAL);
+    int logoH = logo ? U(130) : 0, logoW = logo ? U(250) : 0;
+    int total = (logo ? logoH + U(22) : 0) + U(30) + U(60) + U(36);
+    int y = (H - total) / 2;
+    if (logo) {
+        int lx = (W - logoW) / 2;
+        for (int yy = 0; yy < logoH; ++yy) for (int xx = 0; xx < logoW; ++xx) {   // light card so dark logos stay visible
+            float cov = RoundedCoverage(xx, yy, logoW, logoH, (float)U(14));
+            if (cov > 0) Over(px[(size_t)(y + yy) * W + lx + xx], cov, 0.93f * cov, 0.93f * cov, 0.94f * cov);
+        }
+        BlitLogo(px, W, logo, lx + U(12), y + U(10), logoW - U(24), logoH - U(20));
+        y += logoH + U(22);
+    }
+    DrawText(mask, px, fHead, info.headline, RECT{U(20), y, W - U(20), y + U(30)}, 0.75f, 0.75f, 0.78f, DT_CENTER); y += U(30);
+    DrawText(mask, px, fTitle, info.title, RECT{U(20), y, W - U(20), y + U(60)}, OR, OG, OB, DT_CENTER); y += U(60);
+    std::wstring sub = info.subtitle + (info.favourite ? L"  \u2665" : L"");
+    {   // subtitle + graphic signal bars, centred as one group
+        HDC tmp = CreateCompatibleDC(nullptr);
+        int tw = std::min(W - U(140), (int)Measure(tmp, fSub, sub).cx);
+        DeleteDC(tmp);
+        int barsW = info.bars >= 0 ? U(5 * 7 + 4 * 4) : 0, gap = barsW ? U(18) : 0;
+        int x0 = (W - (tw + gap + barsW)) / 2;
+        DrawText(mask, px, fSub, sub, RECT{x0, y, x0 + tw, y + U(36)}, 0.9f, 0.9f, 0.92f);
+        if (barsW) {
+            int bx = x0 + tw + gap, base = y + U(30);
+            for (int i = 0; i < 5; ++i) {
+                int bh = U(8 + i * 4), xs = bx + i * U(11);
+                if (i < info.bars) FillRect(px, W, H, xs, base - bh, xs + U(7), base, 1.f, OR, OG, OB);
+                else FillRect(px, W, H, xs, base - bh, xs + U(7), base, 1.f, 0.25f, 0.25f, 0.28f);
+            }
+        }
+    }
+    DeleteObject(fHead); DeleteObject(fTitle); DeleteObject(fSub);
+    return img;
+}
+
+std::shared_ptr<OverlayImage> RenderScreenProbe(const std::wstring& label, int W, int H) {
+    auto img = std::make_shared<OverlayImage>();
+    img->width = W; img->height = H; img->renderedForScreenHeight = H;
+    img->pixels.assign((size_t)W * H, 0u);
+    auto& px = img->pixels;
+    const int cs = std::max(8, std::min(W, H) / 8);
+    for (int y = 0; y < H; ++y) for (int x = 0; x < W; ++x)   // magenta / dark checkerboard: impossible to miss
+        px[(size_t)y * W + x] = ((x / cs + y / cs) & 1) ? Pack(1.f, 1.f, 0.f, 0.85f) : Pack(1.f, 0.12f, 0.f, 0.15f);
+    Gdi mask(W, H);
+    HFONT f = MakeFont(std::max(10, H / 7), FW_BOLD), fs = MakeFont(std::max(8, H / 12), FW_BOLD);
+    FillRect(px, W, H, 0, H / 3, W, 2 * H / 3, 1.f, 0.f, 0.f, 0.f);
+    DrawText(mask, px, f, label, RECT{0, H / 3, W, 2 * H / 3}, 1.f, 1.f, 0.2f, DT_CENTER);
+    DrawText(mask, px, fs, L"▲ TOP ▲", RECT{0, 0, W, H / 6}, 1.f, 1.f, 1.f, DT_CENTER);
+    DeleteObject(f); DeleteObject(fs);
+    return img;
+}
+
+std::shared_ptr<OverlayImage> RenderScreenGrid(int W, int H, bool flipX, bool flipY) {
+    auto img = std::make_shared<OverlayImage>();
+    img->width = W; img->height = H; img->renderedForScreenHeight = H;
+    img->pixels.assign((size_t)W * H, Pack(1.f, 0.05f, 0.05f, 0.08f));
+    auto& px = img->pixels;
+    Gdi mask(W, H);
+    HFONT f = MakeFont(std::max(8, std::min(W / 10, H / 10) * 2 / 5), FW_BOLD);
+    for (int cy = 0; cy < 10; ++cy) for (int cx = 0; cx < 10; ++cx) {
+        int x0 = W * cx / 10, x1 = W * (cx + 1) / 10, y0 = H * cy / 10, y1 = H * (cy + 1) / 10;
+        if ((cx + cy) & 1) FillRect(px, W, H, x0, y0, x1, y1, 1.f, 0.10f, 0.10f, 0.16f);
+        // label = position in the render target (the image is mirrored when it is drawn, so undo that here)
+        int lx = flipX ? 9 - cx : cx, ly = flipY ? 9 - cy : cy;
+        wchar_t t[16]; swprintf(t, 16, L"%d,%d", lx, ly);
+        bool corner = (lx == 0 && ly == 0);
+        DrawText(mask, px, f, t, RECT{x0, y0, x1, y1}, corner ? 1.f : 0.2f, 1.f, corner ? 0.2f : 1.f, DT_CENTER);
+    }
+    for (int i = 0; i <= 10; ++i) {   // grid lines, thicker every 50 %
+        int t = (i % 5 == 0) ? 3 : 1;
+        int x = std::min(W - t, W * i / 10), y = std::min(H - t, H * i / 10);
+        FillRect(px, W, H, x, 0, x + t, H, 1.f, 1.f, 0.f, 0.85f);
+        FillRect(px, W, H, 0, y, W, y + t, 1.f, 1.f, 0.f, 0.85f);
+    }
+    DeleteObject(f);
+    return img;
+}

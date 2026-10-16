@@ -19,7 +19,7 @@ bool RadioManager::Init(const std::wstring& dir, const std::string& game) {
     if (!audio_.Init(dir, cfg_.reconnectMaxSeconds)) return false;
     audio_.SetMaster((float)cfg_.volume); audio_.SetMuted(cfg_.muted);
     playing_ = cfg_.autoPlay;
-    overlay_.Init(cfg_.overlay, dir);
+    overlay_.Init(cfg_.overlay, cfg_.screen, dir);
     display_.Start(cfg_.display);
     return true;
 }
@@ -51,10 +51,15 @@ OverlayInfo RadioManager::CurrentInfo(const std::wstring& sub) {
     }
     return i;
 }
-void RadioManager::ShowCurrent(const std::wstring& sub) {
+void RadioManager::ShowCurrent(const std::wstring& sub, bool volumeMessage) {
     auto* st = db_.StationsOf(currentCountry_);
     std::string logo = (st && currentIndex_ >= 0 && currentIndex_ < (int)st->size()) ? (*st)[currentIndex_].logo : "";
-    overlay_.Show(CurrentInfo(sub), logo);
+    OverlayInfo info = CurrentInfo(sub);
+    if (volumeMessage) {   // the in-cab screen shows a volume bar instead of the station
+        info.volume = (int)std::lround(cfg_.volume * 100); info.muted = cfg_.muted;
+        info.volumeLabel = Utf8ToWide(cfg_.muted ? cfg_.overlay.textMuted : cfg_.overlay.textVolume);
+    }
+    overlay_.Show(info, logo);
 }
 
 int RadioManager::StationIndexByName(const std::string& country, const std::string& name) const {
@@ -226,10 +231,10 @@ void RadioManager::OnAction(Action a) {
         double v = std::round(cfg_.volume * 20.0) + (a == Action::VolumeUp ? 1 : -1);   // 5 % steps
         cfg_.volume = std::clamp(v, 0.0, 20.0) / 20.0; audio_.SetMaster((float)cfg_.volume);
         Log::Write("Volume %.0f%%", cfg_.volume * 100);
-        ShowCurrent(Utf8ToWide(cfg_.overlay.textVolume) + L" " + std::to_wstring((int)std::lround(cfg_.volume * 100)) + L" %");
+        ShowCurrent(Utf8ToWide(cfg_.overlay.textVolume) + L" " + std::to_wstring((int)std::lround(cfg_.volume * 100)) + L" %", true);
         break; }
     case Action::Mute: cfg_.muted = !cfg_.muted; audio_.SetMuted(cfg_.muted); Log::Write(cfg_.muted ? "Muted" : "Unmuted");
-        ShowCurrent(cfg_.muted ? Utf8ToWide(cfg_.overlay.textMuted) : Utf8ToWide(cfg_.overlay.textVolume) + L" " + std::to_wstring((int)std::lround(cfg_.volume * 100)) + L" %");
+        ShowCurrent(cfg_.muted ? Utf8ToWide(cfg_.overlay.textMuted) : Utf8ToWide(cfg_.overlay.textVolume) + L" " + std::to_wstring((int)std::lround(cfg_.volume * 100)) + L" %", true);
         break;
     case Action::MakeFavourite:
         if (auto* st = db_.StationsOf(currentCountry_); st && currentIndex_ >= 0) {

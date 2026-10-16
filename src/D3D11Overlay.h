@@ -18,4 +18,19 @@ void SetPlacement(int anchor, float offsetX, float offsetY);   // anchor 0..5 = 
 long long D3D11Frames();         // frames presented by a D3D11 device (overlay drawable)
 long long OtherFrames();         // frames from D3D12/other devices (overlay not drawable here)
 int ScreenHeight();              // back-buffer height of the last frame, 0 if unknown
+
+// --- experimental: draw into the game's in-cab screen render target (e.g. the infotainment / GPS screen) ---
+// The game renders the cab screens into their own render targets. When the game switches away from a render
+// target whose size matches (targetW x targetH), the current screen image is drawn on top of what the game
+// rendered (navigation etc.), so the navigation stays and reappears as soon as alpha goes back to 0.
+void EnableScreenHook(bool on);   // call before Install()
+void SetScreenImage(std::shared_ptr<const OverlayImage> img);
+void SetScreenTarget(int w, int h, int format);   // 0,0 = none; format 0 = any
+void SetScreenAlpha(float a);
+void SetScreenArea(float x, float y, float w, float h, bool flipY, bool flipX = false);   // part of the render target, 0..1
+void SetCollectTargets(bool on);
+struct RenderTargetStat { int w, h, format; long long binds; };
+std::vector<RenderTargetStat> TakeTargetStats();   // colour render targets bound since the last call (not the back buffer)
+bool ScreenHookActive();
+long long RenderTargetCalls();   // diagnostics: render-target changes seen by the hook
 }

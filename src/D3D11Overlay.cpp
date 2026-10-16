@@ -7,6 +7,8 @@
 #include <d3d11_1.h>
 #include <dxgi1_2.h>
 #include <d3dcommon.h>
+#include <map>
+#include <algorithm>
 
 namespace {
 typedef HRESULT(STDMETHODCALLTYPE* PresentFn)(IDXGISwapChain*, UINT, UINT);
@@ -30,6 +32,38 @@ std::shared_ptr<const OverlayImage> g_img;
 std::atomic<unsigned> g_imgVersion{0};
 thread_local bool t_inHook = false;
 
+// --- screen (render target) layer
+typedef void(STDMETHODCALLTYPE* OMSetRTFn)(ID3D11DeviceContext*, UINT, ID3D11RenderTargetView* const*, ID3D11DepthStencilView*);
+typedef void(STDMETHODCALLTYPE* OMSetRTUAVFn)(ID3D11DeviceContext*, UINT, ID3D11RenderTargetView* const*, ID3D11DepthStencilView*,
+                                              UINT, UINT, ID3D11UnorderedAccessView* const*, const UINT*);
+// one entry per context vtable we patched (the runtime may use more than one context class)
+struct VtHook { void** vt; OMSetRTFn rt; OMSetRTUAVFn rtuav; };
+VtHook g_vts[8]; std::atomic<int> g_nVts{0};
+inline const VtHook* FindVt(ID3D11DeviceContext* c) {
+    void** vt = *(void***)c; int n = g_nVts.load();
+    for (int i = 0; i < n; ++i) if (g_vts[i].vt == vt) return &g_vts[i];
+    return n ? &g_vts[0] : nullptr;
+}
+bool g_wantScreenHook = false;
+std::atomic<bool> g_screenHooked{false};
+std::atomic<float> g_scrAlpha{0.f};
+std::atomic<int> g_scrW{0}, g_scrH{0}, g_scrFmt{0};
+std::atomic<float> g_areaX{0}, g_areaY{0}, g_areaW{1}, g_areaH{1};
+std::atomic<bool> g_flipY{false}, g_flipX{false};
+std::atomic<bool> g_collect{false};
+std::atomic<long long> g_rtCalls{0};
+std::mutex g_scrImgMtx;
+std::shared_ptr<const OverlayImage> g_scrImg;
+std::atomic<unsigned> g_scrImgVersion{0};
+std::mutex g_statMtx;
+struct StatEntry { int w, h, fmt; long long binds; };
+std::map<long long, StatEntry> g_stats;
+std::atomic<int> g_bbW{0};
+// render-thread only
+ID3D11RenderTargetView* g_curRtv = nullptr;
+int g_curW = 0, g_curH = 0;
+bool g_curMatch = false;
+
 // Render resources (only touched on the game's render thread, or after the hook is removed)
 struct Res {
     ID3D11Device* dev = nullptr;   // not AddRef'd, identity only
@@ -37,9 +71,10 @@ struct Res {
     ID3D11SamplerState* samp = nullptr; ID3D11BlendState* blend = nullptr; ID3D11RasterizerState* rast = nullptr;
     ID3DDeviceContextState* state = nullptr;
     ID3D11Texture2D* tex = nullptr; ID3D11ShaderResourceView* srv = nullptr; unsigned texVersion = 0; int texW = 0, texH = 0, texScreenH = 1080;
+    ID3D11Texture2D* stex = nullptr; ID3D11ShaderResourceView* ssrv = nullptr; unsigned stexVersion = 0;
     bool failed = false;
     template <class T> static void R(T*& p) { if (p) { p->Release(); p = nullptr; } }
-    void ReleaseAll() { R(vs); R(ps); R(cb); R(samp); R(blend); R(rast); R(state); R(tex); R(srv); dev = nullptr; texVersion = 0; failed = false; }
+    void ReleaseAll() { R(vs); R(ps); R(cb); R(samp); R(blend); R(rast); R(state); R(tex); R(srv); R(stex); R(ssrv); dev = nullptr; texVersion = 0; stexVersion = 0; failed = false; }
 } g_res;
 
 const char* kShader = R"(
@@ -69,17 +104,10 @@ bool CompileShaders() {
 }
 
 bool EnsureResources(ID3D11Device* dev) {
-    if (g_res.dev == dev && !g_res.failed && g_res.state) return true;
+    if (g_res.dev == dev && !g_res.failed && g_res.vs) return true;
     if (g_res.dev == dev && g_res.failed) return false;
     g_res.ReleaseAll(); g_res.dev = dev;
-    ID3D11Device1* dev1 = nullptr;
-    bool ok = SUCCEEDED(dev->QueryInterface(__uuidof(ID3D11Device1), (void**)&dev1));   // D3D 11.1 runtime (Windows 8+)
-    if (ok) {
-        D3D_FEATURE_LEVEL fl = dev->GetFeatureLevel();
-        ok = SUCCEEDED(dev1->CreateDeviceContextState(0, &fl, 1, D3D11_SDK_VERSION, __uuidof(ID3D11Device), nullptr, &g_res.state));
-        dev1->Release();
-    }
-    ok = ok && SUCCEEDED(dev->CreateVertexShader(g_vsCode.data(), g_vsCode.size(), nullptr, &g_res.vs));
+    bool ok = SUCCEEDED(dev->CreateVertexShader(g_vsCode.data(), g_vsCode.size(), nullptr, &g_res.vs));
     ok = ok && SUCCEEDED(dev->CreatePixelShader(g_psCode.data(), g_psCode.size(), nullptr, &g_res.ps));
     D3D11_BUFFER_DESC bd{}; bd.ByteWidth = 32; bd.Usage = D3D11_USAGE_DYNAMIC; bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER; bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     ok = ok && SUCCEEDED(dev->CreateBuffer(&bd, nullptr, &g_res.cb));
@@ -117,6 +145,167 @@ bool EnsureTexture(ID3D11Device* dev) {
     return true;
 }
 
+// Draws one textured quad into rtv. The game's pipeline state is saved and restored by hand (like Dear ImGui's
+// DX11 backend). SwapDeviceContextState is NOT used: it can switch the context's vtable and silently remove hooks.
+struct StateBackup {
+    UINT nVp = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE, nSc = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
+    D3D11_VIEWPORT vp[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE]; D3D11_RECT sc[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE];
+    ID3D11RasterizerState* rs = nullptr; ID3D11BlendState* bs = nullptr; FLOAT bf[4]; UINT mask = 0;
+    ID3D11DepthStencilState* dss = nullptr; UINT stencilRef = 0;
+    ID3D11RenderTargetView* rtv[D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT] = {}; ID3D11DepthStencilView* dsv = nullptr;
+    ID3D11ShaderResourceView* psSrv = nullptr; ID3D11SamplerState* psSmp = nullptr;
+    ID3D11PixelShader* ps = nullptr; ID3D11VertexShader* vs = nullptr; ID3D11GeometryShader* gs = nullptr;
+    ID3D11HullShader* hs = nullptr; ID3D11DomainShader* ds = nullptr;
+    ID3D11ClassInstance* psI[256]; ID3D11ClassInstance* vsI[256]; ID3D11ClassInstance* gsI[256]; ID3D11ClassInstance* hsI[256]; ID3D11ClassInstance* dsI[256];
+    UINT psN = 256, vsN = 256, gsN = 256, hsN = 256, dsN = 256;
+    D3D11_PRIMITIVE_TOPOLOGY topo; ID3D11InputLayout* il = nullptr;
+    ID3D11Buffer* vsCb = nullptr; ID3D11Buffer* psCb = nullptr;
+    ID3D11Buffer* vb = nullptr; UINT vbStride = 0, vbOffset = 0; ID3D11Buffer* ib = nullptr; DXGI_FORMAT ibFmt; UINT ibOffset = 0;
+    void Save(ID3D11DeviceContext* c) {
+        c->RSGetViewports(&nVp, vp); c->RSGetScissorRects(&nSc, sc); c->RSGetState(&rs);
+        c->OMGetBlendState(&bs, bf, &mask); c->OMGetDepthStencilState(&dss, &stencilRef);
+        c->OMGetRenderTargets(D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT, rtv, &dsv);
+        c->PSGetShaderResources(0, 1, &psSrv); c->PSGetSamplers(0, 1, &psSmp);
+        c->PSGetShader(&ps, psI, &psN); c->VSGetShader(&vs, vsI, &vsN); c->GSGetShader(&gs, gsI, &gsN);
+        c->HSGetShader(&hs, hsI, &hsN); c->DSGetShader(&ds, dsI, &dsN);
+        c->VSGetConstantBuffers(0, 1, &vsCb); c->PSGetConstantBuffers(0, 1, &psCb);
+        c->IAGetPrimitiveTopology(&topo); c->IAGetIndexBuffer(&ib, &ibFmt, &ibOffset);
+        c->IAGetVertexBuffers(0, 1, &vb, &vbStride, &vbOffset); c->IAGetInputLayout(&il);
+    }
+    void Restore(ID3D11DeviceContext* c) {
+        c->RSSetScissorRects(nSc, sc); c->RSSetViewports(nVp, vp); c->RSSetState(rs); if (rs) rs->Release();
+        c->OMSetBlendState(bs, bf, mask); if (bs) bs->Release();
+        c->OMSetDepthStencilState(dss, stencilRef); if (dss) dss->Release();
+        c->OMSetRenderTargets(D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT, rtv, dsv);
+        for (auto*& r : rtv) if (r) r->Release(); if (dsv) dsv->Release();
+        c->PSSetShaderResources(0, 1, &psSrv); if (psSrv) psSrv->Release();
+        c->PSSetSamplers(0, 1, &psSmp); if (psSmp) psSmp->Release();
+        c->PSSetShader(ps, psI, psN); if (ps) ps->Release(); for (UINT i = 0; i < psN; ++i) if (psI[i]) psI[i]->Release();
+        c->VSSetShader(vs, vsI, vsN); if (vs) vs->Release(); for (UINT i = 0; i < vsN; ++i) if (vsI[i]) vsI[i]->Release();
+        c->GSSetShader(gs, gsI, gsN); if (gs) gs->Release(); for (UINT i = 0; i < gsN; ++i) if (gsI[i]) gsI[i]->Release();
+        c->HSSetShader(hs, hsI, hsN); if (hs) hs->Release(); for (UINT i = 0; i < hsN; ++i) if (hsI[i]) hsI[i]->Release();
+        c->DSSetShader(ds, dsI, dsN); if (ds) ds->Release(); for (UINT i = 0; i < dsN; ++i) if (dsI[i]) dsI[i]->Release();
+        c->VSSetConstantBuffers(0, 1, &vsCb); if (vsCb) vsCb->Release();
+        c->PSSetConstantBuffers(0, 1, &psCb); if (psCb) psCb->Release();
+        c->IASetPrimitiveTopology(topo);
+        c->IASetIndexBuffer(ib, ibFmt, ibOffset); if (ib) ib->Release();
+        c->IASetVertexBuffers(0, 1, &vb, &vbStride, &vbOffset); if (vb) vb->Release();
+        c->IASetInputLayout(il); if (il) il->Release();
+    }
+};
+
+void DrawQuad(ID3D11DeviceContext* c, ID3D11RenderTargetView* rtv, float vpW, float vpH, ID3D11ShaderResourceView* srv, const float cbdata[8]) {
+    StateBackup* b = new StateBackup();   // ~10 KB, keep it off the game's stack
+    b->Save(c);
+    D3D11_MAPPED_SUBRESOURCE m;
+    if (SUCCEEDED(c->Map(g_res.cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) { memcpy(m.pData, cbdata, 8 * sizeof(float)); c->Unmap(g_res.cb, 0); }
+    D3D11_VIEWPORT vp{0, 0, vpW, vpH, 0, 1};
+    c->OMSetRenderTargets(1, &rtv, nullptr);
+    float bf[4] = {0, 0, 0, 0};
+    c->OMSetBlendState(g_res.blend, bf, 0xFFFFFFFF);
+    c->OMSetDepthStencilState(nullptr, 0);
+    c->RSSetViewports(1, &vp); c->RSSetState(g_res.rast);
+    c->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    c->IASetInputLayout(nullptr);
+    c->IASetIndexBuffer(nullptr, DXGI_FORMAT_R16_UINT, 0);
+    ID3D11Buffer* noVb = nullptr; UINT zero = 0; c->IASetVertexBuffers(0, 1, &noVb, &zero, &zero);
+    c->VSSetShader(g_res.vs, nullptr, 0); c->VSSetConstantBuffers(0, 1, &g_res.cb);
+    c->PSSetShader(g_res.ps, nullptr, 0); c->PSSetConstantBuffers(0, 1, &g_res.cb);
+    c->GSSetShader(nullptr, nullptr, 0); c->HSSetShader(nullptr, nullptr, 0); c->DSSetShader(nullptr, nullptr, 0);
+    c->PSSetShaderResources(0, 1, &srv); c->PSSetSamplers(0, 1, &g_res.samp);
+    c->Draw(4, 0);
+    b->Restore(c);
+    delete b;
+}
+
+bool MakeTexture(ID3D11Device* dev, const OverlayImage& img, ID3D11Texture2D*& tex, ID3D11ShaderResourceView*& srv) {
+    std::vector<uint32_t> rgba(img.pixels.size());
+    for (size_t i = 0; i < rgba.size(); ++i) { uint32_t p = img.pixels[i]; rgba[i] = (p & 0xFF00FF00u) | ((p >> 16) & 0xFFu) | ((p & 0xFFu) << 16); }
+    D3D11_TEXTURE2D_DESC td{}; td.Width = img.width; td.Height = img.height; td.MipLevels = 1; td.ArraySize = 1;
+    td.Format = DXGI_FORMAT_R8G8B8A8_UNORM; td.SampleDesc.Count = 1; td.Usage = D3D11_USAGE_IMMUTABLE; td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    D3D11_SUBRESOURCE_DATA init{rgba.data(), (UINT)img.width * 4, 0};
+    if (FAILED(dev->CreateTexture2D(&td, &init, &tex)) || FAILED(dev->CreateShaderResourceView(tex, nullptr, &srv))) { Res::R(tex); Res::R(srv); return false; }
+    return true;
+}
+
+bool EnsureScreenTexture(ID3D11Device* dev) {
+    unsigned v = g_scrImgVersion.load();
+    if (g_res.ssrv && g_res.stexVersion == v) return true;
+    std::shared_ptr<const OverlayImage> img;
+    { std::unique_lock<std::mutex> l(g_scrImgMtx, std::try_to_lock); if (!l.owns_lock()) return g_res.ssrv != nullptr; img = g_scrImg; }
+    Res::R(g_res.ssrv); Res::R(g_res.stex);
+    g_res.stexVersion = v;
+    if (!img || img->width <= 0) return false;
+    return MakeTexture(dev, *img, g_res.stex, g_res.ssrv);
+}
+
+// Draws the screen image into the given render target (one the game has just finished rendering into)
+void DrawIntoTarget(ID3D11DeviceContext* ctx, ID3D11RenderTargetView* rtv, int w, int h) {
+    float alpha = g_scrAlpha.load();
+    if (alpha <= 0.003f || !rtv) return;
+    ID3D11Device* dev = nullptr; ctx->GetDevice(&dev);
+    if (!dev) return;
+    if (EnsureResources(dev) && EnsureScreenTexture(dev) && g_res.ssrv) {
+        float ax = g_areaX, ay = g_areaY, aw = g_areaW, ah = g_areaH;
+        float x0 = ax * 2 - 1, x1 = (ax + aw) * 2 - 1, yTop = 1 - ay * 2, yBot = 1 - (ay + ah) * 2;
+        if (g_flipY) std::swap(yTop, yBot);
+        if (g_flipX) std::swap(x0, x1);
+        float cbdata[8] = {x0, yTop, x1, yBot, alpha, 0, 0, 0};
+        DrawQuad(ctx, rtv, (float)w, (float)h, g_res.ssrv, cbdata);
+    }
+    dev->Release();
+}
+
+// Called for every render-target change of the immediate context (hot path: keep cheap when inactive)
+void OnRenderTargetChange(ID3D11DeviceContext* ctx, UINT num, ID3D11RenderTargetView* const* views) {
+    ++g_rtCalls;
+    bool drawing = g_scrAlpha.load() > 0.003f && g_scrW.load() > 0;
+    bool collect = g_collect.load();
+    if (!drawing && !collect && !g_curRtv) return;
+    ID3D11RenderTargetView* next = (num > 0 && views) ? views[0] : nullptr;
+    if (next == g_curRtv) return;
+    if (g_curRtv) {
+        if (g_curMatch && drawing) DrawIntoTarget(ctx, g_curRtv, g_curW, g_curH);   // the game is done with it
+        g_curRtv->Release(); g_curRtv = nullptr; g_curMatch = false;
+    }
+    if (!next || (!drawing && !collect)) return;
+    ID3D11Resource* res = nullptr; next->GetResource(&res);
+    ID3D11Texture2D* tex = nullptr;
+    if (res && SUCCEEDED(res->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&tex)) && tex) {
+        D3D11_TEXTURE2D_DESC d; tex->GetDesc(&d);
+        // skip the back buffer and full-scene buffers (render scaling can make them larger than the back buffer)
+        long long bbArea = (long long)g_bbW.load() * g_screenH.load();
+        long long limit = std::max(bbArea * 9 / 10, 2600000LL);   // never drop 2048x1024-class textures (screen atlases)
+        bool sceneSized = bbArea > 0 && (long long)d.Width * d.Height >= limit;
+        bool backBufferSized = (int)d.Width == g_bbW.load() && (int)d.Height == g_screenH.load();   // the game image itself
+        if (bbArea > 0 && !sceneSized && !backBufferSized && d.Width >= 64 && d.Height >= 64) {
+            if (collect) {
+                long long key = ((long long)d.Width << 32) | ((long long)d.Height << 12) | (long long)d.Format;
+                std::lock_guard<std::mutex> l(g_statMtx);
+                auto& e = g_stats[key]; e.w = d.Width; e.h = d.Height; e.fmt = d.Format; ++e.binds;
+            }
+            int fmt = g_scrFmt.load();
+            if (drawing && (int)d.Width == g_scrW.load() && (int)d.Height == g_scrH.load() && (fmt == 0 || fmt == (int)d.Format)) {
+                g_curRtv = next; g_curRtv->AddRef(); g_curW = d.Width; g_curH = d.Height; g_curMatch = true;
+            }
+        }
+        tex->Release();
+    }
+    if (res) res->Release();
+}
+
+void STDMETHODCALLTYPE HookOMSetRT(ID3D11DeviceContext* ctx, UINT num, ID3D11RenderTargetView* const* views, ID3D11DepthStencilView* dsv) {
+    if (!t_inHook && ctx->GetType() == D3D11_DEVICE_CONTEXT_IMMEDIATE) { t_inHook = true; OnRenderTargetChange(ctx, num, views); t_inHook = false; }
+    FindVt(ctx)->rt(ctx, num, views, dsv);
+}
+void STDMETHODCALLTYPE HookOMSetRTUAV(ID3D11DeviceContext* ctx, UINT num, ID3D11RenderTargetView* const* views, ID3D11DepthStencilView* dsv,
+                                      UINT uavStart, UINT numUav, ID3D11UnorderedAccessView* const* uavs, const UINT* counts) {
+    if (num != D3D11_KEEP_RENDER_TARGETS_AND_DEPTH_STENCIL && !t_inHook && ctx->GetType() == D3D11_DEVICE_CONTEXT_IMMEDIATE) {
+        t_inHook = true; OnRenderTargetChange(ctx, num, views); t_inHook = false;
+    }
+    FindVt(ctx)->rtuav(ctx, num, views, dsv, uavStart, numUav, uavs, counts);
+}
+
 DXGI_FORMAT RtvFormat(DXGI_FORMAT f) {
     switch (f) {
     case DXGI_FORMAT_R8G8B8A8_TYPELESS: return DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -127,7 +316,41 @@ DXGI_FORMAT RtvFormat(DXGI_FORMAT f) {
     }
 }
 
+bool PatchSlot(void** vt, int idx, void* fn, void** orig);
+// Hooks the immediate context the game really uses. Its vtable can differ from a self-created device
+// (e.g. single-threaded vs. multithreaded devices use different context classes), so take it from the game.
+void HookGameContext(IDXGISwapChain* sc) {
+    if (!g_wantScreenHook) return;
+    ID3D11Device* d = nullptr;
+    if (FAILED(sc->GetDevice(__uuidof(ID3D11Device), (void**)&d)) || !d) return;
+    ID3D11DeviceContext* c = nullptr; d->GetImmediateContext(&c);
+    if (c) {
+        void** cvt = *(void***)c;
+        bool known = false;
+        for (int i = 0; i < g_nVts.load(); ++i) if (g_vts[i].vt == cvt) known = true;
+        if (!known && cvt[33] != (void*)&HookOMSetRT && g_nVts.load() < 8) {   // new context class: hook it (checked every frame)
+            VtHook h{cvt, nullptr, nullptr};
+            if (PatchSlot(cvt, 33, (void*)&HookOMSetRT, (void**)&h.rt) && PatchSlot(cvt, 34, (void*)&HookOMSetRTUAV, (void**)&h.rtuav)) {
+                g_vts[g_nVts.load()] = h; ++g_nVts; g_screenHooked = true;
+                Log::Write("Screen: hooked the game's render context #%d (device flags 0x%x)", g_nVts.load(), d->GetCreationFlags());
+            }
+        }
+        c->Release();
+    }
+    d->Release();
+}
+
 void Draw(IDXGISwapChain* sc) {
+    HookGameContext(sc);
+    if (g_curRtv) {   // a matching screen target was still bound at the end of the frame
+        ID3D11Device* d = nullptr;
+        if (SUCCEEDED(sc->GetDevice(__uuidof(ID3D11Device), (void**)&d)) && d) {
+            ID3D11DeviceContext* c = nullptr; d->GetImmediateContext(&c);
+            if (c) { if (g_curMatch) DrawIntoTarget(c, g_curRtv, g_curW, g_curH); c->Release(); }
+            d->Release();
+        }
+        g_curRtv->Release(); g_curRtv = nullptr; g_curMatch = false;
+    }
     if (!g_enabled) return;
     ID3D11Device* dev = nullptr;
     if (FAILED(sc->GetDevice(__uuidof(ID3D11Device), (void**)&dev)) || !dev) { ++g_otherFrames; return; }
@@ -135,19 +358,14 @@ void Draw(IDXGISwapChain* sc) {
     ID3D11Texture2D* bb = nullptr;
     if (FAILED(sc->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&bb)) || !bb) { dev->Release(); return; }
     D3D11_TEXTURE2D_DESC bd; bb->GetDesc(&bd);
-    if (bd.Height >= 200) g_screenH = (int)bd.Height;
+    if (bd.Height >= 200) { g_screenH = (int)bd.Height; g_bbW = (int)bd.Width; }
     float alpha = g_alpha.load();
     if (alpha > 0.003f && bd.Width >= 320 && bd.Height >= 200 && EnsureResources(dev) && EnsureTexture(dev) && g_res.srv) {
         D3D11_RENDER_TARGET_VIEW_DESC rvd{}; rvd.Format = RtvFormat(bd.Format);
         rvd.ViewDimension = bd.SampleDesc.Count > 1 ? D3D11_RTV_DIMENSION_TEXTURE2DMS : D3D11_RTV_DIMENSION_TEXTURE2D;
         ID3D11RenderTargetView* rtv = nullptr;
         ID3D11DeviceContext* ctx = nullptr; dev->GetImmediateContext(&ctx);
-        ID3D11DeviceContext1* ctx1 = nullptr;
-        if (ctx && SUCCEEDED(ctx->QueryInterface(__uuidof(ID3D11DeviceContext1), (void**)&ctx1)) &&
-            SUCCEEDED(dev->CreateRenderTargetView(bb, &rvd, &rtv))) {
-            ID3DDeviceContextState* prev = nullptr;
-            ctx1->SwapDeviceContextState(g_res.state, &prev);   // our own clean pipeline state; game state restored below
-            // geometry in pixels -> NDC
+        if (ctx && SUCCEEDED(dev->CreateRenderTargetView(bb, &rvd, &rtv))) {
             float k = (float)bd.Height / (float)std::max(1, g_res.texScreenH);
             float w = g_res.texW * k, h = g_res.texH * k;
             float sw = (float)bd.Width, sh = (float)bd.Height, ox = g_offX * sh, oy = g_offY * sh;
@@ -156,24 +374,9 @@ void Draw(IDXGISwapChain* sc) {
             y = (a < 3) ? oy : sh - h - oy;
             x = std::floor(x); y = std::floor(y);
             float cbdata[8] = {x / sw * 2 - 1, 1 - y / sh * 2, (x + w) / sw * 2 - 1, 1 - (y + h) / sh * 2, alpha, 0, 0, 0};
-            D3D11_MAPPED_SUBRESOURCE m;
-            if (SUCCEEDED(ctx1->Map(g_res.cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) { memcpy(m.pData, cbdata, sizeof(cbdata)); ctx1->Unmap(g_res.cb, 0); }
-            D3D11_VIEWPORT vp{0, 0, sw, sh, 0, 1};
-            ctx1->OMSetRenderTargets(1, &rtv, nullptr);
-            float bf[4] = {0, 0, 0, 0};
-            ctx1->OMSetBlendState(g_res.blend, bf, 0xFFFFFFFF);
-            ctx1->RSSetViewports(1, &vp); ctx1->RSSetState(g_res.rast);
-            ctx1->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-            ctx1->IASetInputLayout(nullptr);
-            ctx1->VSSetShader(g_res.vs, nullptr, 0); ctx1->VSSetConstantBuffers(0, 1, &g_res.cb);
-            ctx1->PSSetShader(g_res.ps, nullptr, 0); ctx1->PSSetConstantBuffers(0, 1, &g_res.cb);
-            ctx1->PSSetShaderResources(0, 1, &g_res.srv); ctx1->PSSetSamplers(0, 1, &g_res.samp);
-            ctx1->Draw(4, 0);
-            ctx1->SwapDeviceContextState(prev, nullptr);
-            if (prev) prev->Release();
+            DrawQuad(ctx, rtv, sw, sh, g_res.srv, cbdata);
         }
         if (rtv) rtv->Release();
-        if (ctx1) ctx1->Release();
         if (ctx) ctx->Release();
     }
     bb->Release(); dev->Release();
@@ -226,6 +429,7 @@ bool Install() {
             ok = PatchSlot(vt, 8, (void*)&HookPresent, (void**)&g_origPresent);
             if (ok && g_hasPresent1) PatchSlot(vt, 22, (void*)&HookPresent1, (void**)&g_origPresent1);
         }
+        if (ok && g_wantScreenHook) Log::Write("Screen: waiting for the game's first frame to hook its render context");
         if (ok) {
             g_vtable = vt;
             // The game may call our hook until the process ends, so keep this DLL loaded for the process lifetime.
@@ -243,6 +447,21 @@ void Uninstall() {
     g_enabled = false;   // module is pinned: the hook stays in place but draws nothing
     g_alpha = 0;
 }
+void EnableScreenHook(bool on) { g_wantScreenHook = on; }
+void SetScreenImage(std::shared_ptr<const OverlayImage> img) { std::lock_guard<std::mutex> l(g_scrImgMtx); g_scrImg = std::move(img); ++g_scrImgVersion; }
+void SetScreenTarget(int w, int h, int format) { g_scrW = w; g_scrH = h; g_scrFmt = format; }
+void SetScreenAlpha(float a) { g_scrAlpha = a; }
+void SetScreenArea(float x, float y, float w, float h, bool flipY, bool flipX) { g_areaX = x; g_areaY = y; g_areaW = w; g_areaH = h; g_flipY = flipY; g_flipX = flipX; }
+void SetCollectTargets(bool on) { g_collect = on; }
+std::vector<RenderTargetStat> TakeTargetStats() {
+    std::lock_guard<std::mutex> l(g_statMtx);
+    std::vector<RenderTargetStat> v;
+    for (auto& [k, e] : g_stats) v.push_back({e.w, e.h, e.fmt, e.binds});
+    g_stats.clear();
+    return v;
+}
+bool ScreenHookActive() { return g_wantScreenHook && g_vtable != nullptr; }
+long long RenderTargetCalls() { return g_rtCalls; }
 void SetImage(std::shared_ptr<const OverlayImage> img) { std::lock_guard<std::mutex> l(g_imgMtx); g_img = std::move(img); ++g_imgVersion; }
 void SetAlpha(float a) { g_alpha = a; }
 void SetPlacement(int anchor, float ox, float oy) { g_anchor = anchor; g_offX = ox; g_offY = oy; }

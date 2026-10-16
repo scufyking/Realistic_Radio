@@ -14,7 +14,7 @@ Von **ScufyKing**. Das ganze Radio läuft im Spiel:
 
 Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels kopieren, ETS2 starten, das Radio läuft. Senderdaten und Sounds stecken in der DLL.
 
-> **Stand:** Getestet in ETS2 1.61 (Windows x64): Das Plugin wird geladen, liest die LKW-Position, wechselt Sender nach Region, spielt Ton ab und zeichnet das Ingame-Overlay. Daten für American Truck Simulator sind enthalten, ATS ist aber ungetestet.
+> **Stand:** Getestet in ETS2 1.61 (Windows x64) mit dem MAN TGX: Das Plugin wird geladen, liest die LKW-Position, wechselt Sender nach Region, spielt Ton ab und zeigt Sender und Lautstärke auf dem Navi-Bildschirm. Daten für American Truck Simulator sind enthalten, ATS ist aber ungetestet.
 
 ---
 
@@ -40,7 +40,8 @@ Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels ko
 - **Realistische Reichweite und Umschaltung.** Jede Stadt hat eine Sendereichweite; an Grenzen überlappen Regionen, und das Radio wechselt nur automatisch, wenn eine andere Region deutlich besser empfangen wird.
 - **Empfang und Rauschen.** Je weiter du von einer Region entfernt bist, desto mehr rauscht es, und bei schwachem Signal setzt der Ton ab und zu aus.
 - **Sanfte Übergänge** mit Umschaltgeräusch.
-- **Ingame-Overlay.** Bei jedem Senderwechsel, bei Lautstärke usw. erscheint für einige Sekunden ein Panel mit Sendername, Land, Empfangsbalken, Favoriten-Herz und Senderlogo. Funktioniert auch im Vollbild. Die Logos werden einmal von `radio.scufystudio.de` geladen und danach lokal gespeichert.
+- **Anzeige auf dem Navi-Bildschirm im LKW.** Bei jedem Senderwechsel erscheinen Logo, Sendername, Land und Empfang für ein paar Sekunden auf dem Navi-Bildschirm im Cockpit, bei Lautstärkeänderungen ein Balken mit Prozentzahl; danach ist die Navigation wieder da. Standardmäßig für den MAN TGX eingerichtet (siehe „Anzeige auf dem Cockpit-Bildschirm“).
+- **Optionales Popup-Overlay** (standardmäßig aus): ein Panel oben im Bild oder ein Display im Autoradio-Stil. Funktioniert auch im Vollbild.
 - **Radio nur bei eingeschalteter Zündung** (oder nur bei laufendem Motor, oder immer; einstellbar).
 - **Steuerung per Tastatur und Controller**, frei belegbar.
 - **Favoriten pro Land.**
@@ -134,7 +135,7 @@ Alle Einstellungen stehen in `realistic-radio\realistic-radio.json`. Die Datei w
 | Schlüssel | Standard | Bedeutung |
 |---|---|---|
 | `style` | `"panel"` | `"panel"` = Info-Panel mit Logo, `"radio"` = Autoradio-Display mit Punktmatrix (siehe unten) |
-| `mode` | `"auto"` | `"auto"` (empfohlen), `"d3d11"` (ins Spielbild zeichnen), `"window"` (transparentes Fenster über dem Spiel), `"off"` |
+| `mode` | `"off"` | `"off"` = kein Popup (Standard; der Cockpit-Bildschirm funktioniert trotzdem), `"auto"` = Popup einschalten (empfohlen), `"d3d11"` (ins Spielbild zeichnen), `"window"` (transparentes Fenster über dem Spiel) |
 | `position` | `"top-center"` | `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right` |
 | `offsetX`, `offsetY` | `0`, `0.07` | Abstand vom Bildschirmrand als Anteil der Bildschirmhöhe (0.07 = 7 %) |
 | `scale` | `1.0` | Größe; passt sich zusätzlich automatisch an die Auflösung an |
@@ -158,6 +159,33 @@ Statt des Panels erscheint über dem Armaturenbrett ein schmales Punktmatrix-Dis
 | `scrollSeconds` | `0.3` | Tempo der Laufschrift: Sekunden pro Zeichen |
 
 Die Punktmatrix-Zeichen nutzen die klassische 5×7-Schrift der Adafruit GFX Library (BSD-Lizenz, siehe `NOTICE.md`); fehlende Buchstaben werden als Grundbuchstabe gezeigt (À → A), andere Schriften wie Kyrillisch zeichnet eine Windows-Schrift.
+
+### Anzeige auf dem Cockpit-Bildschirm (`"screen": { … }`, experimentell)
+
+Zeigt den Senderwechsel (Logo, Name, Land, Empfang) oder einen Lautstärkebalken mit Prozentzahl für ein paar Sekunden **auf dem Infotainment-/Navi-Bildschirm des LKW**; danach ist die Navigation wieder zu sehen. Ein weiteres Plugin ist nicht nötig: Das Spiel zeichnet jeden Cockpit-Bildschirm in eine eigene Zeichenfläche (Render Target), und sobald das Spiel mit der passenden fertig ist, zeichnet das Plugin seine Anzeige darüber.
+
+Weil jeder LKW und jede Mod andere Zeichenflächen nutzt, muss die richtige einmal gefunden werden:
+
+1. `"enabled": true` und `"probe": true` setzen, Spiel starten und ins Cockpit setzen (Navigation sichtbar).
+2. Nach etwa 20 s markiert das Plugin einen Kandidaten nach dem anderen mit einem magentafarbenen Schachbrett und einer Beschriftung wie `3/7  1024x600  f28` (alle 5 s, steht auch im Log).
+3. Erscheint das Muster auf dem gewünschten Bildschirm: Breite, Höhe und Format notieren, dann `"probe": false` und `"width"`, `"height"`, `"format"` entsprechend setzen.
+4. Steht die Schrift auf dem Kopf: `"flipY": true`. Enthält die Bildschirmtextur mehrere Bildschirme, den Bereich mit `areaX`, `areaY`, `areaW`, `areaH` (Anteile 0–1) eingrenzen.
+
+| Schlüssel | Standard | Bedeutung |
+|---|---|---|
+| `enabled` | `true` | Anzeige auf dem Cockpit-Bildschirm einschalten |
+| `width`, `height`, `format` | `1024`, `1024`, `29` | Zeichenfläche, in die gezeichnet wird (aus dem Suchmodus; Standard = Navi-Bildschirm des MAN TGX) |
+| `probe` | `false` | Suchmodus mit Testbildern |
+| `probeSeconds` | `5` | Zeit pro Kandidat im Suchmodus |
+| `durationSeconds` | `4` | Wie lange die Anzeige bleibt, bevor die Navigation zurückkommt |
+| `areaX`, `areaY`, `areaW`, `areaH` | `0.1, 0.3, 0.8, 0.4` | Bereich der Zeichenfläche, der überdeckt wird |
+| `flipY` | `true` | Anzeige umdrehen |
+| `flipX` | `false` | Waagerecht spiegeln (`flipX` + `flipY` = um 180° gedreht) |
+| `grid` | `false` | Zeigt ein 10×10-Koordinatengitter auf der eingestellten Zeichenfläche. Die Beschriftungen sind Koordinaten der Zeichenfläche in Zehnteln; aus den Feldern oben links und unten rechts auf dem Bildschirm ergeben sich `areaX/Y/W/H` |
+
+Beispiel (MAN TGX, ETS2 1.61, Navi-Bildschirm): `"width": 1024, "height": 1024, "format": 29, "flipY": true, "areaX": 0.1, "areaY": 0.3, "areaW": 0.8, "areaH": 0.4`. Andere LKW nutzen andere Zeichenflächen.
+
+Unabhängig vom Popup-Overlay, das standardmäßig aus ist (`"overlay": { "mode": "auto" }` schaltet es zusätzlich ein). Dieser Modus hängt sich in die Direct3D-11-Ausgabe des Spiels; im Suchmodus kann das Testbild kurz auch auf anderen Flächen auftauchen. Unverträglichkeiten mit anderen Grafik-Mods sind möglich.
 
 ### Anzeige auf dem LKW-Bildschirm (`"display": { … }`, optional)
 
@@ -208,7 +236,7 @@ Fast jedes Problem lässt sich an `realistic-radio\realistic-radio.log` erkennen
 | „MP3 decoder init failed“ | Der Stream ist kein echtes MP3. URL aus dem Log melden oder über eigene Sender ersetzen. |
 | „Media Foundation cannot open …“ | Windows kann dieses Format nicht abspielen (z. B. manche HLS- oder Ogg-Streams). Anderen Sender wählen oder URL ersetzen. |
 | Overlay zeigt „Sender nicht erreichbar“ | Der Stream ist gerade nicht erreichbar. Das Plugin versucht es im Hintergrund weiter; meist ist Weiterschalten schneller. |
-| Kein Overlay | Im Log nach `Overlay:` suchen. `Present hook installed` und `D3D11 renderer ready` bedeuten, dass es aktiv ist. Bei Konflikten mit einem anderen Overlay-Tool `"mode": "window"` probieren. |
+| Kein Popup-Overlay | Es ist standardmäßig aus: `"overlay": { "mode": "auto" }` setzen. Ist es an, aber nicht sichtbar, im Log nach `Overlay:` suchen; `Present hook installed` und `D3D11 renderer ready` bedeuten, dass es aktiv ist. Bei Konflikten mit einem anderen Overlay-Tool `"mode": "window"` probieren. |
 | Overlay verdeckt einen Teil des HUD | `position`, `offsetY` oder `scale` ändern. |
 | Kein Senderlogo | Logos werden beim ersten Gebrauch von `radio.scufystudio.de` geladen; ohne Internet oder bei Serverausfall erscheint das Panel ohne Logo, und nach 10 Minuten wird es erneut versucht. |
 | Tasten tun nichts | Ist das Spiel das aktive Fenster? Eventuell belegt ein anderes Programm die Taste; eine andere wählen. |
@@ -216,7 +244,7 @@ Fast jedes Problem lässt sich an `realistic-radio\realistic-radio.log` erkennen
 
 ## Bekannte Einschränkungen
 
-- **Kein Text im eingebauten Radio-Display des LKW.** Das SCS-Telemetrie-SDK kann Daten lesen und Eingabegeräte bereitstellen, aber das Cockpit nicht verändern. Stattdessen gibt es das Overlay und optional das Display-Fenster für PrismTextureStreamer.
+- **Die Anzeige auf dem Cockpit-Bildschirm ist für einen LKW eingerichtet.** Die Standardwerte passen zum Navi-Bildschirm des MAN TGX (ETS2 1.61). Andere LKW zeichnen ihre Bildschirme in andere Zeichenflächen; dafür Such- und Gittermodus nutzen oder die Anzeige abschalten. Das SCS-Telemetrie-SDK selbst kann nicht auf Cockpit-Bildschirme schreiben; das funktioniert über einen Eingriff in die Direct3D-11-Ausgabe des Spiels.
 - **Das spieleigene Radio wird nicht gesteuert.** Das Plugin spielt seinen eigenen Ton über Windows ab.
 - **Nicht jeder Stream funktioniert.** Sender-URLs ändern sich mit der Zeit. Manche AAC/HLS-Streams kann Windows Media Foundation nicht öffnen; jede URL lässt sich über eigene Sender ersetzen.
 - **Das Overlay hängt sich in die DirectX-11-Ausgabe des Spiels.** Mit dem OpenGL-Renderer weicht das Plugin auf ein transparentes Fenster aus; über exklusivem Vollbild ist das nicht garantiert. Konflikte mit anderen Overlay-Tools (Steam-Overlay, RTSS, ReShade, Multiplayer-Clients) sind möglich.

@@ -12,7 +12,7 @@
 //  mode "auto":   d3d11; switches to window if the game does not present D3D11 frames (e.g. OpenGL renderer)
 class Overlay {
 public:
-    void Init(const OverlayConfig& cfg, const std::wstring& dataDir);
+    void Init(const OverlayConfig& cfg, const ScreenConfig& screen, const std::wstring& dataDir);
     void Shutdown();
     void Show(const OverlayInfo& info, const std::string& logoPath);   // shows for durationSeconds
     void Update(const OverlayInfo& info);                               // changes content without extending display time
@@ -39,6 +39,16 @@ private:
     int scroll_ = 0;
     ULONGLONG nextScrollAt_ = 0;
     std::wstring LcdText() const;
+    // in-cab screen (experimental)
+    void TickScreen(ULONGLONG now);
+    void RenderScreen();
+    ScreenConfig scfg_;
+    bool screenOn_ = false, collecting_ = false;
+    OverlayInfo scrInfo_;
+    ULONGLONG scrShownAt_ = 0, scrUntil_ = 0, nextStatAt_ = 0, nextProbeAt_ = 0;
+    struct Cand { int w, h, fmt; long long binds; };
+    std::vector<Cand> cands_;
+    int probeIdx_ = -1;
     ULONGLONG start_ = 0, shownAt_ = 0, visibleUntil_ = 0;
     OverlayInfo info_;
     std::string logoKey_;
