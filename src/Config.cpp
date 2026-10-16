@@ -12,7 +12,7 @@
 
 using nlohmann::json;
 
-static const char* kActionNames[] = {"next", "previous", "stop", "volumeUp", "volumeDown", "makeFavourite", "goToFavourite", "mute", "showOverlay"};
+static const char* kActionNames[] = {"next", "previous", "stop", "volumeUp", "volumeDown", "makeFavourite", "goToFavourite", "mute", "showOverlay", "source"};
 const char* ActionName(Action a) { return kActionNames[(int)a]; }
 
 Config::Config() {
@@ -24,6 +24,7 @@ Config::Config() {
     keys[(int)Action::VolumeUp] = ParseKeyBinding("Up");
     keys[(int)Action::VolumeDown] = ParseKeyBinding("Down");
     keys[(int)Action::MakeFavourite] = ParseKeyBinding("Pause");
+    keys[(int)Action::Source] = ParseKeyBinding("Home");
 }
 
 int ParseKeyName(const std::string& in) {
@@ -84,12 +85,24 @@ static const char* kDefaultConfig = R"({
     "makeFavourite": "Pause",
     "goToFavourite": "",
     "mute": "",
-    "showOverlay": ""
+    "showOverlay": "",
+    "source": "Home"
   },
   "controllerIndex": 0,
   "buttons": {
     "previous": -1, "next": -1, "stop": -1, "volumeUp": -1,
-    "volumeDown": -1, "makeFavourite": -1, "goToFavourite": -1, "mute": -1, "showOverlay": -1
+    "volumeDown": -1, "makeFavourite": -1, "goToFavourite": -1, "mute": -1, "showOverlay": -1, "source": -1
+  },
+  "source": "radio",
+  "media": {
+    "enabled": true,
+    "folder": "usb",
+    "label": "USB",
+    "shuffle": false,
+    "repeat": "all",
+    "textTrack": "Titel",
+    "textPaused": "Pause",
+    "textEmpty": "Keine Musik im USB-Ordner"
   },
   "screen": {
     "enabled": true,
@@ -141,7 +154,9 @@ static const char* kDefaultConfig = R"({
     "textFavourite": "Als Favorit gespeichert",
     "textConnecting": "verbinde\u2026",
     "textUnavailable": "Sender nicht erreichbar",
-    "textPowerOff": "Z\u00fcndung aus"
+    "textPowerOff": "Z\u00fcndung aus",
+    "textRadio": "Radio",
+    "textStations": "Sender"
   }
 }
 )";
@@ -167,6 +182,14 @@ bool Config::Load(const std::wstring& path) {
         onlyWhenGameFocused = j.value("onlyWhenGameFocused", onlyWhenGameFocused);
         reconnectMaxSeconds = j.value("reconnectMaxSeconds", reconnectMaxSeconds);
         controllerIndex = j.value("controllerIndex", controllerIndex);
+        source = j.value("source", source);
+        mediaTrack = j.value("mediaTrack", mediaTrack);
+        if (j.contains("media")) {
+            auto& m = j["media"]; MediaConfig& c = media;
+            c.enabled = m.value("enabled", c.enabled); c.folder = m.value("folder", c.folder); c.label = m.value("label", c.label);
+            c.shuffle = m.value("shuffle", c.shuffle); c.repeat = m.value("repeat", c.repeat);
+            c.textTrack = m.value("textTrack", c.textTrack); c.textPaused = m.value("textPaused", c.textPaused); c.textEmpty = m.value("textEmpty", c.textEmpty);
+        }
         if (j.contains("screen")) {
             auto& sc = j["screen"]; ScreenConfig& c = screen;
             c.enabled = sc.value("enabled", c.enabled);
@@ -211,6 +234,7 @@ bool Config::Load(const std::wstring& path) {
             c.textFavourite = o.value("textFavourite", c.textFavourite); c.textConnecting = o.value("textConnecting", c.textConnecting);
             c.textUnavailable = o.value("textUnavailable", c.textUnavailable);
             c.textPowerOff = o.value("textPowerOff", c.textPowerOff);
+            c.textRadio = o.value("textRadio", c.textRadio); c.textStations = o.value("textStations", c.textStations);
         }
         for (int i = 0; i < (int)Action::Count; ++i) {
             if (j.contains("keys") && j["keys"].contains(kActionNames[i]))
@@ -232,7 +256,10 @@ bool Config::Load(const std::wstring& path) {
                 migratedKeys = true;
             }
         }
-        if (migratedUrlPrefix || migratedKeys) {   // write the changes back so the file matches what is used
+        // 1.1.0: add the USB/CD settings to files written by older versions, so they can be found and changed
+        bool addSource = j.contains("keys") && j["keys"].is_object() && !j["keys"].contains("source");
+        bool addMedia = !j.contains("media");
+        if (migratedUrlPrefix || migratedKeys || addSource || addMedia) {   // write the changes back so the file matches what is used
             f.close();
             try {
                 std::ifstream in{std::filesystem::path(path)};
@@ -241,6 +268,16 @@ bool Config::Load(const std::wstring& path) {
                 if (migratedKeys) {
                     k["keys"]["previous"] = "Left"; k["keys"]["next"] = "Right"; k["keys"]["volumeUp"] = "Up"; k["keys"]["volumeDown"] = "Down";
                     Log::Write("Keys updated to the new defaults: Left/Right = station, Up/Down = volume");
+                }
+                if (addSource) {
+                    k["keys"]["source"] = "Home";
+                    if (k.contains("buttons") && k["buttons"].is_object()) k["buttons"]["source"] = -1;
+                    Log::Write("Added key 'source' (Home): switches between radio and USB");
+                }
+                if (addMedia) {
+                    k["media"] = json::parse(R"({"enabled": true, "folder": "usb", "label": "USB", "shuffle": false, "repeat": "all",
+                        "textTrack": "Titel", "textPaused": "Pause", "textEmpty": "Keine Musik im USB-Ordner"})");
+                    Log::Write("Added settings block 'media' (USB/CD mode)");
                 }
                 std::ofstream o{std::filesystem::path(path)}; o << k.dump(2);
             } catch (...) {}
@@ -257,6 +294,7 @@ void Config::SaveVolume(const std::wstring& path) const {
         std::ifstream f{std::filesystem::path(path)};
         json j = f ? json::parse(f, nullptr, true, true) : json::object();
         j["volume"] = volume; j["muted"] = muted;
+        j["source"] = source; j["mediaTrack"] = mediaTrack;
         std::ofstream o{std::filesystem::path(path)}; o << j.dump(2);
     } catch (...) {}
 }

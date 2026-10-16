@@ -78,7 +78,7 @@ void Overlay::Shutdown() {
 
 void Overlay::Show(const OverlayInfo& info, const std::string& logoPath) {
     if (cfg_.showLogos && !logoPath.empty()) { if (logoPath != logoKey_) RequestLogo(logoPath); }
-    else if (!logoPath.empty() || !cfg_.showLogos) { logoKey_.clear(); logo_.reset(); }
+    else { logoKey_.clear(); logo_.reset(); }   // no logo (USB track without cover, message without station)
     if (screenOn_ && !scfg_.probe && !scfg_.grid && scfg_.width > 0 && scfg_.height > 0) {
         ULONGLONG t = GetTickCount64();
         if (t >= scrUntil_) scrShownAt_ = t;
@@ -101,6 +101,11 @@ void Overlay::Show(const OverlayInfo& info, const std::string& logoPath) {
 }
 
 void Overlay::Update(const OverlayInfo& info) {
+    // in-cab card: refresh while it is visible (status, track time) - but never replace a volume card
+    if (screenOn_ && !scfg_.probe && !scfg_.grid && GetTickCount64() < scrUntil_ && scrInfo_.volume < 0 && !(info == scrInfo_)) {
+        scrInfo_ = info;
+        RenderScreen();
+    }
     if (off_ || info == info_) return;
     info_ = info;
     if (Visible()) Rerender();
@@ -110,6 +115,12 @@ void Overlay::RequestLogo(const std::string& logoPath) {
     logoKey_ = logoPath; logo_.reset();
     auto it = logoCache_.find(logoPath);
     if (it != logoCache_.end()) { logo_ = it->second; return; }
+    if (logoPath.rfind("file:", 0) == 0) {   // USB/CD cover: local image file
+        logo_ = ShrinkImage(LoadImageFile(Utf8ToWide(logoPath.substr(5))), 512);
+        if (logoCache_.size() > 64) logoCache_.clear();
+        if (logo_) logoCache_[logoPath] = logo_;
+        return;
+    }
     std::wstring file = logoDir_ + SafeFileName(logoPath);
     if (GetFileAttributesW(file.c_str()) != INVALID_FILE_ATTRIBUTES) {
         logo_ = LoadImageFile(file);

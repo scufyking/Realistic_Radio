@@ -12,7 +12,11 @@ class AudioEngine {
 public:
     bool Init(const std::wstring& dataDir, int reconnectMaxSeconds);
     void Shutdown();
-    void PlayUrl(const std::string& url);   // replaces current stream (old one is stopped asynchronously)
+    void PlayUrl(const std::string& url, bool once = false);   // replaces current stream (old one is stopped asynchronously); once = USB/CD track
+    void SetPaused(bool p) { paused_ = p; }    // mixer stops reading the stream (USB/CD pause keeps the position)
+    bool Paused() const { return paused_; }
+    struct TrackState { bool active = false, ended = false, failed = false; double pos = 0, len = 0; };
+    TrackState Track();                        // position/length in seconds of the current once-session
     void StopStream();
     void SetStreamGain(float g, float seconds);
     void SetStaticGain(float g, float seconds);
@@ -38,7 +42,7 @@ private:
     Ramp gStream_, gStatic_, gSwitch_;
     std::atomic<float> master_{0.f};
     float masterCur_ = 0.f;   // audio thread only: smoothed master (no sudden jumps)
-    std::atomic<bool> muted_{false};
+    std::atomic<bool> muted_{false}, paused_{false};
     std::mutex sessMtx_;
     std::shared_ptr<StreamSession> session_;
     std::vector<std::shared_ptr<StreamSession>> retired_;

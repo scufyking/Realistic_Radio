@@ -14,7 +14,9 @@ Von **ScufyKing**. Das ganze Radio läuft im Spiel:
 
 Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels kopieren, ETS2 starten, das Radio läuft. Senderdaten und Sounds stecken in der DLL.
 
-> **Stand:** Getestet in ETS2 1.61 (Windows x64) mit dem MAN TGX: Das Plugin wird geladen, liest die LKW-Position, wechselt Sender nach Region, spielt Ton ab und zeigt Sender und Lautstärke auf dem Navi-Bildschirm. Daten für American Truck Simulator sind enthalten, ATS ist aber ungetestet.
+> **Version 1.1.0** · [Änderungen](CHANGELOG.md#changelog-deutsch)
+>
+> **Stand:** Getestet in ETS2 1.61 (Windows x64) mit dem MAN TGX: Das Plugin wird geladen, liest die LKW-Position, wechselt Sender nach Region, spielt Ton ab und zeigt Sender und Lautstärke auf dem Navi-Bildschirm. Daten für American Truck Simulator sind enthalten, ATS ist aber ungetestet. Der USB/CD-Modus und das neue Design der Navi-Anzeige (beide neu in 1.1.0) sind kompiliert, aber noch nicht im Spiel getestet.
 
 ---
 
@@ -24,6 +26,7 @@ Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels ko
 - [Installation](#installation)
 - [Bedienung](#bedienung)
 - [Einstellungen](#einstellungen)
+- [USB / CD: eigene Musik](#usb--cd-eigene-musik)
 - [Eigene Sender hinzufügen](#eigene-sender-hinzufügen)
 - [Fehlersuche](#fehlersuche)
 - [Bekannte Einschränkungen](#bekannte-einschränkungen)
@@ -40,11 +43,12 @@ Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels ko
 - **Realistische Reichweite und Umschaltung.** Jede Stadt hat eine Sendereichweite; an Grenzen überlappen Regionen, und das Radio wechselt nur automatisch, wenn eine andere Region deutlich besser empfangen wird.
 - **Empfang und Rauschen.** Je weiter du von einer Region entfernt bist, desto mehr rauscht es, und bei schwachem Signal setzt der Ton ab und zu aus.
 - **Sanfte Übergänge** mit Umschaltgeräusch.
-- **Anzeige auf dem Navi-Bildschirm im LKW.** Bei jedem Senderwechsel erscheinen Logo, Sendername, Land und Empfang für ein paar Sekunden auf dem Navi-Bildschirm im Cockpit, bei Lautstärkeänderungen ein Balken mit Prozentzahl; danach ist die Navigation wieder da. Standardmäßig für den MAN TGX eingerichtet (siehe „Anzeige auf dem Cockpit-Bildschirm“).
+- **Anzeige auf dem Navi-Bildschirm im LKW.** Bei jedem Senderwechsel erscheinen Logo, Sendername, Land, Empfang und „Sender 3 / 12“ für ein paar Sekunden auf dem Navi-Bildschirm im Cockpit, bei Lautstärkeänderungen ein Lautsprechersymbol, eine große Prozentzahl und ein Balken aus 20 Segmenten; danach ist die Navigation wieder da. Standardmäßig für den MAN TGX eingerichtet (siehe „Anzeige auf dem Cockpit-Bildschirm“).
 - **Optionales Popup-Overlay** (standardmäßig aus): ein Panel oben im Bild oder ein Display im Autoradio-Stil. Funktioniert auch im Vollbild.
 - **Radio nur bei eingeschalteter Zündung** (oder nur bei laufendem Motor, oder immer; einstellbar).
 - **Steuerung per Tastatur und Controller**, frei belegbar.
 - **Favoriten pro Land.**
+- **USB / CD-Modus für eigene Musik.** Musikdateien in den Ordner `realistic-radio\usb\` legen und mit **Pos1** zwischen Radio und USB umschalten. Titel, Interpret, Album, Cover, Titelnummer und Spielzeit erscheinen auf dem Navi-Bildschirm.
 - **Eigene Sender** in einer separaten Datei, die bei Updates erhalten bleibt.
 - **Automatische Wiederverbindung**, wenn ein Stream abbricht.
 - **Spielt MP3-, AAC- und HLS-Streams** (MP3 mit eingebautem Decoder, AAC/HLS über Windows Media Foundation) sowie lokale Audiodateien.
@@ -76,7 +80,8 @@ plugins\
     ├── audio\                       Rauschen und Umschaltgeräusch (aus der DLL)
     ├── realistic-radio.json         Einstellungen (wird beim ersten Start angelegt)
     ├── favourites-ets2.json         deine Favoriten (wird automatisch angelegt)
-    ├── logos\                       heruntergeladene Senderlogos (Zwischenspeicher)
+    ├── usb\                         deine eigene Musik für den USB/CD-Modus (legst du hinein)
+    ├── logos\                       heruntergeladene Senderlogos und Cover (Zwischenspeicher)
     └── realistic-radio.log          Logdatei
 ```
 
@@ -99,8 +104,9 @@ plugins\
 | Zum Favoriten | – | `keys.goToFavourite` |
 | Stumm | – | `keys.mute` |
 | Overlay einblenden | – | `keys.showOverlay` |
+| Quelle wechseln: Radio ↔ USB/CD | Pos1 | `keys.source` |
 
-„Nächster“ und „Vorheriger“ schalten durch alle Sender aller Regionen, die du gerade empfängst.
+„Nächster“ und „Vorheriger“ schalten durch alle Sender aller Regionen, die du gerade empfängst. Im USB/CD-Modus haben die Tasten eine andere Bedeutung, siehe [USB / CD](#usb--cd-eigene-musik).
 
 Tasten reagieren nur, wenn ETS2 das aktive Fenster ist. So stören sie keine anderen Programme.
 
@@ -129,6 +135,8 @@ Alle Einstellungen stehen in `realistic-radio\realistic-radio.json`. Die Datei w
 | `dataFile` | `""` | Andere Sender-/Städtedatei im Ordner `realistic-radio` (leer = `ets2.json` bzw. `ats.json`) |
 | `onlyWhenGameFocused` | `true` | Tasten wirken nur, wenn das Spiel im Vordergrund ist |
 | `reconnectMaxSeconds` | `30` | Maximale Wartezeit zwischen Verbindungsversuchen nach einem Stream-Abbruch |
+| `source` | `"radio"` | Zuletzt gewählte Quelle, `"radio"` oder `"usb"` (wird automatisch gespeichert, beim Start fortgesetzt) |
+| `mediaTrack` | – | Zuletzt gespielter USB-Titel (wird automatisch gespeichert) |
 
 ### Overlay (`"overlay": { … }`)
 
@@ -143,7 +151,7 @@ Alle Einstellungen stehen in `realistic-radio\realistic-radio.json`. Die Datei w
 | `alwaysVisible` | `false` | Panel dauerhaft anzeigen |
 | `showLogos` | `true` | Senderlogos anzeigen |
 | `urlPrefix` | `"https://radio.scufystudio.de/logo/"` | Woher fehlende Logos geladen werden. Geladene Logos bleiben in `realistic-radio\logos\` und werden nie erneut geladen. Leer = nur Logos, die schon in diesem Ordner liegen, kein Netzzugriff |
-| `textNowPlaying`, `textVolume`, `textStopped`, `textMuted`, `textFavourite`, `textConnecting`, `textUnavailable`, `textPowerOff` | deutsche Texte | Alle Texte im Overlay, frei änderbar |
+| `textNowPlaying`, `textVolume`, `textStopped`, `textMuted`, `textFavourite`, `textConnecting`, `textUnavailable`, `textPowerOff`, `textRadio`, `textStations` | deutsche Texte | Alle Texte im Overlay und auf dem Navi, frei änderbar (`textRadio` = Beschriftung des Quellen-Schilds, `textStations` = „Sender“ in „Sender 3 / 12“) |
 
 #### Autoradio-Display (`"style": "radio"`)
 
@@ -187,6 +195,17 @@ Beispiel (MAN TGX, ETS2 1.61, Navi-Bildschirm): `"width": 1024, "height": 1024, 
 
 Unabhängig vom Popup-Overlay, das standardmäßig aus ist (`"overlay": { "mode": "auto" }` schaltet es zusätzlich ein). Dieser Modus hängt sich in die Direct3D-11-Ausgabe des Spiels; im Suchmodus kann das Testbild kurz auch auf anderen Flächen auftauchen. Unverträglichkeiten mit anderen Grafik-Mods sind möglich.
 
+### USB / CD (`"media": { … }`)
+
+| Schlüssel | Standard | Bedeutung |
+|---|---|---|
+| `enabled` | `true` | USB/CD-Modus erlauben. `false` = die Taste `source` tut nichts |
+| `folder` | `"usb"` | Musikordner: relativ zum Ordner `realistic-radio` oder ein vollständiger Pfad, z. B. `"D:\\Musik\\Truck"` (in JSON doppelte Backslashes oder `/`) |
+| `label` | `"USB"` | Name der Quelle auf dem Navi, z. B. `"CD"` |
+| `shuffle` | `false` | Zufallswiedergabe (neue Reihenfolge bei jedem Umschalten auf USB) |
+| `repeat` | `"all"` | `"all"` = nach dem letzten Titel von vorn, `"one"` = Titel wiederholen, `"off"` = nach dem letzten Titel anhalten |
+| `textTrack`, `textPaused`, `textEmpty` | `"Titel"`, `"Pause"`, `"Keine Musik im USB-Ordner"` | Texte auf dem Navi |
+
 ### Anzeige auf dem LKW-Bildschirm (`"display": { … }`, optional)
 
 Das Plugin kann ein natives Fenster „Realistic Radio Display“ öffnen, das das Radio als Infotainment-Bildschirm zeigt. Das separate Plugin [PrismTextureStreamer](https://github.com/Baldywaldy09/PrismTextureStreamer) (nicht Teil dieses Projekts) kann dieses Fenster auf den GPS- oder Dashboard-Bildschirm im LKW spiegeln. Standardmäßig ist es aus.
@@ -197,6 +216,27 @@ Das Plugin kann ein natives Fenster „Realistic Radio Display“ öffnen, das d
 | `width`, `height` | `1280`, `720` | Größe in Pixeln |
 | `offscreen` | `true` | Fenster außerhalb des sichtbaren Desktops platzieren. Bleibt es in PrismTextureStreamer schwarz, auf `false` setzen |
 | `title` | `"Realistic Radio Display"` | Fenstertitel |
+
+## USB / CD: eigene Musik
+
+1. Musikdateien in den Ordner `plugins\realistic-radio\usb\` kopieren. Er wird beim ersten Start von Version 1.1.0 automatisch angelegt (mit einer kurzen `LIES-MICH - READ-ME.txt`). Unterordner sind erlaubt, z. B. ein Ordner pro Album.
+2. Im Spiel **Pos1** drücken: Das Radio verstummt, und der erste Titel (oder der zuletzt gespielte) startet. Noch einmal **Pos1** schaltet zurück zum Radio, auf den zuletzt gehörten Sender.
+3. Der Ordner wird bei jedem Umschalten auf USB neu eingelesen; neue Dateien kann man also auch während des Spiels hinzufügen.
+
+| Taste im USB/CD-Modus | Wirkung |
+|---|---|
+| → (Pfeil rechts) | Nächster Titel |
+| ← (Pfeil links) | Zurück zum Anfang des Titels; innerhalb der ersten 3 Sekunden zum vorherigen Titel (wie beim CD-Spieler) |
+| Ende | Pause / weiter (die Stelle bleibt erhalten) |
+| ↑ / ↓, Stumm | Lautstärke wie beim Radio |
+| Pause (Favorit) | ohne Funktion, Favoriten gibt es nur für Sender |
+
+- **Formate:** MP3, WAV und FLAC spielt das Plugin selbst; M4A, AAC und WMA über Windows Media Foundation (bei Windows 10/11 dabei; bei „N“-Editionen ohne Media Feature Pack nicht).
+- **Reihenfolge:** wie im Windows-Explorer nach Namen sortiert („2“ vor „10“), zuerst die Dateien eines Ordners, dann seine Unterordner. Bis zu 5.000 Dateien, 8 Ordnerebenen.
+- **Anzeige:** Titel, Interpret und Album kommen aus den ID3-Tags von MP3-Dateien. Andere Formate und MP3 ohne Tags nutzen den Dateinamen: `Interpret - Titel.mp3` (eine führende Titelnummer wie `01 - ` wird entfernt), als Album gilt der Ordnername.
+- **Cover:** ein in der MP3 eingebettetes Bild oder eine `cover.jpg`, `folder.jpg` oder `front.jpg` (auch `.png`) im Ordner des Titels. Eingebettete Cover werden einmal nach `realistic-radio\logos\` geschrieben. Ohne Cover zeigt das Navi eine stilisierte CD.
+- Bei Zündung aus wird der Titel angehalten und läuft beim Einschalten an derselben Stelle weiter. Beim Spielstart geht es mit der zuletzt gewählten Quelle und dem zuletzt gespielten Titel weiter (von vorn).
+- Im USB-Modus gibt es kein Rauschen und keinen automatischen Senderwechsel; der Empfang wird im Hintergrund weiter berechnet, sodass beim Zurückschalten sofort der passende Sender kommt.
 
 ## Eigene Sender hinzufügen
 
@@ -240,6 +280,9 @@ Fast jedes Problem lässt sich an `realistic-radio\realistic-radio.log` erkennen
 | Overlay verdeckt einen Teil des HUD | `position`, `offsetY` oder `scale` ändern. |
 | Kein Senderlogo | Logos werden beim ersten Gebrauch von `radio.scufystudio.de` geladen; ohne Internet oder bei Serverausfall erscheint das Panel ohne Logo, und nach 10 Minuten wird es erneut versucht. |
 | Tasten tun nichts | Ist das Spiel das aktive Fenster? Eventuell belegt ein anderes Programm die Taste; eine andere wählen. |
+| „Keine Musik im USB-Ordner“ | Im Ordner `realistic-radio\usb\` (oder dem unter `media.folder` eingestellten) liegt keine Datei mit unterstützter Endung. Im Log steht `USB: 0 file(s) in …` mit dem genauen Pfad. |
+| Ein USB-Titel wird übersprungen | Die Datei ließ sich nicht abspielen (`Cannot play file:` im Log), z. B. ein kopiergeschütztes WMA. Spielt keine einzige Datei, hält der USB-Modus an. |
+| Falscher Titel oder Interpret | Die ID3-Tags der MP3 prüfen (z. B. mit Mp3tag). Bei anderen Formaten den Dateinamen als `Interpret - Titel` benennen. |
 | Ein erwarteter Sender fehlt | Er ist der Region, in der du bist, nicht zugeordnet. Du empfängst nur Regionen in Reichweite. Als eigenen Sender ergänzen. |
 
 ## Bekannte Einschränkungen
@@ -249,6 +292,7 @@ Fast jedes Problem lässt sich an `realistic-radio\realistic-radio.log` erkennen
 - **Nicht jeder Stream funktioniert.** Sender-URLs ändern sich mit der Zeit. Manche AAC/HLS-Streams kann Windows Media Foundation nicht öffnen; jede URL lässt sich über eigene Sender ersetzen.
 - **Das Overlay hängt sich in die DirectX-11-Ausgabe des Spiels.** Mit dem OpenGL-Renderer weicht das Plugin auf ein transparentes Fenster aus; über exklusivem Vollbild ist das nicht garantiert. Konflikte mit anderen Overlay-Tools (Steam-Overlay, RTSS, ReShade, Multiplayer-Clients) sind möglich.
 - **Die DLL bleibt bis zum Spielende geladen**, sobald das Overlay aktiv ist. Das ist Absicht, damit das Spiel nie in entladenen Code springt.
+- **USB/CD-Modus:** Tags werden nur aus MP3-Dateien gelesen (ID3v1/ID3v2); kein Vor- oder Zurückspulen innerhalb eines Titels; Ogg/Opus werden nicht unterstützt. Der Modus und das neue Navi-Design sind kompiliert, aber noch nicht im Spiel getestet.
 - **3 Sender haben kein Logo** (deren Logos gibt es nur als SVG).
 - **American Truck Simulator:** Daten sind enthalten und werden automatisch erkannt, ATS ist aber ungetestet.
 
@@ -270,14 +314,15 @@ ETS2 ──scs_telemetry_init──► Plugin.cpp ── speichert nur Position 
                                  ▼
                            Radio-Thread (alle 50 ms)
                            ├─ InputManager        Tastatur / Controller
-                           ├─ RadioManager        Senderlogik aus main.js
+                           ├─ RadioManager        Senderlogik aus main.js, Quelle Radio/USB
                            │   ├─ StationDatabase, Favoriten, eigene Sender
-                           │   └─ ReceptionCalculator
+                           │   ├─ ReceptionCalculator
+                           │   └─ MediaLibrary    USB-Ordner, ID3-Tags, Cover
                            ├─ Overlay             Panel-Darstellung, Logo-Zwischenspeicher
                            │   └─ D3D11Overlay    Hook auf IDXGISwapChain::Present
                            ├─ DisplayWindow       optionales Fenster für PrismTextureStreamer
                            └─ AudioEngine         Mischer: Stream + Rauschen + Umschaltgeräusch
-                               └─ StreamSession   ein Thread pro Sender, 4 s Puffer, Wiederverbindung
+                               └─ StreamSession   ein Thread pro Sender oder USB-Titel, 4 s Puffer, Wiederverbindung
 ```
 
 Grundregeln im Code:
@@ -285,7 +330,7 @@ Grundregeln im Code:
 - `DllMain` tut nichts. Threads, Audiogerät und Netzwerk starten erst in `scs_telemetry_init`, wie vom SDK vorgesehen.
 - Spiel-Callbacks speichern nur Werte und warten nie auf Ton oder Netzwerk.
 - Stream-Threads halten eine Referenz auf die DLL, damit ein langsamer Netzwerkaufruf beim Entladen des Plugins das Spiel nicht abstürzen lässt.
-- Das Overlay sichert vor dem Zeichnen den kompletten Direct3D-Zustand des Spiels und stellt ihn danach wieder her (`SwapDeviceContextState`).
+- Das Overlay sichert vor dem Zeichnen den Direct3D-Zustand des Spiels, den es verändert, von Hand und stellt ihn danach wieder her.
 
 ## Selbst kompilieren
 
@@ -345,6 +390,7 @@ Der Ordner `server/logo/` enthält alle Logos (verkleinert auf 200 px) in genau 
 │   ├── RadioManager.*         Senderlogik
 │   ├── ReceptionCalculator.*  Reichweite und Empfang
 │   ├── StationDatabase.*      Sender, Städte, Favoriten, eigene Sender
+│   ├── MediaLibrary.*         USB/CD-Modus: Ordner einlesen, ID3-Tags, Cover
 │   ├── AudioEngine.*          Mischer und Audiogerät
 │   ├── StreamSource.*         Netzwerk-Streams, Decoding, Wiederverbindung
 │   ├── NetReader.h            macht den Anfang eines Live-Streams zurückspulbar

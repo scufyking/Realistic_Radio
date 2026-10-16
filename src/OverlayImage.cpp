@@ -7,6 +7,7 @@
 #include <wincodec.h>
 #include <algorithm>
 #include <cmath>
+#include <cwctype>
 
 namespace {
 inline uint32_t Pack(float a, float r, float g, float b) {   // premultiplied input 0..1
@@ -375,73 +376,277 @@ std::shared_ptr<OverlayImage> RenderRadioLcd(const std::wstring& text, int scrol
 }
 
 // ------------------------------------------------------------------------------------------------
-// In-cab screen card
+// In-cab screen card (1.1.0 design)
+namespace {
+struct Canvas {
+    std::vector<uint32_t>& px; int W, H;
+    void Blend(int x, int y, float cov, float r, float g, float b, float a = 1.f) {
+        if (x < 0 || y < 0 || x >= W || y >= H || cov <= 0) return;
+        float k = std::min(1.f, cov) * a;
+        Over(px[(size_t)y * W + x], k, r * k, g * k, b * k);
+    }
+    void Round(int x, int y, int w, int h, float rad, float r, float g, float b, float a = 1.f) {
+        if (w <= 0 || h <= 0) return;
+        rad = std::min({rad, w / 2.f, h / 2.f});
+        for (int yy = 0; yy < h; ++yy) for (int xx = 0; xx < w; ++xx) Blend(x + xx, y + yy, RoundedCoverage(xx, yy, w, h, rad), r, g, b, a);
+    }
+    void Circle(float cx, float cy, float rad, float r, float g, float b, float a = 1.f) {
+        for (int y = (int)(cy - rad - 1); y <= (int)(cy + rad + 1); ++y) for (int x = (int)(cx - rad - 1); x <= (int)(cx + rad + 1); ++x) {
+            float d = std::hypot(x + 0.5f - cx, y + 0.5f - cy);
+            Blend(x, y, std::clamp(rad - d + 0.5f, 0.f, 1.f), r, g, b, a);
+        }
+    }
+    // ring segment between angles a0..a1 (radians, 0 = right, counter-clockwise on screen = negative y)
+    void Arc(float cx, float cy, float rad, float th, float a0, float a1, float r, float g, float b) {
+        int R = (int)(rad + th + 2);
+        for (int y = (int)cy - R; y <= (int)cy + R; ++y) for (int x = (int)cx - R; x <= (int)cx + R; ++x) {
+            float dx = x + 0.5f - cx, dy = cy - (y + 0.5f);
+            float ang = std::atan2(dy, dx);
+            if (ang < a0 || ang > a1) continue;
+            float d = std::hypot(dx, dy);
+            Blend(x, y, std::clamp(th / 2 - std::abs(d - rad) + 0.5f, 0.f, 1.f), r, g, b);
+        }
+    }
+    void Line(float x0, float y0, float x1, float y1, float th, float r, float g, float b) {   // capsule
+        int minx = (int)(std::min(x0, x1) - th), maxx = (int)(std::max(x0, x1) + th), miny = (int)(std::min(y0, y1) - th), maxy = (int)(std::max(y0, y1) + th);
+        float vx = x1 - x0, vy = y1 - y0, len2 = std::max(1e-6f, vx * vx + vy * vy);
+        for (int y = miny; y <= maxy; ++y) for (int x = minx; x <= maxx; ++x) {
+            float px_ = x + 0.5f - x0, py_ = y + 0.5f - y0;
+            float t = std::clamp((px_ * vx + py_ * vy) / len2, 0.f, 1.f);
+            float d = std::hypot(px_ - t * vx, py_ - t * vy);
+            Blend(x, y, std::clamp(th / 2 - d + 0.5f, 0.f, 1.f), r, g, b);
+        }
+    }
+    void Poly(const std::vector<std::pair<float, float>>& p, float r, float g, float b, float a = 1.f) {   // 4x4 supersampled
+        float minx = 1e9f, maxx = -1e9f, miny = 1e9f, maxy = -1e9f;
+        for (auto& q : p) { minx = std::min(minx, q.first); maxx = std::max(maxx, q.first); miny = std::min(miny, q.second); maxy = std::max(maxy, q.second); }
+        auto inside = [&](float x, float y) {
+            bool in = false;
+            for (size_t i = 0, j = p.size() - 1; i < p.size(); j = i++)
+                if ((p[i].second > y) != (p[j].second > y) && x < (p[j].first - p[i].first) * (y - p[i].second) / (p[j].second - p[i].second) + p[i].first) in = !in;
+            return in;
+        };
+        for (int y = (int)miny; y <= (int)maxy; ++y) for (int x = (int)minx; x <= (int)maxx; ++x) {
+            int n = 0;
+            for (int sy = 0; sy < 4; ++sy) for (int sx = 0; sx < 4; ++sx) n += inside(x + (sx + 0.5f) / 4, y + (sy + 0.5f) / 4);
+            Blend(x, y, n / 16.f, r, g, b, a);
+        }
+    }
+    void Glow(float cx, float cy, float rad, float r, float g, float b, float a) {
+        for (int y = std::max(0, (int)(cy - rad)); y < std::min(H, (int)(cy + rad)); ++y)
+            for (int x = std::max(0, (int)(cx - rad)); x < std::min(W, (int)(cx + rad)); ++x) {
+                float d = std::hypot(x - cx, y - cy) / rad;
+                if (d < 1) Blend(x, y, (1 - d) * (1 - d), r, g, b, a);
+            }
+    }
+};
+
+std::wstring Upper(std::wstring s) { if (!s.empty()) CharUpperBuffW(&s[0], (DWORD)s.size()); return s; }
+std::wstring Clock(int s) {
+    if (s < 0) return L"--:--";
+    wchar_t b[32];
+    if (s >= 3600) swprintf(b, 32, L"%d:%02d:%02d", s / 3600, (s / 60) % 60, s % 60); else swprintf(b, 32, L"%d:%02d", s / 60, s % 60);
+    return b;
+}
+std::wstring Initials(const std::wstring& name) {
+    std::wstring r;
+    bool start = true;
+    for (wchar_t c : name) {
+        if (iswalnum(c)) { if (start && r.size() < 2) r.push_back(c); start = false; } else start = true;
+    }
+    return Upper(r.empty() ? L"♪" : r);
+}
+// text that wraps onto at most two lines (DT_EDITCONTROL hides a partly visible third line)
+void DrawText2(Gdi& mask, std::vector<uint32_t>& out, HFONT f, const std::wstring& s, RECT r, float R, float G, float B) {
+    if (s.empty()) return;
+    mask.Clear();
+    HGDIOBJ o = SelectObject(mask.dc, f);
+    DrawTextW(mask.dc, s.c_str(), (int)s.size(), &r, DT_WORDBREAK | DT_EDITCONTROL | DT_END_ELLIPSIS | DT_NOPREFIX);
+    SelectObject(mask.dc, o); GdiFlush();
+    for (int i = 0; i < mask.w * mask.h; ++i) {
+        uint32_t p = mask.bits[i];
+        float cov = std::max({(p >> 16) & 255u, (p >> 8) & 255u, p & 255u}) / 255.f;
+        if (cov > 0) Over(out[i], cov, R * cov, G * cov, B * cov);
+    }
+}
+} // namespace
+
+std::shared_ptr<OverlayImage> ShrinkImage(const std::shared_ptr<OverlayImage>& src, int maxSide) {
+    if (!src || (src->width <= maxSide && src->height <= maxSide)) return src;
+    float k = std::min((float)maxSide / src->width, (float)maxSide / src->height);
+    auto img = std::make_shared<OverlayImage>();
+    img->width = std::max(1, (int)(src->width * k)); img->height = std::max(1, (int)(src->height * k));
+    img->pixels.assign((size_t)img->width * img->height, 0u);
+    BlitLogo(img->pixels, img->width, src.get(), 0, 0, img->width, img->height);
+    return img;
+}
+
 std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const OverlayImage* logo, int W, int H) {
     auto img = std::make_shared<OverlayImage>();
     img->width = W; img->height = H; img->renderedForScreenHeight = H;
     img->pixels.assign((size_t)W * H, 0u);
     auto& px = img->pixels;
+    Canvas cv{px, W, H};
     const float u = std::min(W / 16.f, H / 9.f) / 40.f;   // layout unit (1.0 at 640x360)
     auto U = [&](float v) { return std::max(1, (int)std::lround(v * u)); };
-    const float OR = 1.f, OG = 0.682f, OB = 0.f;
-    for (int y = 0; y < H; ++y) {   // opaque dark background with a slight gradient
-        float c = 0.07f + 0.035f * (1.f - (float)y / H);
-        uint32_t v = Pack(1.f, c, c, c + 0.01f);
+    const float AR = 1.f, AG = 0.682f, AB = 0.f;           // amber accent
+    const float TR = 0.97f, TG = 0.97f, TB = 0.98f;         // main text
+    const float MR = 0.60f, MG = 0.63f, MB = 0.69f;         // muted text
+
+    // background: dark blue-grey gradient + a soft amber glow behind the artwork
+    for (int y = 0; y < H; ++y) {
+        float t = (float)y / std::max(1, H - 1);
+        uint32_t v = Pack(1.f, 0.105f - 0.06f * t, 0.115f - 0.065f * t, 0.14f - 0.075f * t);
         std::fill(px.begin() + (size_t)y * W, px.begin() + (size_t)(y + 1) * W, v);
     }
-    FillRect(px, W, H, 0, 0, W, U(5), 1.f, OR, OG, OB);   // accent line on top
+    cv.Glow(U(120), H * 0.62f, (float)U(300), AR, AG, AB, 0.10f);
+
     Gdi mask(W, H);
-    if (info.volume >= 0) {
-        HFONT fLabel = MakeFont(U(26), FW_NORMAL), fPct = MakeFont(U(84), FW_BOLD);
-        int cy = H / 2;
-        std::wstring label = info.volumeLabel.empty() ? L"Volume" : info.volumeLabel;
-        DrawText(mask, px, fLabel, label, RECT{0, cy - U(120), W, cy - U(80)}, 0.85f, 0.85f, 0.88f, DT_CENTER);
-        std::wstring pct = info.muted ? L"—" : std::to_wstring(info.volume) + L" %";
-        DrawText(mask, px, fPct, pct, RECT{0, cy - U(78), W, cy + U(22)}, OR, OG, OB, DT_CENTER);
-        int bw = W * 70 / 100, bh = U(18), bx = (W - bw) / 2, by = cy + U(52);
-        for (int y = 0; y < bh; ++y) for (int x = 0; x < bw; ++x) {   // rounded track + fill
-            float cov = RoundedCoverage(x, y, bw, bh, bh / 2.f);
-            if (cov <= 0) continue;
-            bool filled = !info.muted && x < bw * std::clamp(info.volume, 0, 100) / 100;
-            if (filled) Over(px[(size_t)(by + y) * W + bx + x], cov, OR * cov, OG * cov, OB * cov);
-            else Over(px[(size_t)(by + y) * W + bx + x], cov, 0.22f * cov, 0.22f * cov, 0.25f * cov);
+    HDC mdc = mask.dc;
+    const int padX = U(22);
+
+    // header: source chip + headline, status on the right
+    HFONT fChip = MakeFont(U(16), FW_BOLD), fHead = MakeFont(U(19), FW_NORMAL);
+    std::wstring chip = Upper(info.source.empty() ? L"Radio" : info.source);
+    int chipW = Measure(mdc, fChip, chip).cx + U(26), chipH = U(28), chipY = U(17);
+    cv.Round(padX, chipY, chipW, chipH, chipH / 2.f, AR, AG, AB);
+    DrawText(mask, px, fChip, chip, RECT{padX, chipY, padX + chipW, chipY + chipH}, 0.07f, 0.07f, 0.09f, DT_CENTER);
+    int rightEdge = W - padX, headY0 = chipY, headY1 = chipY + chipH;
+    if (info.volume < 0 && !info.media && info.bars >= 0) {   // signal bars
+        int bw = U(6), gap = U(4), base = headY1 - U(3);
+        int x0 = rightEdge - (5 * bw + 4 * gap);
+        for (int i = 0; i < 5; ++i) {
+            int bh = U(7 + i * 4), xs = x0 + i * (bw + gap);
+            if (i < info.bars) cv.Round(xs, base - bh, bw, bh, U(1.5f), AR, AG, AB);
+            else cv.Round(xs, base - bh, bw, bh, U(1.5f), 0.26f, 0.27f, 0.31f);
         }
-        DeleteObject(fLabel); DeleteObject(fPct);
-        return img;
+        rightEdge = x0 - U(14);
     }
-    HFONT fHead = MakeFont(U(22), FW_NORMAL), fTitle = MakeFont(U(46), FW_BOLD), fSub = MakeFont(U(26), FW_NORMAL);
-    int logoH = logo ? U(130) : 0, logoW = logo ? U(250) : 0;
-    int total = (logo ? logoH + U(22) : 0) + U(30) + U(60) + U(36);
-    int y = (H - total) / 2;
-    if (logo) {
-        int lx = (W - logoW) / 2;
-        for (int yy = 0; yy < logoH; ++yy) for (int xx = 0; xx < logoW; ++xx) {   // light card so dark logos stay visible
-            float cov = RoundedCoverage(xx, yy, logoW, logoH, (float)U(14));
-            if (cov > 0) Over(px[(size_t)(y + yy) * W + lx + xx], cov, 0.93f * cov, 0.93f * cov, 0.94f * cov);
-        }
-        BlitLogo(px, W, logo, lx + U(12), y + U(10), logoW - U(24), logoH - U(20));
-        y += logoH + U(22);
+    if (info.volume < 0 && info.media) {   // play / pause symbol
+        int s = U(20), x0 = rightEdge - s, y0 = headY0 + (chipH - s) / 2;
+        if (info.paused) { cv.Round(x0 + U(2), y0, U(6), s, U(1.5f), TR, TG, TB); cv.Round(x0 + s - U(8), y0, U(6), s, U(1.5f), TR, TG, TB); }
+        else cv.Poly({{(float)x0 + U(2), (float)y0}, {(float)x0 + s, y0 + s / 2.f}, {(float)x0 + U(2), (float)y0 + s}}, AR, AG, AB);
+        rightEdge = x0 - U(14);
     }
-    DrawText(mask, px, fHead, info.headline, RECT{U(20), y, W - U(20), y + U(30)}, 0.75f, 0.75f, 0.78f, DT_CENTER); y += U(30);
-    DrawText(mask, px, fTitle, info.title, RECT{U(20), y, W - U(20), y + U(60)}, OR, OG, OB, DT_CENTER); y += U(60);
-    std::wstring sub = info.subtitle + (info.favourite ? L"  \u2665" : L"");
-    {   // subtitle + graphic signal bars, centred as one group
-        HDC tmp = CreateCompatibleDC(nullptr);
-        int tw = std::min(W - U(140), (int)Measure(tmp, fSub, sub).cx);
-        DeleteDC(tmp);
-        int barsW = info.bars >= 0 ? U(5 * 7 + 4 * 4) : 0, gap = barsW ? U(18) : 0;
-        int x0 = (W - (tw + gap + barsW)) / 2;
-        DrawText(mask, px, fSub, sub, RECT{x0, y, x0 + tw, y + U(36)}, 0.9f, 0.9f, 0.92f);
-        if (barsW) {
-            int bx = x0 + tw + gap, base = y + U(30);
-            for (int i = 0; i < 5; ++i) {
-                int bh = U(8 + i * 4), xs = bx + i * U(11);
-                if (i < info.bars) FillRect(px, W, H, xs, base - bh, xs + U(7), base, 1.f, OR, OG, OB);
-                else FillRect(px, W, H, xs, base - bh, xs + U(7), base, 1.f, 0.25f, 0.25f, 0.28f);
+    if (info.volume < 0 && info.favourite) {
+        HFONT fHeart = MakeFont(U(22), FW_NORMAL);
+        DrawText(mask, px, fHeart, L"♥", RECT{rightEdge - U(24), headY0, rightEdge, headY1}, AR, AG, AB, DT_RIGHT);
+        DeleteObject(fHeart);
+        rightEdge -= U(36);
+    }
+    std::wstring headline = info.volume >= 0 ? (info.volumeLabel.empty() ? L"Volume" : info.volumeLabel) : info.headline;
+    DrawText(mask, px, fHead, headline, RECT{padX + chipW + U(14), headY0, std::max(padX + chipW + U(14), rightEdge), headY1}, MR, MG, MB);
+    cv.Round(padX, U(60), W - 2 * padX, std::max(1, U(1.5f)), 1.f, 1.f, 1.f, 1.f, 0.10f);   // separator
+    DeleteObject(fChip); DeleteObject(fHead);
+
+    if (info.volume >= 0) {   // ---- volume ----
+        const bool muted = info.muted;
+        int v = std::clamp(info.volume, 0, 100);
+        // speaker symbol
+        const int mid = U(160);
+        float s = (float)U(78), sx = (float)padX + U(4), sy = mid - s / 2;
+        float ir = muted ? 0.55f : TR, ig = muted ? 0.57f : TG, ib = muted ? 0.62f : TB;
+        cv.Round((int)sx, (int)(sy + s * 0.32f), (int)(s * 0.26f), (int)(s * 0.36f), U(3), ir, ig, ib);
+        cv.Poly({{sx + s * 0.22f, sy + s * 0.32f}, {sx + s * 0.55f, sy + s * 0.06f}, {sx + s * 0.55f, sy + s * 0.94f}, {sx + s * 0.22f, sy + s * 0.68f}}, ir, ig, ib);
+        float cx = sx + s * 0.56f, cyy = sy + s * 0.5f;
+        if (muted) {
+            cv.Line(cx + s * 0.18f, cyy - s * 0.17f, cx + s * 0.52f, cyy + s * 0.17f, (float)U(6), 0.95f, 0.33f, 0.28f);
+            cv.Line(cx + s * 0.18f, cyy + s * 0.17f, cx + s * 0.52f, cyy - s * 0.17f, (float)U(6), 0.95f, 0.33f, 0.28f);
+        } else {
+            int waves = v == 0 ? 0 : v <= 33 ? 1 : v <= 66 ? 2 : 3;
+            for (int i = 0; i < 3; ++i) {
+                bool on = i < waves;
+                cv.Arc(cx, cyy, s * (0.2f + 0.16f * i), (float)U(5), -0.85f, 0.85f, on ? AR : 0.30f, on ? AG : 0.31f, on ? AB : 0.35f);
             }
         }
+        // big percentage (grey while muted: the volume that comes back when unmuting)
+        HFONT fBig = MakeFont(U(96), FW_BOLD), fPct = MakeFont(U(40), FW_SEMIBOLD);
+        std::wstring num = std::to_wstring(v);
+        int nx = (int)(sx + s * 1.25f) + U(20);
+        int nw = Measure(mdc, fBig, num).cx;
+        DrawText(mask, px, fBig, num, RECT{nx, mid - U(64), nx + nw + U(4), mid + U(60)}, muted ? 0.45f : TR, muted ? 0.47f : TG, muted ? 0.52f : TB);
+        DrawText(mask, px, fPct, L"%", RECT{nx + nw + U(6), mid - U(8), nx + nw + U(70), mid + U(42)}, MR, MG, MB);
+        DeleteObject(fBig); DeleteObject(fPct);
+        // 20 segments = 5 % steps (the step size of the volume keys)
+        const int segs = 20, gap = U(5), by = U(262), bh = U(40);
+        float segW = (W - 2 * padX - (segs - 1) * gap) / (float)segs;
+        int lit = (v + 2) / 5;
+        for (int i = 0; i < segs; ++i) {
+            int x0 = padX + (int)std::lround(i * (segW + gap)), x1 = padX + (int)std::lround(i * (segW + gap) + segW);
+            int h = bh * (35 + 65 * (i + 1) / segs) / 100;   // rising wedge
+            if (i < lit && muted) cv.Round(x0, by + bh - h, x1 - x0, h, U(2), 0.40f, 0.41f, 0.46f);
+            else if (i < lit) {
+                float k = 0.75f + 0.25f * i / (segs - 1);
+                cv.Round(x0, by + bh - h, x1 - x0, h, U(2), AR * k + (1 - k) * 0.9f, AG * k, AB);
+            } else cv.Round(x0, by + bh - h, x1 - x0, h, U(2), 0.22f, 0.23f, 0.27f);
+        }
+        return img;
     }
-    DeleteObject(fHead); DeleteObject(fTitle); DeleteObject(fSub);
+
+    // ---- station / track ----
+    const bool progress = info.media && info.posSec >= 0;
+    const int top = U(78), bottom = progress ? U(286) : U(338);
+    const int T = std::min(bottom - top, U(200));
+    const int tileX = padX, tileY = top + (bottom - top - T) / 2;
+    if (logo && !info.media) {   // station logo on a light tile (dark logos stay visible)
+        cv.Round(tileX, tileY, T, T, (float)U(18), 0.95f, 0.95f, 0.96f);
+        BlitLogo(px, W, logo, tileX + U(16), tileY + U(16), T - U(32), T - U(32));
+    } else if (logo) {           // album cover
+        cv.Round(tileX, tileY, T, T, (float)U(18), 0.16f, 0.17f, 0.21f);
+        BlitLogo(px, W, logo, tileX + U(6), tileY + U(6), T - U(12), T - U(12));
+    } else {
+        cv.Round(tileX, tileY, T, T, (float)U(18), 0.17f, 0.18f, 0.22f);
+        cv.Glow(tileX + T * 0.3f, tileY + T * 0.25f, T * 0.9f, AR, AG, AB, 0.12f);
+        if (info.media) {   // disc
+            float cx = tileX + T / 2.f, cy = tileY + T / 2.f, r = T * 0.36f;
+            cv.Circle(cx, cy, r, 0.80f, 0.82f, 0.86f);
+            cv.Arc(cx, cy, r * 0.72f, r * 0.10f, 0.35f, 1.25f, 1.f, 1.f, 1.f);
+            cv.Circle(cx, cy, r * 0.42f, AR, AG, AB);
+            cv.Circle(cx, cy, r * 0.12f, 0.17f, 0.18f, 0.22f);
+        } else {
+            HFONT fIni = MakeFont((int)(T * 0.36f), FW_BOLD);
+            DrawText(mask, px, fIni, Initials(info.title), RECT{tileX, tileY, tileX + T, tileY + T}, AR, AG, AB, DT_CENTER);
+            DeleteObject(fIni);
+        }
+    }
+
+    // text column
+    const int tx0 = tileX + T + U(26), tx1 = W - padX, tw = std::max(10, tx1 - tx0);
+    HFONT fTitle = MakeFont(U(40), FW_SEMIBOLD), fTitle2 = MakeFont(U(31), FW_SEMIBOLD), fSub = MakeFont(U(24), FW_NORMAL), fDet = MakeFont(U(19), FW_NORMAL);
+    bool twoLines = Measure(mdc, fTitle, info.title).cx > tw;
+    HFONT ft = twoLines ? fTitle2 : fTitle;
+    int titleH = twoLines ? U(80) : U(52);
+    if (twoLines) {   // check whether it really needs two lines at the smaller size
+        RECT r{0, 0, tw, 1000}; HGDIOBJ o = SelectObject(mdc, ft);
+        DrawTextW(mdc, info.title.c_str(), (int)info.title.size(), &r, DT_CALCRECT | DT_WORDBREAK | DT_EDITCONTROL | DT_NOPREFIX);
+        SelectObject(mdc, o);
+        titleH = std::min((int)r.bottom, U(80)) + U(4);
+    }
+    int subH = info.subtitle.empty() ? 0 : U(34), detH = info.detail.empty() ? 0 : U(28);
+    int blockH = titleH + subH + detH;
+    int y = tileY + (T - blockH) / 2;
+    if (twoLines) DrawText2(mask, px, ft, info.title, RECT{tx0, y, tx1, y + titleH}, TR, TG, TB);
+    else DrawText(mask, px, ft, info.title, RECT{tx0, y, tx1, y + titleH}, TR, TG, TB);
+    y += titleH;
+    DrawText(mask, px, fSub, info.subtitle, RECT{tx0, y, tx1, y + subH}, 0.86f, 0.87f, 0.90f); y += subH;
+    DrawText(mask, px, fDet, info.detail, RECT{tx0, y, tx1, y + detH}, MR, MG, MB);
+    DeleteObject(fTitle); DeleteObject(fTitle2); DeleteObject(fSub); DeleteObject(fDet);
+
+    if (progress) {   // elapsed - bar - length
+        HFONT fTime = MakeFont(U(18), FW_SEMIBOLD);
+        int cy = U(318), tWid = U(62);
+        DrawText(mask, px, fTime, Clock(info.posSec), RECT{padX, cy - U(14), padX + tWid, cy + U(14)}, MR, MG, MB);
+        DrawText(mask, px, fTime, Clock(info.lenSec), RECT{W - padX - tWid, cy - U(14), W - padX, cy + U(14)}, MR, MG, MB, DT_RIGHT);
+        int bx = padX + tWid + U(10), bw = W - 2 * (padX + tWid + U(10)), bh = U(8);
+        cv.Round(bx, cy - bh / 2, bw, bh, bh / 2.f, 0.24f, 0.25f, 0.29f);
+        if (info.lenSec > 0 && info.posSec >= 0) {
+            float f = std::clamp((float)info.posSec / info.lenSec, 0.f, 1.f);
+            int fw = std::max(bh, (int)(bw * f));
+            cv.Round(bx, cy - bh / 2, fw, bh, bh / 2.f, AR, AG, AB);
+            cv.Circle(bx + fw - bh / 2.f, (float)cy, (float)U(8), TR, TG, TB);
+        }
+        DeleteObject(fTime);
+    }
     return img;
 }
 

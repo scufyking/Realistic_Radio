@@ -41,8 +41,8 @@ void AudioEngine::Shutdown() {
     if (device_ok_) { ma_device_uninit(&device_); device_ok_ = false; }
 }
 
-void AudioEngine::PlayUrl(const std::string& url) {
-    auto s = std::make_shared<StreamSession>(url, reconnectMax_);
+void AudioEngine::PlayUrl(const std::string& url, bool once) {
+    auto s = std::make_shared<StreamSession>(url, reconnectMax_, once);
     s->Start();
     std::lock_guard<std::mutex> l(sessMtx_);
     if (session_) { session_->Stop(); retired_.push_back(session_); }
@@ -63,6 +63,14 @@ void AudioEngine::SetStaticGain(float g, float s) { SetRamp(gStatic_, g, s); }
 void AudioEngine::SetSwitchGain(float g, float s) { SetRamp(gSwitch_, g, s); }
 bool AudioEngine::IsBuffering() { std::lock_guard<std::mutex> l(sessMtx_); return session_ && session_->Buffering(); }
 int AudioEngine::StreamFailures() { std::lock_guard<std::mutex> l(sessMtx_); return session_ ? session_->Failures() : 0; }
+AudioEngine::TrackState AudioEngine::Track() {
+    std::lock_guard<std::mutex> l(sessMtx_);
+    TrackState t;
+    if (!session_) return t;
+    t.active = true; t.ended = session_->Ended(); t.failed = session_->Failures() > 0;
+    t.pos = session_->PlayedFrames() / (double)kRate; t.len = session_->LengthFrames() / (double)kRate;
+    return t;
+}
 float AudioEngine::StreamGain() const { return gStream_.target; }
 
 void AudioEngine::Callback(ma_device* d, void* out, const void*, ma_uint32 frames) { ((AudioEngine*)d->pUserData)->Mix((float*)out, frames); }
@@ -73,7 +81,7 @@ void AudioEngine::Mix(float* out, ma_uint32 frames) {
     if (frames > tmp_.size() / kChannels) frames = (ma_uint32)(tmp_.size() / kChannels);
     {   // never block the audio thread
         std::unique_lock<std::mutex> l(sessMtx_, std::try_to_lock);
-        if (l.owns_lock() && session_) got = session_->Read(tmp_.data(), frames);
+        if (l.owns_lock() && session_ && !paused_) got = session_->Read(tmp_.data(), frames);
     }
     const float masterTarget = muted_ ? 0.f : master_.load();
     const float masterStep = 1.f / (0.08f * kRate);   // full range in 80 ms

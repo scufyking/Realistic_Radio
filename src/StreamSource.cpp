@@ -92,7 +92,7 @@ ma_result McbSeek(ma_decoder* d, ma_int64 off, ma_seek_origin origin) {
 }
 } // namespace
 
-StreamSession::StreamSession(const std::string& url, int reconnectMaxSeconds) : url_(url), reconnectMax_(reconnectMaxSeconds) {
+StreamSession::StreamSession(const std::string& url, int reconnectMaxSeconds, bool once) : url_(url), reconnectMax_(reconnectMaxSeconds), once_(once) {
     ma_pcm_rb_init(ma_format_f32, kChannels, kRate * 4, nullptr, nullptr, &rb_);   // 4 s buffer
     done_ = CreateEventW(nullptr, TRUE, FALSE, nullptr);
 }
@@ -145,7 +145,7 @@ bool StreamSession::Write(const float* frames, ma_uint32 count) {
 }
 
 ma_uint32 StreamSession::Read(float* out, ma_uint32 frames) {
-    if (!ready_) return 0;
+    if (!ready_) { if (decoded_ && ma_pcm_rb_available_read(&rb_) == 0) ended_ = true; return 0; }
     ma_uint32 total = 0;
     while (total < frames) {
         ma_uint32 n = frames - total; void* buf;
@@ -154,11 +154,19 @@ ma_uint32 StreamSession::Read(float* out, ma_uint32 frames) {
         ma_pcm_rb_commit_read(&rb_, n);
         total += n;
     }
-    if (total < frames) ready_ = false;   // underrun -> re-buffer
+    played_ += total;
+    if (total < frames) { if (decoded_) ended_ = true; else ready_ = false; }   // end of file / underrun -> re-buffer
     return total;
 }
 
 void StreamSession::Run() {
+    if (once_) {   // USB/CD track: decode once, then let the mixer drain the buffer
+        bool ok = PlayOnce(url_, 0);
+        if (!ok && !stop_) { failures_ = 1; Log::Write("Cannot play file: %s", url_.c_str()); }
+        decoded_ = true;
+        if (ma_pcm_rb_available_read(&rb_) > 0) ready_ = true;   // short files: release what is buffered
+        return;
+    }
     int backoff = 2;
     while (!stop_) {
         bool played = PlayOnce(url_, 0);
@@ -223,11 +231,13 @@ bool StreamSession::PlayLocalFile(const std::string& path) {
     ma_decoder_config cfg = ma_decoder_config_init(ma_format_f32, kChannels, kRate);
     ma_decoder dec;
     if (ma_decoder_init_file_w(w.c_str(), &cfg, &dec) != MA_SUCCESS) return PlayMediaFoundation(path);
+    ma_uint64 len = 0;
+    if (ma_decoder_get_length_in_pcm_frames(&dec, &len) == MA_SUCCESS) length_ = len;   // in output frames (48 kHz)
     float buf[2048 * kChannels]; bool any = false;
-    while (!stop_) {   // local files loop forever
+    while (!stop_) {   // radio: local files loop forever; USB/CD: once
         ma_uint64 got = 0;
         ma_decoder_read_pcm_frames(&dec, buf, 2048, &got);
-        if (got == 0) { if (!any) break; ma_decoder_seek_to_pcm_frame(&dec, 0); continue; }
+        if (got == 0) { if (!any || once_) break; ma_decoder_seek_to_pcm_frame(&dec, 0); continue; }
         any = true;
         if (!Write(buf, (ma_uint32)got)) break;
     }
@@ -254,6 +264,12 @@ bool StreamSession::PlayMediaFoundation(const std::string& url) {
         actual->GetUINT32(MF_MT_AUDIO_NUM_CHANNELS, &ch); actual->GetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND, &rate);
         if (!ch || !rate) break;
         Log::Write("Media Foundation playing %s (%u Hz, %u ch)", url.c_str(), rate, ch);
+        {   // duration (100 ns units) for the USB/CD progress bar; live streams have none
+            PROPVARIANT var; PropVariantInit(&var);
+            if (SUCCEEDED(reader->GetPresentationAttribute((DWORD)MF_SOURCE_READER_MEDIASOURCE, MF_PD_DURATION, &var)) && var.vt == VT_UI8)
+                length_ = var.uhVal.QuadPart * kRate / 10000000ULL;
+            PropVariantClear(&var);
+        }
         ma_data_converter_config cc = ma_data_converter_config_init(ma_format_f32, ma_format_f32, ch, kChannels, rate, kRate);
         if (ma_data_converter_init(&cc, nullptr, &conv) != MA_SUCCESS) break;
         convInit = true;

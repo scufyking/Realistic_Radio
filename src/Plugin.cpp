@@ -109,7 +109,7 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
     MigrateFromLocalRadio(dir);
     std::string gid = p->common.game_id ? p->common.game_id : "";
     g_game = (gid == SCS_GAME_ID_ATS) ? "ats" : "ets2";
-    Log::Write("Realistic Radio loaded by %s (game id '%s', telemetry 0x%x)", p->common.game_name ? p->common.game_name : "?", gid.c_str(), version);
+    Log::Write("Realistic Radio " REALISTIC_RADIO_VERSION " loaded by %s (game id '%s', telemetry 0x%x)", p->common.game_name ? p->common.game_name : "?", gid.c_str(), version);
     {   // warn about other radio plugin DLLs in the same folder
         HMODULE self = nullptr; wchar_t me[MAX_PATH] = {0};
         GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)&scs_telemetry_init, &self);

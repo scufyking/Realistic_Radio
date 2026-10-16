@@ -16,6 +16,8 @@
 #include <mutex>
 #include <atomic>
 
+#define REALISTIC_RADIO_VERSION "1.1.0"
+
 std::wstring Utf8ToWide(const std::string& s);
 std::string WideToUtf8(const std::wstring& s);
 std::wstring PluginDataDir();   // <folder of DLL>\realistic-radio\  (with trailing backslash)

@@ -9,6 +9,7 @@
 #include "ReceptionCalculator.h"
 #include "AudioEngine.h"
 #include "Overlay.h"
+#include "MediaLibrary.h"
 
 // Replaces main.js (refresh, setRadioStation, setWhitenoise, nextStation, favourites) + the server's command handling.
 class RadioManager {
@@ -49,4 +50,24 @@ private:
     bool noiseAllowed_ = true;
     struct Entry { std::string country; size_t index; double whitenoise; };
     std::vector<Entry> list_;   // g_stations
+
+    // USB / CD mode
+    enum class Source { Radio, Media };
+    Source source_ = Source::Radio;
+    MediaLibrary lib_;
+    std::vector<int> order_;    // play order (shuffled or folder order), indices into lib_.Tracks()
+    int orderPos_ = -1, track_ = -1;
+    bool mediaPaused_ = false;
+    int mediaFailStreak_ = 0;
+    ULONGLONG lastMediaInfoAt_ = 0;
+    std::string mediaLogo_;
+    std::wstring MediaFolder() const;
+    void ToggleSource();
+    bool EnterMedia(bool rescan = true);
+    void EnterRadio();
+    void BuildOrder();
+    void PlayTrack(int orderPos, bool show);
+    void StepTrack(int dir);
+    void TickMedia(ULONGLONG now);
+    OverlayInfo MediaInfo(const std::wstring& sub);
 };

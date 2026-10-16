@@ -6,7 +6,7 @@
 #include "Common.h"
 #include "DisplayWindow.h"
 
-enum class Action { Next, Previous, Stop, VolumeUp, VolumeDown, MakeFavourite, GoToFavourite, Mute, ShowOverlay, Count };
+enum class Action { Next, Previous, Stop, VolumeUp, VolumeDown, MakeFavourite, GoToFavourite, Mute, ShowOverlay, Source, Count };
 
 struct KeyBinding { int vk = 0; bool ctrl = false, shift = false, alt = false; };
 
@@ -33,6 +33,18 @@ struct ScreenConfig {
     bool grid = false;                  // show a coordinate grid on the configured target (to find areaX/Y/W/H)
 };
 
+// USB / CD mode: own music files from realistic-radio\usb\ (or another folder)
+struct MediaConfig {
+    bool enabled = true;
+    std::string folder = "usb";         // relative to the realistic-radio folder, or a full path (e.g. D:\\Music)
+    std::string label = "USB";          // name of the source on the screen, e.g. USB or CD
+    bool shuffle = false;
+    std::string repeat = "all";         // all (start again after the last track) | one (repeat the track) | off (stop at the end)
+    std::string textTrack = "Titel";
+    std::string textPaused = "Pause";
+    std::string textEmpty = "Keine Musik im USB-Ordner";
+};
+
 struct OverlayConfig {
     std::string style = "panel";        // panel (info panel with logo) | radio (car-radio dot-matrix display)
     RadioStyleConfig radio;
@@ -53,12 +65,17 @@ struct OverlayConfig {
     std::string textConnecting = "verbinde\u2026";
     std::string textUnavailable = "Sender nicht erreichbar";
     std::string textPowerOff = "Z\u00fcndung aus";
+    std::string textRadio = "Radio";
+    std::string textStations = "Sender";
 };
 
 struct Config {
     OverlayConfig overlay;
     ScreenConfig screen;
     DisplayConfig display;
+    MediaConfig media;
+    std::string source = "radio";   // radio | usb (remembered)
+    std::string mediaTrack;         // last USB track, relative to the folder (remembered)
     // Reception (original web/config.js)
     double radius = 7500.0;
     double threshold = 0.15;
@@ -80,7 +97,7 @@ struct Config {
     bool migratedUrlPrefix = false;
     Config();
     bool Load(const std::wstring& path);   // creates default file if missing
-    void SaveVolume(const std::wstring& path) const;
+    void SaveVolume(const std::wstring& path) const;   // volume, mute, source and USB track
 };
 
 int ParseKeyName(const std::string& name);

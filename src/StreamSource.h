@@ -15,7 +15,8 @@ constexpr ma_uint32 kChannels = 2;
 // the plugin even if a blocking network call is still finishing.
 class StreamSession : public std::enable_shared_from_this<StreamSession> {
 public:
-    explicit StreamSession(const std::string& url, int reconnectMaxSeconds);
+    // once = play a local file a single time (USB/CD mode): no reconnect loop, Ended() becomes true at the end
+    StreamSession(const std::string& url, int reconnectMaxSeconds, bool once = false);
     ~StreamSession();
     void Start();
     void Stop();                         // non-blocking
@@ -23,6 +24,9 @@ public:
     ma_uint32 Read(float* out, ma_uint32 frames);   // audio thread; returns frames read (rest must be silence)
     bool Buffering() const { return !ready_.load(); }
     int Failures() const { return failures_.load(); }
+    bool Ended() const { return ended_.load(); }                       // once mode: everything decoded and played
+    uint64_t PlayedFrames() const { return played_.load(); }           // frames handed to the mixer (48 kHz)
+    uint64_t LengthFrames() const { return length_.load(); }           // 0 = unknown
     const std::string& Url() const { return url_; }
 
     // used by the worker implementation
@@ -41,6 +45,9 @@ private:
     ma_pcm_rb rb_;
     std::atomic<bool> ready_{false};
     std::atomic<int> failures_{0};
+    bool once_ = false;
+    std::atomic<bool> decoded_{false}, ended_{false};
+    std::atomic<uint64_t> played_{0}, length_{0};
     HANDLE thread_ = nullptr;
     HANDLE done_ = nullptr;
 };

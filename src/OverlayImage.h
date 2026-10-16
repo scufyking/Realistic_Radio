@@ -24,7 +24,14 @@ struct OverlayInfo {
     int volume = -1;         // >= 0: this is a volume message (0..100)
     bool muted = false;
     std::wstring volumeLabel;   // label above the volume bar on the in-cab screen
-    bool operator==(const OverlayInfo& o) const { return headline == o.headline && title == o.title && subtitle == o.subtitle && bars == o.bars && favourite == o.favourite && lcd == o.lcd && volume == o.volume && muted == o.muted; }
+    // in-cab screen card
+    std::wstring source;     // source chip: "RADIO", "USB", "CD"
+    std::wstring detail;     // small third line (e.g. "Sender 3 / 12", album)
+    bool media = false;      // USB/CD track: progress bar instead of signal bars
+    bool paused = false;
+    int posSec = -1, lenSec = -1;   // track position / length in seconds (-1 = unknown)
+    bool operator==(const OverlayInfo& o) const { return headline == o.headline && title == o.title && subtitle == o.subtitle && bars == o.bars && favourite == o.favourite && lcd == o.lcd && volume == o.volume && muted == o.muted &&
+                                                         source == o.source && detail == o.detail && media == o.media && paused == o.paused && posSec == o.posSec && lenSec == o.lenSec; }
 };
 
 // Draws the panel with GDI (text, full Unicode incl. Cyrillic/Greek/Arabic via font fallback) + optional logo.
@@ -55,5 +62,7 @@ std::shared_ptr<OverlayImage> RenderScreenGrid(int width, int height, bool flipX
 // Test pattern for finding the right render target
 std::shared_ptr<OverlayImage> RenderScreenProbe(const std::wstring& label, int width, int height);
 
+// Box-filtered copy that fits into maxSide x maxSide (returns the input if it is already small enough)
+std::shared_ptr<OverlayImage> ShrinkImage(const std::shared_ptr<OverlayImage>& img, int maxSide);
 // Decodes PNG/JPG/BMP via WIC to premultiplied BGRA (nullptr on failure). COM must be initialised.
 std::shared_ptr<OverlayImage> LoadImageFile(const std::wstring& path);
