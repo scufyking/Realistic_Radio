@@ -14,9 +14,9 @@ By **ScufyKing**. The whole radio runs inside the game:
 
 Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ETS2, and the radio plays. Station data and sounds are built into the DLL.
 
-> **Version 1.2.1** · [Changes](CHANGELOG.md)
+> **Version 1.3.0** · [Changes](CHANGELOG.md)
 >
-> **Status:** Tested in ETS2 1.61 (Windows x64) with the MAN TGX: the plugin loads, reads the truck position, switches stations by region, plays audio and shows station and volume on the navigation screen. American Truck Simulator data is included but ATS is untested.
+> **Status:** Tested in ETS2 1.61 (Windows x64) with several MAN and Scania models and mod trucks: the plugin loads, reads the truck position, switches stations by region, plays audio and shows station and volume on the navigation screen. American Truck Simulator data is included but ATS is untested.
 
 ---
 
@@ -46,7 +46,9 @@ Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ET
 - **Reception and static.** The further you are from a region, the more static you hear, and weak signals drop out now and then.
 - **Smooth transitions** with a tuning sound.
 - **Radio page on the navigation screen.** Press **Insert** to switch between the navigation and a permanent radio page that shows the station or track live.
-- **Display on the truck's navigation screen.** On every station change the logo, station name, country, signal and "station 3 / 12" appear on the in-cab navigation screen for a few seconds, on volume changes a speaker symbol, a large percentage and a 20-segment bar; then the navigation is back. Set up for the MAN TGX by default (see "In-cab screen").
+- **Display on the truck's navigation screen.** On every station change the logo, station name, country, signal and "station 3 / 12" appear on the in-cab navigation screen for a few seconds, on volume changes a speaker symbol, a large percentage and a 20-segment bar; then the navigation is back. Works in trucks with a modern infotainment/navigation screen (tested: several MAN and Scania models and mod trucks; see "In-cab screen").
+- **Radio memory per truck** (optional): every truck keeps its own stations, favourites, volume, source and USB track.
+- **Truck presets:** the position and design of the screen display can be saved per truck; the right preset is loaded automatically by the truck id from the telemetry.
 - **Optional pop-up overlay** (off by default): a panel at the top of the screen or a car-radio style dot-matrix display. Works in fullscreen.
 - **Radio only with the ignition on** (or only with the engine running, or always; your choice).
 - **Keyboard and controller controls**, freely configurable.
@@ -84,6 +86,7 @@ plugins\
     ├── audio\                       static and tuning sound (from the DLL)
     ├── realistic-radio.json         settings (created on first start)
     ├── favourites-ets2.json         your favourites (created automatically)
+    ├── trucks-ets2.json             radio memory per truck (if switched on)
     ├── usb\                         your own music for the USB/CD mode (you put it there)
     ├── logos\                       downloaded station logos and covers (cache)
     └── realistic-radio.log          log file
@@ -133,7 +136,8 @@ The most important settings can be changed right in the game. **Ctrl + 0** opens
 |---|---|
 | Radio | Volume, mute, radio on with (ignition / engine running / always), start automatically, menu language |
 | Reception | Broadcast range, switch threshold, auto volume, static, tuning sound |
-| Navigation screen | Display on/off, display time, keep the radio page on, key for navigation ↔ radio page |
+| Navigation screen | Display on/off, display time, **design**, keep the radio page on, key for navigation ↔ radio page, **test mode**, **automatic detection (beta)** and the position of the display (area X / Y / width / height, flip, mirror) |
+| Trucks | Current truck (from the telemetry), **radio memory per truck**, new preset, active preset, change automatically per truck, link / unlink, delete, load a saved preset |
 | Pop-up overlay | Mode, style, position, size, display time, station logos |
 | USB / CD | Mode on/off, every folder its own USB, default type, shuffle, repeat, open the music folder, type of every music folder (USB, CD, SD card, cassette, Bluetooth, AUX) |
 | Storage | Maximum size of the logo storage, load station logos, used space and clear, open the logo folder |
@@ -226,11 +230,40 @@ Because every truck and mod uses different render targets, the right one must be
 | `areaX`, `areaY`, `areaW`, `areaH` | `0.1, 0.3, 0.8, 0.4` | Part of the render target to cover |
 | `flipY` | `true` | Turn the card upside down |
 | `flipX` | `false` | Mirror horizontally (`flipX` + `flipY` = rotated by 180°) |
-| `grid` | `false` | Show a 10×10 coordinate grid on the configured target. The labels are render-target coordinates in tenths; read the top-left and bottom-right labels visible on the screen to get `areaX/Y/W/H` |
+| `grid` | `false` | Test mode (easiest in the settings menu): a 10×10 coordinate grid over the whole render target and an orange frame showing where the display is drawn, with its values in the corners. Move the frame with the area sliders until it lies fully on the visible part of the screen. Not saved as on |
+| `design` | `"modern"` | Look of the display: `"modern"` (dark, amber), `"ocean"` (navy, light blue), `"sport"` (black, red), `"light"` (white, blue), `"retro"` (green LCD look) |
 
 Example (MAN TGX, ETS2 1.61, navigation screen): `"width": 1024, "height": 1024, "format": 29, "flipY": true, "areaX": 0.1, "areaY": 0.3, "areaW": 0.8, "areaH": 0.4`. Other trucks use other render targets.
 
 Independent of the pop-up overlay, which is off by default (`"overlay": { "mode": "auto" }` turns it on in addition). This mode hooks into the game's Direct3D 11 rendering; in probe mode the test pattern can briefly appear on other surfaces too. Untested combinations with other graphics mods are possible.
+
+### Truck presets (`"presets"`, `"activePreset"`, `"presetAuto"`)
+
+Different trucks have different screens – the area that fits a MAN may be cut off in a Scania. Presets store the screen settings per truck.
+
+**Standard presets** are included for the MAN TGX, Scania S, Mercedes-Benz New Actros, DAF NGD and Iveco S-Way – these trucks need no setting up. If you change a standard preset, it becomes your own preset with the same name (marked *customised*); deleting it brings back the standard values. Standard presets are not written to the file.
+
+For other trucks, set up a preset once in the settings menu, page **Trucks**:
+
+1. Get into the truck, set up the display on the **Navigation screen** page (test mode, sliders, design).
+2. On **Trucks** click **New preset**. The preset is named after the truck and linked to it via the truck id from the telemetry (e.g. `vehicle.scania.s_2016`).
+3. Repeat in the other trucks. With **Change automatically per truck** (on by default) the matching preset loads as soon as you get into a truck.
+
+Changes on the **Navigation screen** page are stored in the active preset right away. **Active preset** / **Load** chooses a preset by hand, **Link to this truck** / **Unlink** change the link, **Delete active preset** removes an own preset (click twice; the screen values stay). A truck without a preset keeps the current screen settings and does not change the presets of other trucks.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `presets` | `[]` | List of presets: `{ "name": "Scania S", "trucks": ["vehicle.scania.s_2016"], "screen": { "width", "height", "format", "areaX", "areaY", "areaW", "areaH", "flipX", "flipY", "design", "durationSeconds" } }` |
+| `activePreset` | `""` | Name of the active preset (`""` = none) |
+| `presetAuto` | `true` | Load the preset of the truck automatically when you get in |
+
+### Radio memory per truck (`"truckMemory"`)
+
+Settings menu → **Trucks** → **Radio memory per truck** (off by default): every truck then has its own radio like a real one. It keeps the station it played last in every country, its own favourites (**Pause**), volume and mute, the source (radio or which USB / CD) and the track on every USB / CD. Get into another truck and its radio carries on where you left it; a truck you drive for the first time takes over the current radio settings. Trucks are told apart by the truck id from the telemetry. The memory is stored in `realistic-radio\trucks-ets2.json` (`trucks-ats.json` in ATS); favourites without a truck favourite still come from the general favourites file.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `truckMemory` | `false` | Radio memory per truck on / off |
 
 ### USB / CD (`"media": { … }`)
 
@@ -342,7 +375,7 @@ Almost every problem can be diagnosed from `realistic-radio\realistic-radio.log`
 ## Known limitations
 
 - **USB/CD mode:** tags are read from MP3 files only (ID3v1/ID3v2); no seeking within a track; Ogg/Opus are not supported.
-- **The in-cab screen display is set up for one truck.** The default values fit the navigation screen of the MAN TGX (ETS2 1.61). Other trucks render their screens into other render targets; use the probe and grid modes to set them up, or turn the screen display off. The SCS Telemetry SDK itself offers no way to write to cab screens; this works by hooking the game's Direct3D 11 rendering.
+- **The in-cab screen display needs a modern infotainment screen.** The default values (found in the MAN TGX, ETS2 1.61) worked in all MAN and Scania models and mod trucks tested so far, all of them with a modern infotainment/navigation screen. Trucks with an old-style radio have not been tested; if the display does not appear, use the probe and grid modes to set it up, or turn the screen display off. The SCS Telemetry SDK itself offers no way to write to cab screens; this works by hooking the game's Direct3D 11 rendering.
 - **The game's own radio is not controlled.** The plugin plays its own audio through Windows.
 - **Not every stream works.** Station URLs change over time. Some AAC/HLS streams cannot be opened by Windows Media Foundation; you can replace any URL with your own stations.
 - **The overlay hooks into the game's DirectX 11 output.** With the OpenGL renderer, the plugin falls back to a transparent window, which is not guaranteed over exclusive fullscreen. Conflicts with other overlay tools (Steam overlay, RTSS, ReShade, multiplayer clients) are possible.

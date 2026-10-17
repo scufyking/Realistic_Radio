@@ -2,6 +2,20 @@
 
 **English** · [Deutsch](#changelog-deutsch)
 
+## 1.3.0 – Truck presets, radio memory per truck, designs and test mode for the navigation screen
+
+### New
+- **Designs for the display in the truck.** Settings menu → Navigation screen → **Design**: *Modern* (dark, amber – as before), *Ocean* (navy, light blue), *Sport* (black, red), *Light* (white, blue) and *Retro* (green LCD look with a monospace font). The design applies to station, track, volume and the radio page and changes immediately. Setting: `"screen": { "design": "modern" }`.
+- **Test mode for the position of the display.** Settings menu → Navigation screen → **Test mode**: the cab screen shows a coordinate grid and an orange frame where the display will be drawn, with its values in the corners. With the new sliders **Area left (X)**, **Area top (Y)**, **Width** and **Height** (and **Flip** / **Mirror**) the frame moves live until nothing is cut off – useful for trucks where the display was partly cut off. Switch test mode off and the display appears in the new place right away. Test mode is never saved as on.
+- **Automatic detection (beta).** Button **Detect automatically** on the same page: the plugin hides its display for a moment, looks once at the picture the game itself draws into the cab screen and sets the area to the part the game uses. Test mode is switched on afterwards so the result can be checked in the truck; the sliders stay available to correct it by hand. Works best in trucks with a modern infotainment screen and visible navigation; if a texture holds several screens (e.g. navigation and digital dashboard), the detected area can be too large.
+- **Truck presets.** New page **Trucks** in the settings menu: the settings of the navigation screen (area, flip / mirror, design, display time and the screen's render target) can be saved as presets – as many as you like, e.g. one per truck. The plugin reads the **truck id from the telemetry**: a preset is linked to the truck it was created in, and with **Change automatically per truck** (on by default) it is loaded as soon as you get into that truck. Presets can also be chosen by hand (**Active preset** or **Load**), linked to or unlinked from the current truck and deleted. Changes on the navigation screen page are stored in the active preset right away. If a truck has no preset yet, the current screen settings stay and the preset of the other truck is left unchanged. Settings: `"presets"`, `"activePreset"`, `"presetAuto"`.
+- **Standard presets included** for the **MAN TGX**, **Scania S**, **Mercedes-Benz New Actros**, **DAF NGD** and **Iveco S-Way**: in these trucks the display fits the navigation screen right away, without any setting up. A standard preset that you change becomes your own preset with the same name; delete it to get the standard values back.
+- **Radio memory per truck.** Settings menu → **Trucks** → **Radio memory per truck** (off by default): every truck keeps its own radio – the last station in every country, its own favourites, volume and mute, the source (radio or which USB / CD) and the track on every USB / CD. Get into another truck and its radio carries on where you left it. Stored in `trucks-ets2.json`; setting `"truckMemory"`.
+- **The settings menu can be moved:** drag it by its title bar, e.g. to see the cab screen behind it while using test mode.
+
+### Upgrade notes
+- Replace `realistic-radio.dll` only. Settings, favourites, own stations, logos and music are kept; the default design is the look of 1.2. Without presets everything works as before – the current screen settings are used for every truck.
+
 ## 1.2.1 – Fix: static in USB / CD mode, "no media detected"
 
 ### Fixed
@@ -119,6 +133,20 @@
 
 <a id="changelog-deutsch"></a>
 # Changelog (Deutsch)
+
+## 1.3.0 – LKW-Presets, Radio-Speicher je LKW, Designs und Testmodus für den Navi-Bildschirm
+
+### Neu
+- **Designs für die Anzeige im LKW.** Einstellungsmenü → Navi-Bildschirm → **Design**: *Modern* (dunkel, Amber – wie bisher), *Ozean* (Marineblau, Hellblau), *Sport* (Schwarz, Rot), *Hell* (Weiß, Blau) und *Retro* (grüne LCD-Optik mit Monospace-Schrift). Das Design gilt für Sender, Titel, Lautstärke und die Radio-Seite und wechselt sofort. Einstellung: `"screen": { "design": "modern" }`.
+- **Testmodus für die Position der Anzeige.** Einstellungsmenü → Navi-Bildschirm → **Testmodus**: Auf dem Bildschirm im Cockpit erscheinen ein Koordinatengitter und ein orangefarbener Rahmen, wohin die Anzeige gezeichnet wird, mit den Werten in den Ecken. Mit den neuen Reglern **Bereich links (X)**, **Bereich oben (Y)**, **Breite** und **Höhe** (sowie **Umdrehen** / **Spiegeln**) verschiebt sich der Rahmen live, bis nichts mehr abgeschnitten ist – praktisch für LKW, in denen die Anzeige teilweise abgeschnitten war. Testmodus aus, und die Anzeige erscheint sofort an der neuen Stelle. Der Testmodus wird nie als „an“ gespeichert.
+- **Automatische Erkennung (Beta).** Knopf **Automatisch erkennen** auf derselben Seite: Das Plugin blendet seine Anzeige kurz aus, schaut sich einmal das Bild an, das das Spiel selbst in den Cockpit-Bildschirm zeichnet, und stellt den Bereich auf den Teil, den das Spiel benutzt. Danach ist der Testmodus an, damit man das Ergebnis im LKW prüfen kann; die Regler bleiben zum Nachstellen von Hand. Klappt am besten in LKW mit modernem Infotainment-Bildschirm und sichtbarer Navigation; liegen mehrere Bildschirme in einer Fläche (z. B. Navi und digitales Armaturenbrett), kann der erkannte Bereich zu groß sein.
+- **LKW-Presets.** Neue Seite **LKW** im Einstellungsmenü: Die Einstellungen des Navi-Bildschirms (Bereich, Umdrehen / Spiegeln, Design, Anzeigedauer und die Render-Fläche des Bildschirms) lassen sich als Presets speichern – beliebig viele, z. B. eins pro LKW. Das Plugin liest die **LKW-ID aus der Telemetrie**: Ein Preset wird mit dem LKW verknüpft, in dem es angelegt wurde, und mit **Automatisch je LKW wechseln** (standardmäßig an) wird es geladen, sobald man in diesen LKW steigt. Presets lassen sich auch von Hand wählen (**Aktives Preset** oder **Laden**), mit dem aktuellen LKW verknüpfen oder davon lösen und löschen. Änderungen auf der Seite Navi-Bildschirm landen sofort im aktiven Preset. Hat ein LKW noch kein Preset, bleiben die aktuellen Navi-Einstellungen, und das Preset des anderen LKWs wird nicht verändert. Einstellungen: `"presets"`, `"activePreset"`, `"presetAuto"`.
+- **Standard-Presets dabei** für **MAN TGX**, **Scania S**, **Mercedes-Benz New Actros**, **DAF NGD** und **Iveco S-Way**: In diesen LKW sitzt die Anzeige sofort passend auf dem Navi, ohne etwas einzustellen. Ändert man ein Standard-Preset, wird daraus ein eigenes Preset mit demselben Namen; löscht man es, sind die Standardwerte wieder da.
+- **Radio-Speicher je LKW.** Einstellungsmenü → **LKW** → **Radio-Speicher je LKW** (standardmäßig aus): Jeder LKW behält sein eigenes Radio – den letzten Sender in jedem Land, eigene Favoriten, Lautstärke und Stumm, die Quelle (Radio oder welcher USB / welche CD) und den Titel auf jedem USB / jeder CD. Steigt man in einen anderen LKW, macht dessen Radio dort weiter, wo man es verlassen hat. Gespeichert in `trucks-ets2.json`; Einstellung `"truckMemory"`.
+- **Das Einstellungsmenü lässt sich verschieben:** an der Titelleiste ziehen, z. B. um im Testmodus den Bildschirm im Cockpit dahinter zu sehen.
+
+### Hinweise zum Update
+- Nur `realistic-radio.dll` ersetzen. Einstellungen, Favoriten, eigene Sender, Logos und Musik bleiben erhalten; das Standard-Design entspricht dem Aussehen von 1.2. Ohne Presets funktioniert alles wie bisher – die aktuellen Navi-Einstellungen gelten für jeden LKW.
 
 ## 1.2.1 – Fehlerbehebung: Rauschen im USB / CD-Modus, „Kein Medientyp erkannt“
 

@@ -14,9 +14,9 @@ Von **ScufyKing**. Das ganze Radio läuft im Spiel:
 
 Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels kopieren, ETS2 starten, das Radio läuft. Senderdaten und Sounds stecken in der DLL.
 
-> **Version 1.2.1** · [Änderungen](CHANGELOG.md#changelog-deutsch)
+> **Version 1.3.0** · [Änderungen](CHANGELOG.md#changelog-deutsch)
 >
-> **Stand:** Getestet in ETS2 1.61 (Windows x64) mit dem MAN TGX: Das Plugin wird geladen, liest die LKW-Position, wechselt Sender nach Region, spielt Ton ab und zeigt Sender und Lautstärke auf dem Navi-Bildschirm. Daten für American Truck Simulator sind enthalten, ATS ist aber ungetestet.
+> **Stand:** Getestet in ETS2 1.61 (Windows x64) mit mehreren MAN- und Scania-Modellen sowie Mod-LKW: Das Plugin wird geladen, liest die LKW-Position, wechselt Sender nach Region, spielt Ton ab und zeigt Sender und Lautstärke auf dem Navi-Bildschirm. Daten für American Truck Simulator sind enthalten, ATS ist aber ungetestet.
 
 ---
 
@@ -46,7 +46,9 @@ Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels ko
 - **Empfang und Rauschen.** Je weiter du von einer Region entfernt bist, desto mehr rauscht es, und bei schwachem Signal setzt der Ton ab und zu aus.
 - **Sanfte Übergänge** mit Umschaltgeräusch.
 - **Radio-Seite auf dem Navi-Bildschirm.** Mit **Einfg** zwischen Navigation und einer dauerhaften Radio-Seite umschalten, die Sender bzw. Titel live anzeigt.
-- **Anzeige auf dem Navi-Bildschirm im LKW.** Bei jedem Senderwechsel erscheinen Logo, Sendername, Land, Empfang und „Sender 3 / 12“ für ein paar Sekunden auf dem Navi-Bildschirm im Cockpit, bei Lautstärkeänderungen ein Lautsprechersymbol, eine große Prozentzahl und ein Balken aus 20 Segmenten; danach ist die Navigation wieder da. Standardmäßig für den MAN TGX eingerichtet (siehe „Anzeige auf dem Cockpit-Bildschirm“).
+- **Anzeige auf dem Navi-Bildschirm im LKW.** Bei jedem Senderwechsel erscheinen Logo, Sendername, Land, Empfang und „Sender 3 / 12“ für ein paar Sekunden auf dem Navi-Bildschirm im Cockpit, bei Lautstärkeänderungen ein Lautsprechersymbol, eine große Prozentzahl und ein Balken aus 20 Segmenten; danach ist die Navigation wieder da. Funktioniert in LKW mit modernem Infotainment-/Navi-Bildschirm (getestet: mehrere MAN- und Scania-Modelle sowie Mod-LKW; siehe „Anzeige auf dem Cockpit-Bildschirm“).
+- **Radio-Speicher je LKW** (optional): Jeder LKW merkt sich eigene Sender, Favoriten, Lautstärke, Quelle und USB-Titel.
+- **LKW-Presets:** Position und Design der Navi-Anzeige lassen sich pro LKW speichern; das passende Preset lädt automatisch über die LKW-ID aus der Telemetrie.
 - **Optionales Popup-Overlay** (standardmäßig aus): ein Panel oben im Bild oder ein Display im Autoradio-Stil. Funktioniert auch im Vollbild.
 - **Radio nur bei eingeschalteter Zündung** (oder nur bei laufendem Motor, oder immer; einstellbar).
 - **Steuerung per Tastatur und Controller**, frei belegbar.
@@ -84,6 +86,7 @@ plugins\
     ├── audio\                       Rauschen und Umschaltgeräusch (aus der DLL)
     ├── realistic-radio.json         Einstellungen (wird beim ersten Start angelegt)
     ├── favourites-ets2.json         deine Favoriten (wird automatisch angelegt)
+    ├── trucks-ets2.json             Radio-Speicher je LKW (wenn eingeschaltet)
     ├── usb\                         deine eigene Musik für den USB/CD-Modus (legst du hinein)
     ├── logos\                       heruntergeladene Senderlogos und Cover (Zwischenspeicher)
     └── realistic-radio.log          Logdatei
@@ -133,7 +136,8 @@ Die wichtigsten Einstellungen lassen sich direkt im Spiel ändern. **Strg + 0** 
 |---|---|
 | Radio | Lautstärke, Stumm, Radio an bei (Zündung / Motor läuft / immer), automatisch starten, Sprache des Menüs |
 | Empfang | Sendereichweite, Wechselschwelle, Auto-Lautstärke, Rauschen, Umschaltgeräusch |
-| Navi-Bildschirm | Anzeige an/aus, Anzeigedauer, Radio-Seite dauerhaft, Taste für Navi ↔ Radio-Seite |
+| Navi-Bildschirm | Anzeige an/aus, Anzeigedauer, **Design**, Radio-Seite dauerhaft, Taste für Navi ↔ Radio-Seite, **Testmodus**, **automatische Erkennung (Beta)** und Position der Anzeige (Bereich X / Y / Breite / Höhe, umdrehen, spiegeln) |
+| LKW | Aktueller LKW (aus der Telemetrie), **Radio-Speicher je LKW**, neues Preset, aktives Preset, automatisch je LKW wechseln, verknüpfen / lösen, löschen, gespeichertes Preset laden |
 | Popup-Overlay | Modus, Stil, Position, Größe, Anzeigedauer, Senderlogos |
 | USB / CD | Modus an/aus, jeder Ordner ein eigener USB, Standard-Typ, Zufall, Wiederholen, Musikordner öffnen, Typ jedes Musikordners (USB, CD, SD-Karte, Kassette, Bluetooth, AUX) |
 | Speicher | Höchstgröße des Logo-Speichers, Senderlogos laden, belegter Platz und Leeren, Logo-Ordner öffnen |
@@ -226,11 +230,40 @@ Weil jeder LKW und jede Mod andere Zeichenflächen nutzt, muss die richtige einm
 | `areaX`, `areaY`, `areaW`, `areaH` | `0.1, 0.3, 0.8, 0.4` | Bereich der Zeichenfläche, der überdeckt wird |
 | `flipY` | `true` | Anzeige umdrehen |
 | `flipX` | `false` | Waagerecht spiegeln (`flipX` + `flipY` = um 180° gedreht) |
-| `grid` | `false` | Zeigt ein 10×10-Koordinatengitter auf der eingestellten Zeichenfläche. Die Beschriftungen sind Koordinaten der Zeichenfläche in Zehnteln; aus den Feldern oben links und unten rechts auf dem Bildschirm ergeben sich `areaX/Y/W/H` |
+| `grid` | `false` | Testmodus (am einfachsten im Einstellungsmenü): ein 10×10-Koordinatengitter über der ganzen Zeichenfläche und ein orangefarbener Rahmen, der zeigt, wohin die Anzeige gezeichnet wird, mit den Werten in den Ecken. Den Rahmen mit den Bereichs-Reglern verschieben, bis er ganz im sichtbaren Teil des Bildschirms liegt. Wird nie als „an“ gespeichert |
+| `design` | `"modern"` | Aussehen der Anzeige: `"modern"` (dunkel, Amber), `"ocean"` (Ozean: Marineblau, Hellblau), `"sport"` (Schwarz, Rot), `"light"` (Hell: Weiß, Blau), `"retro"` (grüne LCD-Optik) |
 
 Beispiel (MAN TGX, ETS2 1.61, Navi-Bildschirm): `"width": 1024, "height": 1024, "format": 29, "flipY": true, "areaX": 0.1, "areaY": 0.3, "areaW": 0.8, "areaH": 0.4`. Andere LKW nutzen andere Zeichenflächen.
 
 Unabhängig vom Popup-Overlay, das standardmäßig aus ist (`"overlay": { "mode": "auto" }` schaltet es zusätzlich ein). Dieser Modus hängt sich in die Direct3D-11-Ausgabe des Spiels; im Suchmodus kann das Testbild kurz auch auf anderen Flächen auftauchen. Unverträglichkeiten mit anderen Grafik-Mods sind möglich.
+
+### LKW-Presets (`"presets"`, `"activePreset"`, `"presetAuto"`)
+
+Jeder LKW hat einen anderen Bildschirm – der Bereich, der im MAN passt, kann im Scania abgeschnitten sein. Presets speichern die Navi-Einstellungen pro LKW.
+
+**Standard-Presets** sind für MAN TGX, Scania S, Mercedes-Benz New Actros, DAF NGD und Iveco S-Way dabei – diese LKW brauchen keine Einrichtung. Ändert man ein Standard-Preset, wird daraus ein eigenes Preset mit demselben Namen (markiert als *angepasst*); löscht man es, gelten wieder die Standardwerte. Standard-Presets werden nicht in die Datei geschrieben.
+
+Für weitere LKW legt man einmal ein Preset im Einstellungsmenü an, Seite **LKW**:
+
+1. In den LKW steigen, die Anzeige auf der Seite **Navi-Bildschirm** einstellen (Testmodus, Regler, Design).
+2. Auf der Seite **LKW** auf **Neues Preset** klicken. Das Preset bekommt den Namen des LKWs und wird über die LKW-ID aus der Telemetrie (z. B. `vehicle.scania.s_2016`) mit ihm verknüpft.
+3. In den anderen LKW wiederholen. Mit **Automatisch je LKW wechseln** (standardmäßig an) wird das passende Preset geladen, sobald man in einen LKW steigt.
+
+Änderungen auf der Seite **Navi-Bildschirm** landen sofort im aktiven Preset. **Aktives Preset** / **Laden** wählt ein Preset von Hand, **Mit diesem LKW verknüpfen** / **Verknüpfung lösen** ändern die Verknüpfung, **Aktives Preset löschen** entfernt ein eigenes Preset (zweimal klicken; die Navi-Werte bleiben). Ein LKW ohne Preset behält die aktuellen Navi-Einstellungen und verändert die Presets anderer LKW nicht.
+
+| Schlüssel | Standard | Bedeutung |
+|---|---|---|
+| `presets` | `[]` | Liste der Presets: `{ "name": "Scania S", "trucks": ["vehicle.scania.s_2016"], "screen": { "width", "height", "format", "areaX", "areaY", "areaW", "areaH", "flipX", "flipY", "design", "durationSeconds" } }` |
+| `activePreset` | `""` | Name des aktiven Presets (`""` = keins) |
+| `presetAuto` | `true` | Beim Einsteigen automatisch das Preset des LKWs laden |
+
+### Radio-Speicher je LKW (`"truckMemory"`)
+
+Einstellungsmenü → **LKW** → **Radio-Speicher je LKW** (standardmäßig aus): Dann hat jeder LKW sein eigenes Radio wie in echt. Er merkt sich den zuletzt gehörten Sender in jedem Land, eigene Favoriten (**Pause**), Lautstärke und Stumm, die Quelle (Radio oder welcher USB / welche CD) und den Titel auf jedem USB / jeder CD. Steigt man in einen anderen LKW, macht dessen Radio dort weiter, wo man es verlassen hat; ein LKW, den man zum ersten Mal fährt, übernimmt die aktuellen Radio-Einstellungen. Die LKW werden über die LKW-ID aus der Telemetrie unterschieden. Gespeichert wird in `realistic-radio\trucks-ets2.json` (in ATS `trucks-ats.json`); Länder ohne LKW-Favorit nutzen weiter die allgemeinen Favoriten.
+
+| Schlüssel | Standard | Bedeutung |
+|---|---|---|
+| `truckMemory` | `false` | Radio-Speicher je LKW an / aus |
 
 ### USB / CD (`"media": { … }`)
 
@@ -341,7 +374,7 @@ Fast jedes Problem lässt sich an `realistic-radio\realistic-radio.log` erkennen
 
 ## Bekannte Einschränkungen
 
-- **Die Anzeige auf dem Cockpit-Bildschirm ist für einen LKW eingerichtet.** Die Standardwerte passen zum Navi-Bildschirm des MAN TGX (ETS2 1.61). Andere LKW zeichnen ihre Bildschirme in andere Zeichenflächen; dafür Such- und Gittermodus nutzen oder die Anzeige abschalten. Das SCS-Telemetrie-SDK selbst kann nicht auf Cockpit-Bildschirme schreiben; das funktioniert über einen Eingriff in die Direct3D-11-Ausgabe des Spiels.
+- **Die Anzeige auf dem Cockpit-Bildschirm braucht einen modernen Infotainment-Bildschirm.** Die Standardwerte (ermittelt im MAN TGX, ETS2 1.61) haben in allen bisher getesteten MAN- und Scania-Modellen sowie Mod-LKW funktioniert, alle mit modernem Infotainment-/Navi-Bildschirm. LKW mit altem Radio sind noch nicht getestet; erscheint die Anzeige nicht, Such- und Gittermodus nutzen oder die Anzeige abschalten. Das SCS-Telemetrie-SDK selbst kann nicht auf Cockpit-Bildschirme schreiben; das funktioniert über einen Eingriff in die Direct3D-11-Ausgabe des Spiels.
 - **Das spieleigene Radio wird nicht gesteuert.** Das Plugin spielt seinen eigenen Ton über Windows ab.
 - **Nicht jeder Stream funktioniert.** Sender-URLs ändern sich mit der Zeit. Manche AAC/HLS-Streams kann Windows Media Foundation nicht öffnen; jede URL lässt sich über eigene Sender ersetzen.
 - **Das Overlay hängt sich in die DirectX-11-Ausgabe des Spiels.** Mit dem OpenGL-Renderer weicht das Plugin auf ein transparentes Fenster aus; über exklusivem Vollbild ist das nicht garantiert. Konflikte mit anderen Overlay-Tools (Steam-Overlay, RTSS, ReShade, Multiplayer-Clients) sind möglich.
