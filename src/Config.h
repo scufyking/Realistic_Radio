@@ -30,7 +30,8 @@ struct ScreenConfig {
     double areaX = 0.1, areaY = 0.3, areaW = 0.8, areaH = 0.4;   // part of the render target to draw into (0..1)
     bool flipY = true;
     bool flipX = false;                 // flipX + flipY = rotated by 180 degrees
-    bool grid = false;                  // show a coordinate grid on the configured target (to find areaX/Y/W/H)
+    bool grid = false;                  // test mode: coordinate grid + the card's area on the target (to find areaX/Y/W/H)
+    std::string design = "modern";      // look of the card: modern | ocean | sport | light | retro
 };
 
 // USB / CD mode: own music files from realistic-radio\usb\ (or another folder)
@@ -46,6 +47,16 @@ struct MediaConfig {
     std::string textEmpty = "Kein Medientyp erkannt";
     // media type per folder (folder name -> usb | cd | sd | cassette | bluetooth | aux); folders not listed use `label`
     std::map<std::string, std::string> types;
+};
+
+// Truck preset: the in-cab screen settings for one or more trucks (screen target, area, flip, design, time)
+struct TruckPreset {
+    std::string name;
+    std::vector<std::string> trucks;    // truck ids from the game (e.g. vehicle.man.tgx_2020) this preset is used for
+    int width = 1024, height = 1024, format = 29;
+    double areaX = 0.1, areaY = 0.3, areaW = 0.8, areaH = 0.4, durationSeconds = 4.0;
+    bool flipX = false, flipY = true;
+    std::string design = "modern";
 };
 
 struct OverlayConfig {
@@ -80,9 +91,13 @@ struct Config {
     MediaConfig media;
     std::string source = "radio";   // radio | usb (remembered)
     std::string mediaTrack;         // last USB track, relative to the folder (remembered)
-    std::map<std::string, std::string> mediaResume;
-    std::string screenPage = "navi";
-    std::string menuLanguage = "de";   // key menu (Ctrl+0): de | en   // navi | radio: radio page kept on the in-cab screen (remembered)   // last track per USB / CD (folder name -> track), remembered
+    std::map<std::string, std::string> mediaResume;   // last track per USB / CD (folder name -> track), remembered
+    std::string screenPage = "navi";   // navi | radio: radio page kept on the in-cab screen (remembered)
+    std::string menuLanguage = "de";   // key menu (Ctrl+0): de | en
+    std::vector<TruckPreset> presets;
+    std::string activePreset;          // name, empty = none
+    bool presetAuto = true;            // load the preset linked to the truck when the truck changes
+    bool truckMemory = false;          // every truck remembers its own stations, favourites, volume, source and USB track
     // Reception (original web/config.js)
     double radius = 7500.0;
     double threshold = 0.15;
@@ -116,6 +131,22 @@ struct Config {
 int ParseKeyName(const std::string& name);
 KeyBinding ParseKeyBinding(const std::string& s);
 const char* ActionName(Action a);
-std::string KeyBindingName(const KeyBinding& b);
-void CopyMenuSettings(Config& dst, const Config& src);   // only the values the settings menu edits   // inverse of ParseKeyBinding, e.g. "Ctrl+0", "Right", "" = none
+std::string KeyBindingName(const KeyBinding& b);   // inverse of ParseKeyBinding, e.g. "Ctrl+0", "Right", "" = none
+void CopyMenuSettings(Config& dst, const Config& src);   // only the values the settings menu edits
+TruckPreset PresetFromScreen(const std::string& name, const ScreenConfig& s);
+void ApplyPreset(ScreenConfig& s, const TruckPreset& p);
+// Standard presets built into the DLL (set up by ScufyKing). They are used until the player saves an own preset with
+// the same name (= override) or links the truck to an own preset; they are never written to realistic-radio.json.
+const std::vector<TruckPreset>& BuiltinPresets();
+TruckPreset* FindPreset(Config& c, const std::string& name);                 // own preset by name, nullptr = none
+const TruckPreset* LookupPreset(const Config& c, const std::string& name);   // own preset, else standard preset
+bool IsStandardPreset(const Config& c, const std::string& name);              // standard preset without own override
+const TruckPreset* PresetForTruck(const Config& c, const std::string& truckId);   // own first, then standard; nullptr = none
+std::vector<const TruckPreset*> AllPresets(const Config& c);                  // own presets + standard presets not overridden
+TruckPreset* OwnPreset(Config& c, const std::string& name);   // own preset by name; a standard preset is copied first
+// Truck changed (presetAuto): load the truck's preset into c.screen. Without a preset of its own, a preset that
+// belongs to other trucks is deselected (the screen values stay) so later changes do not overwrite it.
+// Returns true when c.screen or c.activePreset changed.
+bool AutoSelectPreset(Config& c, const std::string& truckId);
+void StoreActivePreset(Config& c);   // copy c.screen into the active preset (after a change in the menu)
 inline bool operator==(const KeyBinding& a, const KeyBinding& b) { return a.vk == b.vk && a.ctrl == b.ctrl && a.shift == b.shift && a.alt == b.alt; }

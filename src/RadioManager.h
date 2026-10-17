@@ -23,6 +23,7 @@ public:
     bool MenuOpen() const { return menu_.IsOpen(); }
     bool MenuTick(InputManager& input);   // true = menu closed and new bindings applied (re-init the input)
     const Config& Settings() const { return cfg_; }
+    void SetTruck(const std::string& id, const std::string& name);   // truck changed: load its preset (presetAuto)
 private:
     void Refresh(double x, double z);
     void SetRadioStation(const std::string& country, size_t index, double whitenoise);
@@ -64,6 +65,24 @@ private:
     ULONGLONG lastSpeedAt_ = 0;
     void UpdateSpeedVolume(float speed, ULONGLONG now);
     void ApplySettings(const Config& e);
+    std::string truckId_, truckName_;
+    // radio memory per truck (truckMemory): realistic-radio\trucks-<game>.json
+    struct TruckMemory {
+        std::string name, source = "radio", mediaTrack;
+        double volume = -1; bool muted = false;
+        std::map<std::string, std::string> mediaResume, stations, favourites;   // stations / favourites: country -> station name
+    };
+    std::map<std::string, TruckMemory> mem_;
+    std::wstring memPath_;
+    std::string memSaved_;
+    ULONGLONG memStoreAt_ = 0;
+    void LoadMemory();
+    void SaveMemory();
+    void StoreMemory();                    // current state -> memory of truckId_
+    void RestoreMemory();                  // memory of truckId_ -> current state (station, source, volume, ...)
+    bool UseMemory() const { return cfg_.truckMemory && !truckId_.empty(); }
+    std::string FavGet(const std::string& country) const;   // favourite of the truck (truckMemory), else the general one
+    bool FavHas(const std::string& country) const;
     MediaLibrary lib_;
     std::vector<int> order_;    // play order (shuffled or folder order), indices into lib_.Tracks()
     int orderPos_ = -1, track_ = -1, disc_ = -1;

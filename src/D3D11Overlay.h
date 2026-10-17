@@ -19,6 +19,10 @@ long long D3D11Frames();         // frames presented by a D3D11 device (overlay 
 long long OtherFrames();         // frames from D3D12/other devices (overlay not drawable here)
 int ScreenHeight();              // back-buffer height of the last frame, 0 if unknown
 int ScreenWidth();
+// auto-detection (beta): the next time the game finishes the screen target, find the area it drew into
+void RequestScreenCapture();
+int ScreenCaptureState(float rect[4]);   // 0 idle, 1 waiting, 2 done (rect = x, y, w, h in 0..1), 3-5 failed
+void ResetScreenCapture();
 // settings menu: mouse cursor drawn above the overlay image; positions in back-buffer pixels
 void SetCursorImage(std::shared_ptr<const OverlayImage> img);
 void SetCursorVisible(bool on);

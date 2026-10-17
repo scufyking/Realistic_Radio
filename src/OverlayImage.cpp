@@ -34,9 +34,15 @@ struct Gdi {
     void Clear() { GdiFlush(); std::fill(bits, bits + w * h, 0u); }
 };
 
+const wchar_t* g_fontName = L"Segoe UI";   // renderers run on the radio thread only
+struct FontScope {   // a design may use another font for one picture
+    const wchar_t* old;
+    explicit FontScope(const wchar_t* f) : old(g_fontName) { g_fontName = f; }
+    ~FontScope() { g_fontName = old; }
+};
 HFONT MakeFont(int px, int weight) {
     return CreateFontW(-px, 0, 0, 0, weight, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
-                       ANTIALIASED_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+                       ANTIALIASED_QUALITY, DEFAULT_PITCH, g_fontName);
 }
 SIZE Measure(HDC dc, HFONT f, const std::wstring& s) {
     SIZE sz{0, 0}; HGDIOBJ o = SelectObject(dc, f);
@@ -495,7 +501,43 @@ std::shared_ptr<OverlayImage> ShrinkImage(const std::shared_ptr<OverlayImage>& s
     return img;
 }
 
-std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const OverlayImage* logo, int W, int H) {
+// ------------------------------------------------------------------------------------------------
+// Designs of the in-cab card (screen.design)
+namespace {
+struct CardTheme {
+    float bgTop[3], bgBottom[3], accent[3], chipText[3], text[3], sub[3], muted[3], tile[3], inactive[3], art[3];
+    float glow;
+    const wchar_t* font;
+};
+const CardTheme kThemes[] = {
+    // modern (default): dark blue-grey, amber
+    {{0.105f, 0.115f, 0.14f}, {0.045f, 0.05f, 0.065f}, {1.f, 0.682f, 0.f}, {0.07f, 0.07f, 0.09f}, {0.97f, 0.97f, 0.98f}, {0.86f, 0.87f, 0.90f},
+     {0.60f, 0.63f, 0.69f}, {0.17f, 0.18f, 0.22f}, {0.26f, 0.27f, 0.31f}, {0.80f, 0.82f, 0.86f}, 0.10f, L"Segoe UI"},
+    // ocean: navy, light blue
+    {{0.05f, 0.10f, 0.18f}, {0.02f, 0.04f, 0.09f}, {0.25f, 0.72f, 1.f}, {0.02f, 0.05f, 0.10f}, {0.97f, 0.98f, 1.f}, {0.80f, 0.87f, 0.95f},
+     {0.52f, 0.63f, 0.76f}, {0.08f, 0.15f, 0.26f}, {0.15f, 0.25f, 0.38f}, {0.78f, 0.86f, 0.95f}, 0.12f, L"Segoe UI"},
+    // sport: black-red
+    {{0.12f, 0.05f, 0.06f}, {0.04f, 0.02f, 0.02f}, {0.95f, 0.22f, 0.20f}, {1.f, 1.f, 1.f}, {0.98f, 0.97f, 0.97f}, {0.90f, 0.83f, 0.83f},
+     {0.66f, 0.56f, 0.56f}, {0.20f, 0.10f, 0.11f}, {0.33f, 0.19f, 0.20f}, {0.86f, 0.82f, 0.82f}, 0.10f, L"Segoe UI"},
+    // light: white, blue
+    {{0.96f, 0.97f, 0.98f}, {0.86f, 0.88f, 0.91f}, {0.f, 0.46f, 0.86f}, {1.f, 1.f, 1.f}, {0.08f, 0.09f, 0.11f}, {0.24f, 0.26f, 0.30f},
+     {0.42f, 0.45f, 0.50f}, {0.80f, 0.83f, 0.88f}, {0.70f, 0.73f, 0.79f}, {0.36f, 0.39f, 0.45f}, 0.f, L"Segoe UI"},
+    // retro: green LCD on black, monospace
+    {{0.02f, 0.035f, 0.02f}, {0.01f, 0.02f, 0.01f}, {0.35f, 1.f, 0.45f}, {0.01f, 0.05f, 0.02f}, {0.55f, 1.f, 0.60f}, {0.42f, 0.86f, 0.47f},
+     {0.26f, 0.58f, 0.31f}, {0.04f, 0.10f, 0.05f}, {0.08f, 0.22f, 0.10f}, {0.42f, 0.86f, 0.47f}, 0.05f, L"Consolas"},
+};
+const CardTheme& ThemeFor(const std::string& d) {
+    if (d == "ocean") return kThemes[1];
+    if (d == "sport") return kThemes[2];
+    if (d == "light") return kThemes[3];
+    if (d == "retro") return kThemes[4];
+    return kThemes[0];
+}
+} // namespace
+
+std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const OverlayImage* logo, int W, int H, const std::string& design) {
+    const CardTheme& th = ThemeFor(design);
+    FontScope fontScope(th.font);
     auto img = std::make_shared<OverlayImage>();
     img->width = W; img->height = H; img->renderedForScreenHeight = H;
     img->pixels.assign((size_t)W * H, 0u);
@@ -503,17 +545,19 @@ std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const Ov
     Canvas cv{px, W, H};
     const float u = std::min(W / 16.f, H / 9.f) / 40.f;   // layout unit (1.0 at 640x360)
     auto U = [&](float v) { return std::max(1, (int)std::lround(v * u)); };
-    const float AR = 1.f, AG = 0.682f, AB = 0.f;           // amber accent
-    const float TR = 0.97f, TG = 0.97f, TB = 0.98f;         // main text
-    const float MR = 0.60f, MG = 0.63f, MB = 0.69f;         // muted text
+    const float AR = th.accent[0], AG = th.accent[1], AB = th.accent[2];   // accent (chip, bars, progress)
+    const float TR = th.text[0], TG = th.text[1], TB = th.text[2];         // main text
+    const float MR = th.muted[0], MG = th.muted[1], MB = th.muted[2];      // muted text
+    const float IR = th.inactive[0], IG = th.inactive[1], IB = th.inactive[2];   // unlit bars, tracks
 
     // background: dark blue-grey gradient + a soft amber glow behind the artwork
     for (int y = 0; y < H; ++y) {
         float t = (float)y / std::max(1, H - 1);
-        uint32_t v = Pack(1.f, 0.105f - 0.06f * t, 0.115f - 0.065f * t, 0.14f - 0.075f * t);
+        uint32_t v = Pack(1.f, th.bgTop[0] + (th.bgBottom[0] - th.bgTop[0]) * t, th.bgTop[1] + (th.bgBottom[1] - th.bgTop[1]) * t,
+                          th.bgTop[2] + (th.bgBottom[2] - th.bgTop[2]) * t);
         std::fill(px.begin() + (size_t)y * W, px.begin() + (size_t)(y + 1) * W, v);
     }
-    cv.Glow(U(120), H * 0.62f, (float)U(300), AR, AG, AB, 0.10f);
+    if (th.glow > 0) cv.Glow(U(120), H * 0.62f, (float)U(300), AR, AG, AB, th.glow);
 
     Gdi mask(W, H);
     HDC mdc = mask.dc;
@@ -524,7 +568,7 @@ std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const Ov
     std::wstring chip = Upper(info.source.empty() ? L"Radio" : info.source);
     int chipW = Measure(mdc, fChip, chip).cx + U(26), chipH = U(28), chipY = U(17);
     cv.Round(padX, chipY, chipW, chipH, chipH / 2.f, AR, AG, AB);
-    DrawText(mask, px, fChip, chip, RECT{padX, chipY, padX + chipW, chipY + chipH}, 0.07f, 0.07f, 0.09f, DT_CENTER);
+    DrawText(mask, px, fChip, chip, RECT{padX, chipY, padX + chipW, chipY + chipH}, th.chipText[0], th.chipText[1], th.chipText[2], DT_CENTER);
     int rightEdge = W - padX, headY0 = chipY, headY1 = chipY + chipH;
     if (info.volume < 0 && !info.media && info.bars >= 0) {   // signal bars
         int bw = U(6), gap = U(4), base = headY1 - U(3);
@@ -532,7 +576,7 @@ std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const Ov
         for (int i = 0; i < 5; ++i) {
             int bh = U(7 + i * 4), xs = x0 + i * (bw + gap);
             if (i < info.bars) cv.Round(xs, base - bh, bw, bh, U(1.5f), AR, AG, AB);
-            else cv.Round(xs, base - bh, bw, bh, U(1.5f), 0.26f, 0.27f, 0.31f);
+            else cv.Round(xs, base - bh, bw, bh, U(1.5f), IR, IG, IB);
         }
         rightEdge = x0 - U(14);
     }
@@ -550,7 +594,7 @@ std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const Ov
     }
     std::wstring headline = info.volume >= 0 ? (info.volumeLabel.empty() ? L"Volume" : info.volumeLabel) : info.headline;
     DrawText(mask, px, fHead, headline, RECT{padX + chipW + U(14), headY0, std::max(padX + chipW + U(14), rightEdge), headY1}, MR, MG, MB);
-    cv.Round(padX, U(60), W - 2 * padX, std::max(1, U(1.5f)), 1.f, 1.f, 1.f, 1.f, 0.10f);   // separator
+    cv.Round(padX, U(60), W - 2 * padX, std::max(1, U(1.5f)), 1.f, TR, TG, TB, 0.12f);   // separator
     DeleteObject(fChip); DeleteObject(fHead);
 
     if (info.volume >= 0) {   // ---- volume ----
@@ -559,7 +603,7 @@ std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const Ov
         // speaker symbol
         const int mid = U(160);
         float s = (float)U(78), sx = (float)padX + U(4), sy = mid - s / 2;
-        float ir = muted ? 0.55f : TR, ig = muted ? 0.57f : TG, ib = muted ? 0.62f : TB;
+        float ir = muted ? MR : TR, ig = muted ? MG : TG, ib = muted ? MB : TB;
         cv.Round((int)sx, (int)(sy + s * 0.32f), (int)(s * 0.26f), (int)(s * 0.36f), U(3), ir, ig, ib);
         cv.Poly({{sx + s * 0.22f, sy + s * 0.32f}, {sx + s * 0.55f, sy + s * 0.06f}, {sx + s * 0.55f, sy + s * 0.94f}, {sx + s * 0.22f, sy + s * 0.68f}}, ir, ig, ib);
         float cx = sx + s * 0.56f, cyy = sy + s * 0.5f;
@@ -570,7 +614,7 @@ std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const Ov
             int waves = v == 0 ? 0 : v <= 33 ? 1 : v <= 66 ? 2 : 3;
             for (int i = 0; i < 3; ++i) {
                 bool on = i < waves;
-                cv.Arc(cx, cyy, s * (0.2f + 0.16f * i), (float)U(5), -0.85f, 0.85f, on ? AR : 0.30f, on ? AG : 0.31f, on ? AB : 0.35f);
+                cv.Arc(cx, cyy, s * (0.2f + 0.16f * i), (float)U(5), -0.85f, 0.85f, on ? AR : IR, on ? AG : IG, on ? AB : IB);
             }
         }
         // big percentage (grey while muted: the volume that comes back when unmuting)
@@ -578,7 +622,7 @@ std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const Ov
         std::wstring num = std::to_wstring(v);
         int nx = (int)(sx + s * 1.25f) + U(20);
         int nw = Measure(mdc, fBig, num).cx;
-        DrawText(mask, px, fBig, num, RECT{nx, mid - U(64), nx + nw + U(4), mid + U(60)}, muted ? 0.45f : TR, muted ? 0.47f : TG, muted ? 0.52f : TB);
+        DrawText(mask, px, fBig, num, RECT{nx, mid - U(64), nx + nw + U(4), mid + U(60)}, muted ? MR : TR, muted ? MG : TG, muted ? MB : TB);
         DrawText(mask, px, fPct, L"%", RECT{nx + nw + U(6), mid - U(8), nx + nw + U(70), mid + U(42)}, MR, MG, MB);
         DeleteObject(fBig); DeleteObject(fPct);
         // 20 segments = 5 % steps (the step size of the volume keys)
@@ -588,11 +632,11 @@ std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const Ov
         for (int i = 0; i < segs; ++i) {
             int x0 = padX + (int)std::lround(i * (segW + gap)), x1 = padX + (int)std::lround(i * (segW + gap) + segW);
             int h = bh * (35 + 65 * (i + 1) / segs) / 100;   // rising wedge
-            if (i < lit && muted) cv.Round(x0, by + bh - h, x1 - x0, h, U(2), 0.40f, 0.41f, 0.46f);
+            if (i < lit && muted) cv.Round(x0, by + bh - h, x1 - x0, h, U(2), MR, MG, MB);
             else if (i < lit) {
-                float k = 0.75f + 0.25f * i / (segs - 1);
-                cv.Round(x0, by + bh - h, x1 - x0, h, U(2), AR * k + (1 - k) * 0.9f, AG * k, AB);
-            } else cv.Round(x0, by + bh - h, x1 - x0, h, U(2), 0.22f, 0.23f, 0.27f);
+                float k = 0.72f + 0.28f * i / (segs - 1);   // brighter towards the right
+                cv.Round(x0, by + bh - h, x1 - x0, h, U(2), AR * k, AG * k, AB * k);
+            } else cv.Round(x0, by + bh - h, x1 - x0, h, U(2), IR, IG, IB);
         }
         return img;
     }
@@ -606,12 +650,12 @@ std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const Ov
         cv.Round(tileX, tileY, T, T, (float)U(18), 0.95f, 0.95f, 0.96f);
         BlitLogo(px, W, logo, tileX + U(16), tileY + U(16), T - U(32), T - U(32));
     } else if (logo) {           // album cover
-        cv.Round(tileX, tileY, T, T, (float)U(18), 0.16f, 0.17f, 0.21f);
+        cv.Round(tileX, tileY, T, T, (float)U(18), th.tile[0], th.tile[1], th.tile[2]);
         BlitLogo(px, W, logo, tileX + U(6), tileY + U(6), T - U(12), T - U(12));
     } else {
-        cv.Round(tileX, tileY, T, T, (float)U(18), 0.17f, 0.18f, 0.22f);
-        cv.Glow(tileX + T * 0.3f, tileY + T * 0.25f, T * 0.9f, AR, AG, AB, 0.12f);
-        const float cx = tileX + T / 2.f, cy = tileY + T / 2.f, L = 0.80f, LG = 0.82f, LB = 0.86f, DR = 0.17f, DG = 0.18f, DB = 0.22f;
+        cv.Round(tileX, tileY, T, T, (float)U(18), th.tile[0], th.tile[1], th.tile[2]);
+        if (th.glow > 0) cv.Glow(tileX + T * 0.3f, tileY + T * 0.25f, T * 0.9f, AR, AG, AB, th.glow * 1.2f);
+        const float cx = tileX + T / 2.f, cy = tileY + T / 2.f, L = th.art[0], LG = th.art[1], LB = th.art[2], DR = th.tile[0], DG = th.tile[1], DB = th.tile[2];
         const std::string& mt = info.mediaType;
         auto R = [&](float x0, float y0, float x1, float y1, float rad, float r, float g, float b) {
             cv.Round((int)(cx + x0 * T), (int)(cy + y0 * T), (int)((x1 - x0) * T), (int)((y1 - y0) * T), rad * T, r, g, b); };
@@ -643,16 +687,16 @@ std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const Ov
             R(-0.09f, -0.04f, 0.09f, 0.30f, 0.04f, AR, AG, AB);
             R(-0.025f, 0.30f, 0.025f, 0.40f, 0.01f, L, LG, LB);
         } else if (info.media && mt == "none") {       // no medium: empty slot with a question mark
-            R(-0.30f, -0.07f, 0.30f, 0.07f, 0.035f, 0.10f, 0.10f, 0.12f);
+            R(-0.30f, -0.07f, 0.30f, 0.07f, 0.035f, IR * 0.5f, IG * 0.5f, IB * 0.5f);
             HFONT fQ = MakeFont((int)(T * 0.30f), FW_BOLD);
             DrawText(mask, px, fQ, L"?", RECT{tileX, tileY + (int)(T * 0.06f), tileX + T, tileY + (int)(T * 0.44f)}, AR, AG, AB, DT_CENTER);
             DeleteObject(fQ);
         } else if (info.media) {   // disc (CD)
             float r = T * 0.36f;
-            cv.Circle(cx, cy, r, 0.80f, 0.82f, 0.86f);
+            cv.Circle(cx, cy, r, L, LG, LB);
             cv.Arc(cx, cy, r * 0.72f, r * 0.10f, 0.35f, 1.25f, 1.f, 1.f, 1.f);
             cv.Circle(cx, cy, r * 0.42f, AR, AG, AB);
-            cv.Circle(cx, cy, r * 0.12f, 0.17f, 0.18f, 0.22f);
+            cv.Circle(cx, cy, r * 0.12f, DR, DG, DB);
         } else {
             HFONT fIni = MakeFont((int)(T * 0.36f), FW_BOLD);
             DrawText(mask, px, fIni, Initials(info.title), RECT{tileX, tileY, tileX + T, tileY + T}, AR, AG, AB, DT_CENTER);
@@ -678,7 +722,7 @@ std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const Ov
     if (twoLines) DrawText2(mask, px, ft, info.title, RECT{tx0, y, tx1, y + titleH}, TR, TG, TB);
     else DrawText(mask, px, ft, info.title, RECT{tx0, y, tx1, y + titleH}, TR, TG, TB);
     y += titleH;
-    DrawText(mask, px, fSub, info.subtitle, RECT{tx0, y, tx1, y + subH}, 0.86f, 0.87f, 0.90f); y += subH;
+    DrawText(mask, px, fSub, info.subtitle, RECT{tx0, y, tx1, y + subH}, th.sub[0], th.sub[1], th.sub[2]); y += subH;
     DrawText(mask, px, fDet, info.detail, RECT{tx0, y, tx1, y + detH}, MR, MG, MB);
     DeleteObject(fTitle); DeleteObject(fTitle2); DeleteObject(fSub); DeleteObject(fDet);
 
@@ -688,7 +732,7 @@ std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const Ov
         DrawText(mask, px, fTime, Clock(info.posSec), RECT{padX, cy - U(14), padX + tWid, cy + U(14)}, MR, MG, MB);
         DrawText(mask, px, fTime, Clock(info.lenSec), RECT{W - padX - tWid, cy - U(14), W - padX, cy + U(14)}, MR, MG, MB, DT_RIGHT);
         int bx = padX + tWid + U(10), bw = W - 2 * (padX + tWid + U(10)), bh = U(8);
-        cv.Round(bx, cy - bh / 2, bw, bh, bh / 2.f, 0.24f, 0.25f, 0.29f);
+        cv.Round(bx, cy - bh / 2, bw, bh, bh / 2.f, IR, IG, IB);
         if (info.lenSec > 0 && info.posSec >= 0) {
             float f = std::clamp((float)info.posSec / info.lenSec, 0.f, 1.f);
             int fw = std::max(bh, (int)(bw * f));
@@ -794,6 +838,7 @@ MenuHit HitTestMenu(const MenuView& v, int screenH, float x, float y) {
     if (x < 0 || y < 0 || x >= L.W || y >= L.H) return h;
     h.kind = MenuHit::Panel;
     if (In(L.close, x, y)) { h.kind = MenuHit::Close; return h; }
+    if (y < L.headH) { h.kind = MenuHit::Header; return h; }   // title bar: drag the menu
     if (In(L.save, x, y)) { h.kind = MenuHit::Save; return h; }
     if (In(L.reset, x, y)) { h.kind = MenuHit::Reset; return h; }
     if (In(L.def, x, y)) { h.kind = MenuHit::Default; return h; }
@@ -1018,5 +1063,35 @@ std::shared_ptr<OverlayImage> RenderMenuCursor(int screenH) {
     std::vector<std::pair<float, float>> inner = {P(3, 5.5f), P(3, 22.5f), P(8, 17.8f), P(12.8f, 28.2f), P(14.2f, 27.6f), P(9.6f, 17.5f), P(16.4f, 17.5f)};
     cv.Poly(outer, 0.05f, 0.05f, 0.06f);
     cv.Poly(inner, 1.f, 1.f, 1.f);
+    return img;
+}
+
+// ------------------------------------------------------------------------------------------------
+// Test mode for the in-cab screen: coordinate grid over the whole render target plus the area the card is drawn
+// into (orange frame, corner values), so areaX/Y/W/H can be set until nothing is cut off.
+std::shared_ptr<OverlayImage> RenderScreenTest(int W, int H, bool flipX, bool flipY, float ax, float ay, float aw, float ah) {
+    auto img = RenderScreenGrid(W, H, flipX, flipY);
+    auto& px = img->pixels;
+    Canvas cv{px, W, H};
+    // area in target coordinates -> picture coordinates (the picture is mirrored when it is drawn)
+    float x0 = flipX ? 1.f - (ax + aw) : ax, x1 = x0 + aw;
+    float y0 = flipY ? 1.f - (ay + ah) : ay, y1 = y0 + ah;
+    int X0 = (int)(x0 * W), X1 = (int)(x1 * W), Y0 = (int)(y0 * H), Y1 = (int)(y1 * H);
+    FillRect(px, W, H, X0, Y0, X1, Y1, 0.30f, 1.f, 0.55f, 0.f);   // translucent fill
+    int t = std::max(3, std::min(W, H) / 150);
+    FillRect(px, W, H, X0, Y0, X1, Y0 + t, 1.f, 1.f, 0.55f, 0.f); FillRect(px, W, H, X0, Y1 - t, X1, Y1, 1.f, 1.f, 0.55f, 0.f);
+    FillRect(px, W, H, X0, Y0, X0 + t, Y1, 1.f, 1.f, 0.55f, 0.f); FillRect(px, W, H, X1 - t, Y0, X1, Y1, 1.f, 1.f, 0.55f, 0.f);
+    Gdi mask(W, H);
+    HFONT f = MakeFont(std::max(10, std::min(W, H) / 26), FW_BOLD), fb = MakeFont(std::max(12, std::min(W, H) / 16), FW_BOLD);
+    auto num = [](float v) { wchar_t b[16]; swprintf(b, 16, L"%.2f", v); std::wstring s = b; for (auto& c : s) if (c == L'.') c = L','; return s; };
+    std::wstring tl = L"X " + num(ax) + L"  Y " + num(ay), br = L"B " + num(aw) + L"  H " + num(ah);
+    int lh = std::min(W, H) / 14, lw = W / 2;
+    // label boxes inside the frame corners (readable on every background)
+    cv.Round(X0 + t * 2, Y0 + t * 2, std::min(lw, X1 - X0 - t * 4), lh, (float)lh / 4, 0.f, 0.f, 0.f, 0.75f);
+    DrawText(mask, px, f, tl, RECT{X0 + t * 3, Y0 + t * 2, X0 + t * 2 + std::min(lw, X1 - X0 - t * 4), Y0 + t * 2 + lh}, 1.f, 0.75f, 0.2f);
+    cv.Round(std::max(X0 + t * 2, X1 - t * 2 - lw), Y1 - t * 2 - lh, std::min(lw, X1 - X0 - t * 4), lh, (float)lh / 4, 0.f, 0.f, 0.f, 0.75f);
+    DrawText(mask, px, f, br, RECT{std::max(X0 + t * 2, X1 - t * 2 - lw), Y1 - t * 2 - lh, X1 - t * 3, Y1 - t * 2}, 1.f, 0.75f, 0.2f, DT_RIGHT);
+    DrawText(mask, px, fb, L"TEST", RECT{X0, (Y0 + Y1) / 2 - lh, X1, (Y0 + Y1) / 2 + lh}, 1.f, 1.f, 1.f, DT_CENTER);
+    DeleteObject(f); DeleteObject(fb);
     return img;
 }

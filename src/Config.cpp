@@ -3,6 +3,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "Config.h"
+#include <cmath>
 #include "Logger.h"
 #include "json.hpp"
 #include <fstream>
@@ -130,7 +131,8 @@ static const char* kDefaultConfig = R"({
     "areaW": 0.8,
     "areaH": 0.4,
     "durationSeconds": 4,
-    "probeSeconds": 5
+    "probeSeconds": 5,
+    "design": "modern"
   },
   "display": {
     "enabled": false,
@@ -200,6 +202,32 @@ bool Config::Load(const std::wstring& path) {
         mediaTrack = j.value("mediaTrack", mediaTrack);
         screenPage = j.value("screenPage", screenPage);
         menuLanguage = j.value("menuLanguage", menuLanguage);
+        activePreset = j.value("activePreset", activePreset);
+        presetAuto = j.value("presetAuto", presetAuto);
+        truckMemory = j.value("truckMemory", truckMemory);
+        if (j.contains("presets") && j["presets"].is_array())
+            for (auto& p : j["presets"]) {
+                if (!p.is_object()) continue;
+                TruckPreset t; t.name = p.value("name", std::string());
+                if (t.name.empty()) continue;
+                if (p.contains("trucks") && p["trucks"].is_array()) for (auto& id : p["trucks"]) if (id.is_string()) t.trucks.push_back(id.get<std::string>());
+                if (p.contains("screen") && p["screen"].is_object()) {
+                    auto& s = p["screen"];
+                    t.width = s.value("width", t.width); t.height = s.value("height", t.height); t.format = s.value("format", t.format);
+                    t.areaX = s.value("areaX", t.areaX); t.areaY = s.value("areaY", t.areaY); t.areaW = s.value("areaW", t.areaW); t.areaH = s.value("areaH", t.areaH);
+                    t.flipX = s.value("flipX", t.flipX); t.flipY = s.value("flipY", t.flipY); t.design = s.value("design", t.design);
+                    t.durationSeconds = s.value("durationSeconds", t.durationSeconds);
+                }
+                // an unchanged copy of a standard preset is dropped, so it keeps following the standard values of new versions
+                bool standardCopy = false;
+                auto approx = [](double a, double b) { return std::fabs(a - b) < 1e-6; };
+                for (auto& b : BuiltinPresets())
+                    if (b.name == t.name && b.trucks == t.trucks && b.width == t.width && b.height == t.height && b.format == t.format &&
+                        approx(b.areaX, t.areaX) && approx(b.areaY, t.areaY) && approx(b.areaW, t.areaW) && approx(b.areaH, t.areaH) &&
+                        b.flipX == t.flipX && b.flipY == t.flipY && b.design == t.design && approx(b.durationSeconds, t.durationSeconds))
+                        standardCopy = true;
+                if (!standardCopy) presets.push_back(t);
+            }
         if (j.contains("mediaResume") && j["mediaResume"].is_object())
             for (auto& [k, v] : j["mediaResume"].items()) if (v.is_string()) mediaResume[k] = v.get<std::string>();
         if (j.contains("media")) {
@@ -221,6 +249,7 @@ bool Config::Load(const std::wstring& path) {
             c.areaX = sc.value("areaX", c.areaX); c.areaY = sc.value("areaY", c.areaY);
             c.areaW = sc.value("areaW", c.areaW); c.areaH = sc.value("areaH", c.areaH);
             c.flipY = sc.value("flipY", c.flipY); c.flipX = sc.value("flipX", c.flipX); c.grid = sc.value("grid", c.grid);
+            c.design = sc.value("design", c.design);
         }
         if (j.contains("display")) {
             auto& d = j["display"];
@@ -355,12 +384,26 @@ void Config::SaveBindings(const std::wstring& path) const {
     } catch (...) { Log::Write("Could not save key bindings"); }
 }
 
+static double R6(double v) { return std::round(v * 1e6) / 1e6; }   // 0.58 instead of 0.5800000000000001 in the file
+
 static json MenuJsonObj(const Config& c) {
     json j;
     j["radius"] = c.radius; j["threshold"] = c.threshold; j["whitenoise"] = c.whitenoise; j["transitionWhitenoise"] = c.transitionWhitenoise;
     j["volume"] = c.volume; j["muted"] = c.muted; j["autoVolume"] = c.autoVolume; j["autoPlay"] = c.autoPlay; j["powerSource"] = c.powerSource;
     j["menuLanguage"] = c.menuLanguage; j["screenPage"] = c.screenPage;
+    j["activePreset"] = c.activePreset; j["presetAuto"] = c.presetAuto; j["truckMemory"] = c.truckMemory;
+    j["presets"] = json::array();
+    for (auto& p : c.presets) {
+        json o; o["name"] = p.name; o["trucks"] = p.trucks;
+        o["screen"] = {{"width", p.width}, {"height", p.height}, {"format", p.format}, {"areaX", R6(p.areaX)}, {"areaY", R6(p.areaY)}, {"areaW", R6(p.areaW)},
+                       {"areaH", R6(p.areaH)}, {"flipX", p.flipX}, {"flipY", p.flipY}, {"design", p.design}, {"durationSeconds", p.durationSeconds}};
+        j["presets"].push_back(o);
+    }
     j["screen"]["enabled"] = c.screen.enabled; j["screen"]["durationSeconds"] = c.screen.durationSeconds;
+    j["screen"]["areaX"] = R6(c.screen.areaX); j["screen"]["areaY"] = R6(c.screen.areaY); j["screen"]["areaW"] = R6(c.screen.areaW); j["screen"]["areaH"] = R6(c.screen.areaH);
+    j["screen"]["flipX"] = c.screen.flipX; j["screen"]["flipY"] = c.screen.flipY; j["screen"]["design"] = c.screen.design;
+    j["screen"]["grid"] = false;   // test mode is never saved as on
+    j["screen"]["width"] = c.screen.width; j["screen"]["height"] = c.screen.height; j["screen"]["format"] = c.screen.format;
     auto& o = j["overlay"];
     o["mode"] = c.overlay.mode; o["style"] = c.overlay.style; o["position"] = c.overlay.position; o["scale"] = c.overlay.scale;
     o["durationSeconds"] = c.overlay.durationSeconds; o["showLogos"] = c.overlay.showLogos; o["logoCacheMB"] = c.overlay.logoCacheMB;
@@ -390,13 +433,112 @@ void CopyMenuSettings(Config& d, const Config& s) {
     d.radius = s.radius; d.threshold = s.threshold; d.whitenoise = s.whitenoise; d.transitionWhitenoise = s.transitionWhitenoise;
     d.volume = s.volume; d.muted = s.muted; d.autoVolume = s.autoVolume; d.autoPlay = s.autoPlay; d.powerSource = s.powerSource;
     d.menuLanguage = s.menuLanguage; d.screenPage = s.screenPage;
+    d.presets = s.presets; d.activePreset = s.activePreset; d.presetAuto = s.presetAuto; d.truckMemory = s.truckMemory;
+    d.screen.width = s.screen.width; d.screen.height = s.screen.height; d.screen.format = s.screen.format;
     d.screen.enabled = s.screen.enabled; d.screen.durationSeconds = s.screen.durationSeconds;
+    d.screen.areaX = s.screen.areaX; d.screen.areaY = s.screen.areaY; d.screen.areaW = s.screen.areaW; d.screen.areaH = s.screen.areaH;
+    d.screen.flipX = s.screen.flipX; d.screen.flipY = s.screen.flipY; d.screen.design = s.screen.design;
+    d.screen.grid = s.screen.grid;   // test mode: applied live, not part of MenuJson (not saved)
     d.overlay.mode = s.overlay.mode; d.overlay.style = s.overlay.style; d.overlay.position = s.overlay.position; d.overlay.scale = s.overlay.scale;
     d.overlay.durationSeconds = s.overlay.durationSeconds; d.overlay.showLogos = s.overlay.showLogos; d.overlay.logoCacheMB = s.overlay.logoCacheMB;
     d.overlay.radio.position = s.overlay.radio.position; d.overlay.radio.scale = s.overlay.radio.scale;
     d.media.enabled = s.media.enabled; d.media.folderPerDisc = s.media.folderPerDisc; d.media.label = s.media.label;
     d.media.shuffle = s.media.shuffle; d.media.repeat = s.media.repeat; d.media.types = s.media.types;
     for (int i = 0; i < (int)Action::Count; ++i) { d.keys[i] = s.keys[i]; d.buttons[i] = s.buttons[i]; }
+}
+
+TruckPreset PresetFromScreen(const std::string& name, const ScreenConfig& s) {
+    TruckPreset p; p.name = name;
+    p.width = s.width; p.height = s.height; p.format = s.format;
+    p.areaX = s.areaX; p.areaY = s.areaY; p.areaW = s.areaW; p.areaH = s.areaH;
+    p.flipX = s.flipX; p.flipY = s.flipY; p.design = s.design; p.durationSeconds = s.durationSeconds;
+    return p;
+}
+void ApplyPreset(ScreenConfig& s, const TruckPreset& p) {
+    s.width = p.width; s.height = p.height; s.format = p.format;
+    s.areaX = p.areaX; s.areaY = p.areaY; s.areaW = p.areaW; s.areaH = p.areaH;
+    s.flipX = p.flipX; s.flipY = p.flipY; s.design = p.design; s.durationSeconds = p.durationSeconds;
+}
+namespace {
+TruckPreset Std(const char* name, const char* truck, double x, double y, double w, double h) {
+    TruckPreset p; p.name = name; p.trucks = {truck};
+    p.width = 1024; p.height = 1024; p.format = 29; p.flipX = false; p.flipY = true; p.design = "modern"; p.durationSeconds = 4.0;
+    p.areaX = x; p.areaY = y; p.areaW = w; p.areaH = h;
+    return p;
+}
+}
+const std::vector<TruckPreset>& BuiltinPresets() {
+    static const std::vector<TruckPreset> list = {
+        Std("MAN TGX", "vehicle.man.tgx_2020", 0.10, 0.13, 0.78, 0.58),
+        Std("Scania S", "vehicle.scania.s_2016", 0.11, 0.12, 0.77, 0.58),
+        Std("Mercedes-Benz New Actros", "vehicle.mercedes.actros2014", 0.25, 0.12, 0.50, 0.56),
+        Std("DAF NGD", "vehicle.daf.2021", 0.10, 0.26, 0.78, 0.44),
+        Std("Iveco S-Way", "vehicle.iveco.sway", 0.02, 0.32, 0.75, 0.33),
+    };
+    return list;
+}
+TruckPreset* FindPreset(Config& c, const std::string& name) {
+    if (name.empty()) return nullptr;
+    for (auto& p : c.presets) if (p.name == name) return &p;
+    return nullptr;
+}
+const TruckPreset* LookupPreset(const Config& c, const std::string& name) {
+    if (TruckPreset* p = FindPreset(const_cast<Config&>(c), name)) return p;
+    if (name.empty()) return nullptr;
+    for (auto& p : BuiltinPresets()) if (p.name == name) return &p;
+    return nullptr;
+}
+bool IsStandardPreset(const Config& c, const std::string& name) {
+    return !FindPreset(const_cast<Config&>(c), name) && LookupPreset(c, name) != nullptr;
+}
+const TruckPreset* PresetForTruck(const Config& c, const std::string& id) {
+    if (id.empty()) return nullptr;
+    for (auto& p : c.presets) for (auto& t : p.trucks) if (t == id) return &p;
+    for (auto& p : BuiltinPresets())
+        if (!FindPreset(const_cast<Config&>(c), p.name)) for (auto& t : p.trucks) if (t == id) return &p;
+    return nullptr;
+}
+std::vector<const TruckPreset*> AllPresets(const Config& c) {
+    std::vector<const TruckPreset*> v;
+    for (auto& p : c.presets) v.push_back(&p);
+    for (auto& p : BuiltinPresets()) if (!FindPreset(const_cast<Config&>(c), p.name)) v.push_back(&p);
+    return v;
+}
+TruckPreset* OwnPreset(Config& c, const std::string& name) {
+    if (TruckPreset* p = FindPreset(c, name)) return p;
+    const TruckPreset* s = LookupPreset(c, name);
+    if (!s) return nullptr;
+    c.presets.push_back(*s);
+    return &c.presets.back();
+}
+
+namespace {
+bool SameScreen(const TruckPreset& a, const TruckPreset& b) {
+    return a.width == b.width && a.height == b.height && a.format == b.format && a.areaX == b.areaX && a.areaY == b.areaY &&
+           a.areaW == b.areaW && a.areaH == b.areaH && a.flipX == b.flipX && a.flipY == b.flipY && a.design == b.design &&
+           a.durationSeconds == b.durationSeconds;
+}
+}
+bool AutoSelectPreset(Config& c, const std::string& id) {
+    if (id.empty()) return false;
+    if (const TruckPreset* p = PresetForTruck(c, id)) {
+        bool changed = !SameScreen(PresetFromScreen(p->name, c.screen), *p) || c.activePreset != p->name;
+        ApplyPreset(c.screen, *p);
+        c.activePreset = p->name;
+        return changed;
+    }
+    const TruckPreset* a = LookupPreset(c, c.activePreset);
+    if (a && !a->trucks.empty()) { c.activePreset.clear(); return true; }
+    return false;
+}
+void StoreActivePreset(Config& c) {
+    const TruckPreset* a = LookupPreset(c, c.activePreset);
+    if (!a) return;
+    TruckPreset p = PresetFromScreen(a->name, c.screen);
+    if (SameScreen(p, *a)) return;                  // unchanged: a standard preset stays a standard preset
+    TruckPreset* own = OwnPreset(c, c.activePreset);   // a changed standard preset becomes an own preset (same name and trucks)
+    p.trucks = own->trucks;
+    *own = p;
 }
 
 void Config::SaveVolume(const std::wstring& path) const {

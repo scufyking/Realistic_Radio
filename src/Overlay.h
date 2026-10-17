@@ -22,6 +22,10 @@ public:
     // Key menu: shown in the middle of the upper half of the game picture while open
     void PrepareMenu();                                   // makes sure the D3D11 hook is installed
     void ShowMenu(std::shared_ptr<OverlayImage> img);
+    void SetMenuPosition(float x, float y);
+    // auto-detection of the visible screen area (beta)
+    void StartScreenDetect();
+    int PollScreenDetect(float rect[4]);      // 0 running/idle, 1 done (rect = x, y, w, h), < 0 failed   // top-left corner in back-buffer pixels (menu dragged by its title)
     void Reconfigure(const OverlayConfig& cfg, const ScreenConfig& screen);
     void LogoCacheUsage(uint64_t& bytes, int& files) const;
     void ClearLogoCache();
@@ -64,6 +68,10 @@ private:
     OverlayInfo pageInfo_;              // latest station/track info: content of the radio page
     bool pinned_ = false;
     bool menu_ = false;
+    float menuX_ = -1, menuY_ = -1;           // -1 = centred
+    int detectPhase_ = 0, detectResult_ = 0;
+    ULONGLONG detectAt_ = 0;
+    float detectRect_[4] = {};
     std::shared_ptr<OverlayImage> menuImg_;
     ULONGLONG pinShownAt_ = 0;
     bool ScreenUsable() const { return screenOn_ && !scfg_.probe && !scfg_.grid && scfg_.width > 0 && scfg_.height > 0; }

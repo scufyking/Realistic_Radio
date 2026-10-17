@@ -35,6 +35,32 @@ void Overlay::Reconfigure(const OverlayConfig& cfg, const ScreenConfig& screen) 
     std::string mode = cfg_.mode;   // the mode needs a restart (hooks / window are set up once)
     cfg_ = cfg; cfg_.mode = mode;
     scfg_.durationSeconds = screen.durationSeconds;
+    bool areaChanged = scfg_.areaX != screen.areaX || scfg_.areaY != screen.areaY || scfg_.areaW != screen.areaW || scfg_.areaH != screen.areaH ||
+                       scfg_.flipX != screen.flipX || scfg_.flipY != screen.flipY;
+    bool designChanged = scfg_.design != screen.design, testChanged = scfg_.grid != screen.grid;
+    // truck preset with another screen target (render target size / format of the cab screen)
+    if (screen.width > 0 && screen.height > 0 &&
+        (scfg_.width != screen.width || scfg_.height != screen.height || scfg_.format != screen.format)) {
+        scfg_.width = screen.width; scfg_.height = screen.height; scfg_.format = screen.format;
+        if (!scfg_.probe) { collecting_ = false; D3D11Overlay::SetScreenTarget(scfg_.width, scfg_.height, scfg_.format); }
+        areaChanged = true;
+        Log::Write("Screen target: %dx%d format %d", scfg_.width, scfg_.height, scfg_.format);
+    }
+    scfg_.areaX = screen.areaX; scfg_.areaY = screen.areaY; scfg_.areaW = screen.areaW; scfg_.areaH = screen.areaH;
+    scfg_.flipX = screen.flipX; scfg_.flipY = screen.flipY; scfg_.design = screen.design; scfg_.grid = screen.grid;
+    if (screenOn_ && (areaChanged || designChanged || testChanged)) {
+        if (scfg_.grid) probeIdx_ = -1;   // test mode: draw the grid again with the new area
+        else {
+            if (testChanged) probeIdx_ = -1;
+            D3D11Overlay::SetScreenArea((float)scfg_.areaX, (float)scfg_.areaY, (float)scfg_.areaW, (float)scfg_.areaH, scfg_.flipY, scfg_.flipX);
+            if (ScreenUsable()) {   // show the card right away in its new place / design
+                ULONGLONG t = GetTickCount64();
+                if (!pinned_) { if (t >= scrUntil_) scrShownAt_ = t; scrUntil_ = t + (ULONGLONG)(scfg_.durationSeconds * 1000); }
+                if (scrInfo_.volume >= 0 || scrInfo_.title.empty()) scrInfo_ = pageInfo_;
+                RenderScreen();
+            }
+        }
+    }
     ApplyStyle();
     PruneLogoCache(true);
     if (!menu_) D3D11Overlay::SetPlacement(anchor_, offX_, offY_);
@@ -373,11 +399,45 @@ void Overlay::RenderScreen() {
     // render at the pixel size of the visible area, so the card is not stretched
     int w = std::max(64, (int)std::lround(scfg_.width * std::clamp(scfg_.areaW, 0.01, 1.0)));
     int h = std::max(64, (int)std::lround(scfg_.height * std::clamp(scfg_.areaH, 0.01, 1.0)));
-    D3D11Overlay::SetScreenImage(RenderScreenCard(scrInfo_, logo.get(), w, h));
+    D3D11Overlay::SetScreenImage(RenderScreenCard(scrInfo_, logo.get(), w, h, scfg_.design));
     D3D11Overlay::SetScreenTarget(scfg_.width, scfg_.height, scfg_.format);
 }
 
+// Auto-detection (beta) of the visible area: hide our own picture for a moment (so the game's next frames do not
+// contain it), then let the D3D hook copy the game's own screen picture once and find where it drew.
+void Overlay::StartScreenDetect() {
+    detectResult_ = 0;
+    if (!screenOn_ || scfg_.width <= 0 || scfg_.height <= 0) { detectResult_ = -1; return; }
+    D3D11Overlay::ResetScreenCapture();
+    detectPhase_ = 1; detectAt_ = GetTickCount64() + 700;
+    Log::Write("Screen detect: started (target %dx%d)", scfg_.width, scfg_.height);
+}
+int Overlay::PollScreenDetect(float rect[4]) {
+    int r = detectResult_;
+    if (r == 1) for (int i = 0; i < 4; ++i) rect[i] = detectRect_[i];
+    if (r != 0) detectResult_ = 0;
+    return r;
+}
+
 void Overlay::TickScreen(ULONGLONG now) {
+    if (detectPhase_) {
+        D3D11Overlay::SetScreenAlpha(0.f);
+        D3D11Overlay::SetScreenTarget(scfg_.width, scfg_.height, scfg_.format);
+        if (detectPhase_ == 1 && now >= detectAt_) { D3D11Overlay::RequestScreenCapture(); detectPhase_ = 2; detectAt_ = now + 4000; }
+        else if (detectPhase_ == 2) {
+            float r[4];
+            int s = D3D11Overlay::ScreenCaptureState(r);
+            if (s >= 2 || now >= detectAt_) {
+                detectPhase_ = 0;
+                D3D11Overlay::ResetScreenCapture();
+                if (s == 2) { for (int i = 0; i < 4; ++i) detectRect_[i] = r[i]; detectResult_ = 1; }
+                else detectResult_ = s >= 3 ? -s : -2;   // -2 = the screen was not drawn (not visible / other truck)
+                Log::Write("Screen detect: %s", s == 2 ? "done" : "failed");
+                probeIdx_ = -1;   // test grid: draw again
+            }
+        }
+        return;
+    }
     if (collecting_ && now >= nextStatAt_) {   // merge and log the render targets the game used
         nextStatAt_ = now + 15000;
         for (auto& s : D3D11Overlay::TakeTargetStats()) {
@@ -388,12 +448,15 @@ void Overlay::TickScreen(ULONGLONG now) {
         for (auto& c : cands_) { char b[64]; snprintf(b, sizeof(b), " %dx%d(fmt %d)", c.w, c.h, c.fmt); list += b; }
         Log::Write("Screen: %lld render-target changes so far; targets seen:%s", D3D11Overlay::RenderTargetCalls(), list.empty() ? " none yet" : list.c_str());
     }
-    if (scfg_.grid && scfg_.width > 0 && scfg_.height > 0) {   // coordinate grid permanently on the configured target
+    if (scfg_.grid && scfg_.width > 0 && scfg_.height > 0) {   // test mode: grid over the whole target + the card's area
         if (probeIdx_ != -2) {
             probeIdx_ = -2;
-            D3D11Overlay::SetScreenImage(RenderScreenGrid(scfg_.width, scfg_.height, scfg_.flipX, scfg_.flipY));
+            D3D11Overlay::SetScreenArea(0.f, 0.f, 1.f, 1.f, scfg_.flipY, scfg_.flipX);
+            D3D11Overlay::SetScreenImage(RenderScreenTest(scfg_.width, scfg_.height, scfg_.flipX, scfg_.flipY,
+                                                          (float)scfg_.areaX, (float)scfg_.areaY, (float)scfg_.areaW, (float)scfg_.areaH));
             D3D11Overlay::SetScreenTarget(scfg_.width, scfg_.height, scfg_.format);
-            Log::Write("Screen grid: showing coordinates on %dx%d (format %d)", scfg_.width, scfg_.height, scfg_.format);
+            Log::Write("Screen test mode: grid on %dx%d (format %d), area %.2f %.2f %.2f %.2f", scfg_.width, scfg_.height, scfg_.format,
+                       scfg_.areaX, scfg_.areaY, scfg_.areaW, scfg_.areaH);
         }
         D3D11Overlay::SetScreenAlpha(1.f);
         return;
@@ -429,10 +492,17 @@ void Overlay::ShowMenu(std::shared_ptr<OverlayImage> img) {
     menuImg_ = img;
     menu_ = true;
     int sh = D3D11Overlay::ScreenHeight() >= 200 ? D3D11Overlay::ScreenHeight() : img->renderedForScreenHeight;
-    D3D11Overlay::SetPlacement(1, 0.f, std::max(0.f, (sh - img->height) / 2.f / sh));   // centred
+    if (menuX_ >= 0) D3D11Overlay::SetPlacement(0, menuX_ / sh, menuY_ / sh);   // where it was dragged to
+    else D3D11Overlay::SetPlacement(1, 0.f, std::max(0.f, (sh - img->height) / 2.f / sh));   // centred
     D3D11Overlay::SetImage(menuImg_);
     if (window_) { image_ = menuImg_; lastImg_ = nullptr; }
     D3D11Overlay::SetAlpha(d3d_ && !window_ ? 1.f : 0.f);
+}
+
+void Overlay::SetMenuPosition(float x, float y) {
+    menuX_ = x; menuY_ = y;
+    int sh = std::max(1, D3D11Overlay::ScreenHeight());
+    if (menu_) D3D11Overlay::SetPlacement(0, x / sh, y / sh);
 }
 
 void Overlay::HideMenu() {

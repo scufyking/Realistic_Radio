@@ -5,6 +5,9 @@
 // Station selection, reception and favourite logic derived from MPL-2.0 licensed code (see NOTICE.md).
 #include "RadioManager.h"
 #include "Logger.h"
+#include "json.hpp"
+#include <fstream>
+#include <filesystem>
 #include <cmath>
 #include <cstdlib>
 #include <algorithm>
@@ -18,6 +21,8 @@ bool RadioManager::Init(const std::wstring& dir, const std::string& game) {
     if (!db_.Load(dir + Utf8ToWide(file))) return false;
     db_.LoadCustom(dir + L"custom-stations-" + Utf8ToWide(game) + L".json");
     fav_.Load(dir + L"favourites-" + Utf8ToWide(game) + L".json");
+    memPath_ = dir + L"trucks-" + Utf8ToWide(game) + L".json";
+    LoadMemory();
     if (!audio_.Init(dir, cfg_.reconnectMaxSeconds)) return false;
     audio_.SetMaster((float)cfg_.volume); audio_.SetMuted(cfg_.muted);
     playing_ = cfg_.autoPlay;
@@ -228,6 +233,11 @@ bool RadioManager::MenuTick(InputManager& input) {
         menu_.SetStatus(Utf8ToWide(cfg_.menuLanguage == "en" ? "Folder opened in Explorer - new music appears when you switch to USB"
                                                              : "Ordner im Explorer ge\u00f6ffnet \u2013 neue Musik erscheint beim Umschalten auf USB"));
         break; }
+    case SettingsMenu::DetectScreen:
+        overlay_.StartScreenDetect();
+        menu_.SetStatus("Erkenne den sichtbaren Bereich \u2026 (Navigation im LKW muss zu sehen sein)",
+                        "Detecting the visible area \u2026 (the navigation must be visible in the truck)");
+        break;
     case SettingsMenu::OpenLogoFolder:
         ShellExecuteW(nullptr, L"open", overlay_.LogoDir().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
         break;
@@ -241,7 +251,19 @@ bool RadioManager::MenuTick(InputManager& input) {
     default: break;
     }
     if (menu_.TakeSaveRequest()) { cfg_.SaveMenuSettings(cfgPath_); menu_.MarkSaved(); }
+    {   // auto-detection result (beta)
+        float r[4];
+        int d = overlay_.PollScreenDetect(r);
+        if (d == 1) menu_.SetScreenArea(r);
+        else if (d == -1) menu_.SetStatus("Die Anzeige auf dem Navi ist aus oder nicht bereit", "The navigation screen display is off or not ready");
+        else if (d == -2) menu_.SetStatus("Navi-Bildschirm nicht gefunden \u2013 im LKW sitzen, Navigation sichtbar, nochmal versuchen",
+                                          "Navigation screen not found - sit in the truck with the navigation visible and try again");
+        else if (d < 0) menu_.SetStatus("Automatische Erkennung hier nicht m\u00f6glich \u2013 bitte von Hand einstellen",
+                                        "Automatic detection is not possible here - please adjust by hand");
+    }
     if (res == SettingsMenu::Result::Open) {
+        float mx, my;
+        if (menu_.TakeMoved(mx, my)) overlay_.SetMenuPosition(mx, my);
         if (auto img = menu_.TakeImage()) overlay_.ShowMenu(img);
         return false;
     }
@@ -249,8 +271,102 @@ bool RadioManager::MenuTick(InputManager& input) {
     return true;
 }
 
+void RadioManager::SetTruck(const std::string& id, const std::string& name) {
+    if (UseMemory() && id != truckId_) StoreMemory();   // the truck we are leaving keeps its radio
+    bool changed = id != truckId_;
+    truckId_ = id; truckName_ = name;
+    Log::Write("Truck: %s (%s)", name.c_str(), id.c_str());
+    if (menu_.IsOpen()) menu_.SetTruck(id, name);
+    if (cfg_.presetAuto && AutoSelectPreset(cfg_, id)) {
+        overlay_.Reconfigure(cfg_.overlay, cfg_.screen);
+        if (cfg_.activePreset.empty()) Log::Write("Truck presets: no preset for this truck - current screen settings kept");
+        else Log::Write("Truck preset '%s' loaded", cfg_.activePreset.c_str());
+    }
+    if (UseMemory() && changed) { RestoreMemory(); SaveMemory(); }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Radio memory per truck
+namespace {
+using mjson = nlohmann::json;
+std::map<std::string, std::string> StrMap(const mjson& j, const char* key) {
+    std::map<std::string, std::string> m;
+    if (j.contains(key) && j[key].is_object()) for (auto& [k, v] : j[key].items()) if (v.is_string()) m[k] = v.get<std::string>();
+    return m;
+}
+}
+void RadioManager::LoadMemory() {
+    try {
+        std::ifstream f{std::filesystem::path(memPath_)};
+        if (!f) return;
+        mjson j = mjson::parse(f, nullptr, true, true);
+        if (!j.contains("trucks") || !j["trucks"].is_object()) return;
+        for (auto& [id, t] : j["trucks"].items()) {
+            if (!t.is_object()) continue;
+            TruckMemory m;
+            m.name = t.value("name", std::string()); m.source = t.value("source", m.source); m.mediaTrack = t.value("mediaTrack", std::string());
+            m.volume = t.value("volume", -1.0); m.muted = t.value("muted", false);
+            m.mediaResume = StrMap(t, "mediaResume"); m.stations = StrMap(t, "stations"); m.favourites = StrMap(t, "favourites");
+            mem_[id] = m;
+        }
+        Log::Write("Radio memory: %d truck(s)", (int)mem_.size());
+    } catch (...) { Log::Write("Radio memory: could not read trucks file"); }
+}
+void RadioManager::SaveMemory() {
+    if (mem_.empty()) return;
+    mjson j; j["trucks"] = mjson::object();
+    for (auto& [id, m] : mem_) {
+        mjson t;
+        t["name"] = m.name; t["source"] = m.source; t["mediaTrack"] = m.mediaTrack; t["volume"] = m.volume; t["muted"] = m.muted;
+        t["mediaResume"] = m.mediaResume; t["stations"] = m.stations; t["favourites"] = m.favourites;
+        j["trucks"][id] = t;
+    }
+    std::string s = j.dump(2);
+    if (s == memSaved_) return;
+    try { std::ofstream o{std::filesystem::path(memPath_)}; o << s; memSaved_ = s; } catch (...) {}
+}
+void RadioManager::StoreMemory() {
+    if (truckId_.empty()) return;
+    TruckMemory& m = mem_[truckId_];
+    if (!truckName_.empty()) m.name = truckName_;
+    m.volume = cfg_.volume; m.muted = cfg_.muted; m.source = cfg_.source; m.mediaTrack = cfg_.mediaTrack; m.mediaResume = cfg_.mediaResume;
+    if (auto* st = db_.StationsOf(currentCountry_); st && currentIndex_ >= 0 && currentIndex_ < (int)st->size())
+        m.stations[currentCountry_] = (*st)[currentIndex_].name;
+}
+void RadioManager::RestoreMemory() {
+    auto it = mem_.find(truckId_);
+    if (it == mem_.end()) { StoreMemory(); Log::Write("Radio memory: new truck, current radio settings taken over"); return; }
+    const TruckMemory m = it->second;
+    if (m.volume >= 0) cfg_.volume = std::clamp(m.volume, 0.0, 1.0);
+    cfg_.muted = m.muted;
+    audio_.SetMaster((float)cfg_.volume); audio_.SetMuted(cfg_.muted);
+    cfg_.mediaResume = m.mediaResume; cfg_.mediaTrack = m.mediaTrack;
+    if (m.source == "usb" && cfg_.media.enabled && !lib_.Discs().empty()) {
+        EnterMedia(-1, false);   // the USB / CD and track this truck played last
+    } else {
+        if (source_ == Source::Media) EnterRadio();
+        auto st = m.stations.find(currentCountry_);
+        auto av = last_.available.find(currentCountry_);
+        if (st != m.stations.end() && av != last_.available.end()) {
+            int idx = StationIndexByName(currentCountry_, st->second);
+            if (idx >= 0 && idx != currentIndex_) SetRadioStation(currentCountry_, idx, av->second.whitenoise);
+        }
+    }
+    Log::Write("Radio memory of %s restored (%s)", m.name.c_str(), cfg_.source.c_str());
+}
+std::string RadioManager::FavGet(const std::string& country) const {
+    if (UseMemory()) {
+        auto it = mem_.find(truckId_);
+        if (it != mem_.end()) { auto f = it->second.favourites.find(country); if (f != it->second.favourites.end()) return f->second; }
+    }
+    return fav_.Get(country);
+}
+bool RadioManager::FavHas(const std::string& country) const { return !FavGet(country).empty(); }
+
 void RadioManager::ApplySettings(const Config& e) {
+    bool memWasOn = cfg_.truckMemory;
     CopyMenuSettings(cfg_, e);
+    if (!memWasOn && UseMemory()) { StoreMemory(); SaveMemory(); Log::Write("Radio memory per truck: on"); }
     audio_.SetMaster((float)cfg_.volume); audio_.SetMuted(cfg_.muted);
     if (!cfg_.whitenoise) audio_.SetStaticGain(0, 0.3f);
     overlay_.Reconfigure(cfg_.overlay, cfg_.screen);
@@ -259,7 +375,7 @@ void RadioManager::ApplySettings(const Config& e) {
     if (source_ == Source::Media) overlay_.Update(CurrentInfo());   // media type of the folder may have changed
 }
 
-void RadioManager::Shutdown() { menu_.Close(); overlay_.HideMenu(); display_.Stop(); overlay_.Shutdown(); audio_.Shutdown(); cfg_.SaveVolume(cfgPath_); }
+void RadioManager::Shutdown() { if (UseMemory()) { StoreMemory(); SaveMemory(); } menu_.Close(); overlay_.HideMenu(); display_.Stop(); overlay_.Shutdown(); audio_.Shutdown(); cfg_.SaveVolume(cfgPath_); }
 
 
 std::string RadioManager::ResolveUrl(const std::string& url) const {
@@ -279,7 +395,7 @@ OverlayInfo RadioManager::CurrentInfo(const std::wstring& sub) {
     i.title = Utf8ToWide(s.name);
     auto it = last_.available.find(currentCountry_);
     i.bars = playing_ ? (it == last_.available.end() ? 0 : ReceptionBars(it->second.whitenoise)) : -1;
-    i.favourite = fav_.Get(currentCountry_) == s.name;
+    i.favourite = FavGet(currentCountry_) == s.name;
     for (size_t k = 0; k < list_.size(); ++k)   // "Sender 3 / 12" (position in the Next/Previous order)
         if (list_[k].country == currentCountry_ && (int)list_[k].index == currentIndex_) {
             i.detail = Utf8ToWide(cfg_.overlay.textStations) + L" " + std::to_wstring(k + 1) + L" / " + std::to_wstring(list_.size());
@@ -346,6 +462,7 @@ void RadioManager::UpdateSpeedVolume(float speed, ULONGLONG now) {
 void RadioManager::Tick(double x, double z, bool valid, bool electric, bool engine, float speed) {
     ULONGLONG now = GetTickCount64();
     UpdateSpeedVolume(speed, now);
+    if (UseMemory() && now >= memStoreAt_) { memStoreAt_ = now + 30000; StoreMemory(); SaveMemory(); }   // volume, track, ... (crash-safe)
     SetPower(cfg_.powerSource == "always" || !valid ? true : cfg_.powerSource == "engine" ? engine : electric);
     // station-switch timeline (port of the jQuery animate() chain in setRadioStation)
     if (swapAt_ && now >= swapAt_) {
@@ -441,7 +558,12 @@ void RadioManager::Refresh(double x, double z) {
             (best.whitenoise + cfg_.threshold < cur->second.whitenoise && lastNearestCountry_ != r.bestCountry)) {
             lastNearestCountry_ = r.bestCountry;
             if (db_.StationsOf(r.bestCountry)) {
-                int idx = StationIndexByName(r.bestCountry, fav_.Get(r.bestCountry));
+                int idx = -1;
+                if (UseMemory()) {   // the station this truck played last in this country
+                    auto m = mem_.find(truckId_);
+                    if (m != mem_.end()) { auto s = m->second.stations.find(r.bestCountry); if (s != m->second.stations.end()) idx = StationIndexByName(r.bestCountry, s->second); }
+                }
+                if (idx < 0) idx = StationIndexByName(r.bestCountry, FavGet(r.bestCountry));
                 SetRadioStation(r.bestCountry, idx < 0 ? 0 : idx, best.whitenoise);
             } else Log::Write("No stations for country '%s'", r.bestCountry.c_str());
         } else if (!countriesChanged && cur != r.available.end()) {
@@ -454,6 +576,7 @@ void RadioManager::SetRadioStation(const std::string& country, size_t index, dou
     auto* st = db_.StationsOf(country); if (!st || index >= st->size()) return;
     currentCountry_ = country; currentIndex_ = (int)index;
     const Station& s = (*st)[index];
+    if (UseMemory()) mem_[truckId_].stations[country] = s.name;
     auto it = last_.available.find(country);
     Log::Write("Station: %s [%s] reception %d/5", s.name.c_str(), country.c_str(), it == last_.available.end() ? 0 : ReceptionBars(it->second.whitenoise));
     playing_ = true;
@@ -494,6 +617,7 @@ void RadioManager::OnAction(Action a) {
     if (a == Action::Menu) {
         overlay_.PrepareMenu();
         menu_.Open(cfg_);
+        menu_.SetTruck(truckId_, truckName_);
         if (cfg_.media.enabled) {   // music folders for the media type rows (read again: files may have been added)
             if (source_ != Source::Media) lib_.Scan(MediaFolder(), cfg_.media.folderPerDisc);
             std::vector<SettingsMenu::Folder> f;
@@ -553,21 +677,22 @@ void RadioManager::OnAction(Action a) {
         break;
     case Action::MakeFavourite:
         if (auto* st = db_.StationsOf(currentCountry_); st && currentIndex_ >= 0) {
-            fav_.Set(currentCountry_, (*st)[currentIndex_].name);
+            if (UseMemory()) { mem_[truckId_].favourites[currentCountry_] = (*st)[currentIndex_].name; SaveMemory(); }
+            else fav_.Set(currentCountry_, (*st)[currentIndex_].name);
             Log::Write("Favourite for %s: %s", currentCountry_.c_str(), (*st)[currentIndex_].name.c_str());
             ShowCurrent(Utf8ToWide(cfg_.overlay.textFavourite));
         }
         break;
     case Action::GoToFavourite: {   // port of the "goToFavourite" command: cycles through favourites of countries in range
         std::string country = currentCountry_;
-        int idx = StationIndexByName(country, fav_.Get(country));
+        int idx = StationIndexByName(country, FavGet(country));
         if (idx < 0 || idx == currentIndex_) {
             std::vector<std::string> favCountries;
-            for (auto& [k, v] : last_.available) if (fav_.Has(k) && db_.StationsOf(k)) favCountries.push_back(k);
+            for (auto& [k, v] : last_.available) if (FavHas(k) && db_.StationsOf(k)) favCountries.push_back(k);
             if (favCountries.empty()) break;
             auto it = std::find(favCountries.begin(), favCountries.end(), currentCountry_);
             country = (it == favCountries.end() || it + 1 == favCountries.end()) ? favCountries.front() : *(it + 1);
-            idx = std::max(0, StationIndexByName(country, fav_.Get(country)));
+            idx = std::max(0, StationIndexByName(country, FavGet(country)));
         }
         SetRadioStation(country, idx, last_.available.count(country) ? last_.available[country].whitenoise : 0);
         break; }

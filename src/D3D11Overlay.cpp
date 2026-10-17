@@ -66,6 +66,9 @@ std::atomic<unsigned> g_curImgVersion{0};
 std::atomic<bool> g_cursorOn{false};
 std::atomic<float> g_cursorX{0}, g_cursorY{0};
 std::atomic<float> g_imgX{0}, g_imgY{0}, g_imgW{0}, g_imgH{0};   // where the overlay image was drawn last (back-buffer pixels)
+// auto-detection of the visible screen area (beta): one copy of the game's own picture in the screen target
+std::atomic<int> g_capState{0};       // 0 idle, 1 requested, 2 done, 3 failed: multisampled, 4 failed: format, 5 failed: empty
+std::atomic<float> g_capRect[4];
 // render-thread only
 ID3D11RenderTargetView* g_curRtv = nullptr;
 int g_curW = 0, g_curH = 0;
@@ -259,6 +262,62 @@ bool EnsureCursorTexture(ID3D11Device* dev) {
     return MakeTexture(dev, *img, g_res.ctex, g_res.csrv);
 }
 
+// Copies the target the game has just finished (before our own picture is drawn on it) and finds the part the game
+// actually drew into: rows and columns that differ from the background colour (the most common corner colour).
+void CaptureTarget(ID3D11DeviceContext* ctx, ID3D11RenderTargetView* rtv) {
+    if (g_capState.load() != 1) return;
+    ID3D11Resource* res = nullptr; rtv->GetResource(&res);
+    ID3D11Texture2D* tex = nullptr;
+    if (!res || FAILED(res->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&tex)) || !tex) { if (res) res->Release(); return; }
+    D3D11_TEXTURE2D_DESC d; tex->GetDesc(&d);
+    static const int k4[] = {24, 25, 26, 27, 28, 29, 87, 88, 90, 91, 92, 93};
+    bool fourBytes = std::find(std::begin(k4), std::end(k4), (int)d.Format) != std::end(k4);
+    int state = 0;
+    if (d.SampleDesc.Count > 1) state = 3;
+    else if (!fourBytes) state = 4;
+    else {
+        D3D11_TEXTURE2D_DESC sd = d; sd.Usage = D3D11_USAGE_STAGING; sd.BindFlags = 0; sd.CPUAccessFlags = D3D11_CPU_ACCESS_READ; sd.MiscFlags = 0;
+        ID3D11Device* dev = nullptr; ctx->GetDevice(&dev);
+        ID3D11Texture2D* st = nullptr;
+        if (dev && SUCCEEDED(dev->CreateTexture2D(&sd, nullptr, &st)) && st) {
+            ctx->CopyResource(st, tex);
+            D3D11_MAPPED_SUBRESOURCE m;
+            if (SUCCEEDED(ctx->Map(st, 0, D3D11_MAP_READ, 0, &m))) {
+                const int W = d.Width, H = d.Height;
+                auto px = [&](int x, int y) { return ((const uint32_t*)((const uint8_t*)m.pData + (size_t)y * m.RowPitch))[x]; };
+                uint32_t corners[4] = {px(0, 0), px(W - 1, 0), px(0, H - 1), px(W - 1, H - 1)};
+                uint32_t bg = corners[0]; int best = 0;
+                for (uint32_t c : corners) { int n = 0; for (uint32_t o : corners) n += o == c; if (n > best) { best = n; bg = c; } }
+                auto differs = [&](uint32_t p) {
+                    int s = 0; for (int k = 0; k < 32; k += 8) s += std::abs((int)((p >> k) & 255) - (int)((bg >> k) & 255));
+                    return s > 40;
+                };
+                std::vector<int> rows(H, 0), cols(W, 0);
+                for (int y = 0; y < H; ++y) for (int x = 0; x < W; ++x) if (differs(px(x, y))) { ++rows[y]; ++cols[x]; }
+                int minR = std::max(2, W / 100), minC = std::max(2, H / 100);
+                int y0 = 0, y1 = H - 1, x0 = 0, x1 = W - 1;
+                while (y0 < H && rows[y0] < minR) ++y0;
+                while (y1 > y0 && rows[y1] < minR) --y1;
+                while (x0 < W && cols[x0] < minC) ++x0;
+                while (x1 > x0 && cols[x1] < minC) --x1;
+                ctx->Unmap(st, 0);
+                if (y0 >= H || x0 >= W || (x1 - x0) < W / 10 || (y1 - y0) < H / 10) state = 5;
+                else {
+                    g_capRect[0] = (float)x0 / W; g_capRect[1] = (float)y0 / H;
+                    g_capRect[2] = (float)(x1 + 1 - x0) / W; g_capRect[3] = (float)(y1 + 1 - y0) / H;
+                    state = 2;
+                }
+                Log::Write("Screen detect: target %dx%d fmt %d, background 0x%08x, content x %d..%d y %d..%d", W, H, (int)d.Format, bg, x0, x1, y0, y1);
+            }
+            st->Release();
+        }
+        if (dev) dev->Release();
+        if (!state) state = 4;
+    }
+    tex->Release(); res->Release();
+    g_capState = state;
+}
+
 // Draws the screen image into the given render target (one the game has just finished rendering into)
 void DrawIntoTarget(ID3D11DeviceContext* ctx, ID3D11RenderTargetView* rtv, int w, int h) {
     float alpha = g_scrAlpha.load();
@@ -281,14 +340,16 @@ void OnRenderTargetChange(ID3D11DeviceContext* ctx, UINT num, ID3D11RenderTarget
     ++g_rtCalls;
     bool drawing = g_scrAlpha.load() > 0.003f && g_scrW.load() > 0;
     bool collect = g_collect.load();
-    if (!drawing && !collect && !g_curRtv) return;
+    bool capture = g_capState.load() == 1 && g_scrW.load() > 0;
+    if (!drawing && !collect && !capture && !g_curRtv) return;
     ID3D11RenderTargetView* next = (num > 0 && views) ? views[0] : nullptr;
     if (next == g_curRtv) return;
     if (g_curRtv) {
+        if (g_curMatch && capture) CaptureTarget(ctx, g_curRtv);                    // the game's own picture, before ours
         if (g_curMatch && drawing) DrawIntoTarget(ctx, g_curRtv, g_curW, g_curH);   // the game is done with it
         g_curRtv->Release(); g_curRtv = nullptr; g_curMatch = false;
     }
-    if (!next || (!drawing && !collect)) return;
+    if (!next || (!drawing && !collect && !capture)) return;
     ID3D11Resource* res = nullptr; next->GetResource(&res);
     ID3D11Texture2D* tex = nullptr;
     if (res && SUCCEEDED(res->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&tex)) && tex) {
@@ -305,7 +366,7 @@ void OnRenderTargetChange(ID3D11DeviceContext* ctx, UINT num, ID3D11RenderTarget
                 auto& e = g_stats[key]; e.w = d.Width; e.h = d.Height; e.fmt = d.Format; ++e.binds;
             }
             int fmt = g_scrFmt.load();
-            if (drawing && (int)d.Width == g_scrW.load() && (int)d.Height == g_scrH.load() && (fmt == 0 || fmt == (int)d.Format)) {
+            if ((drawing || capture) && (int)d.Width == g_scrW.load() && (int)d.Height == g_scrH.load() && (fmt == 0 || fmt == (int)d.Format)) {
                 g_curRtv = next; g_curRtv->AddRef(); g_curW = d.Width; g_curH = d.Height; g_curMatch = true;
             }
         }
@@ -366,7 +427,7 @@ void Draw(IDXGISwapChain* sc) {
         ID3D11Device* d = nullptr;
         if (SUCCEEDED(sc->GetDevice(__uuidof(ID3D11Device), (void**)&d)) && d) {
             ID3D11DeviceContext* c = nullptr; d->GetImmediateContext(&c);
-            if (c) { if (g_curMatch) DrawIntoTarget(c, g_curRtv, g_curW, g_curH); c->Release(); }
+            if (c) { if (g_curMatch) { CaptureTarget(c, g_curRtv); if (g_scrAlpha.load() > 0.003f) DrawIntoTarget(c, g_curRtv, g_curW, g_curH); } c->Release(); }
             d->Release();
         }
         g_curRtv->Release(); g_curRtv = nullptr; g_curMatch = false;
@@ -495,6 +556,9 @@ long long D3D11Frames() { return g_d3d11Frames; }
 long long OtherFrames() { return g_otherFrames; }
 int ScreenHeight() { return g_screenH; }
 int ScreenWidth() { return g_bbW; }
+void RequestScreenCapture() { g_capState = 1; }
+int ScreenCaptureState(float rect[4]) { int s = g_capState.load(); if (s == 2) for (int i = 0; i < 4; ++i) rect[i] = g_capRect[i]; return s; }
+void ResetScreenCapture() { g_capState = 0; }
 void SetCursorImage(std::shared_ptr<const OverlayImage> img) { std::lock_guard<std::mutex> l(g_curImgMtx); g_curImg = std::move(img); ++g_curImgVersion; }
 void SetCursorVisible(bool on) { g_cursorOn = on; }
 void SetCursorPos(float x, float y) { g_cursorX = x; g_cursorY = y; }

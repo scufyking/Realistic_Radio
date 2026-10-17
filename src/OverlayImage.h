@@ -57,9 +57,12 @@ std::shared_ptr<OverlayImage> RenderRadioLcd(const std::wstring& text, int scrol
                                              int screenHeight, double scale, uint32_t color);
 
 // In-cab screen card (drawn over the navigation for a few seconds): station or volume
-std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const OverlayImage* logo, int width, int height);
+// design: modern (default) | ocean | sport | light | retro
+std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const OverlayImage* logo, int width, int height, const std::string& design = "modern");
 // Coordinate grid (10 x 10 cells labelled with their x/y position in tenths) for finding the visible area
 std::shared_ptr<OverlayImage> RenderScreenGrid(int width, int height, bool flipX = false, bool flipY = false);
+// Test mode: grid plus the area the card is drawn into (target coordinates 0..1), with its values in the corners
+std::shared_ptr<OverlayImage> RenderScreenTest(int width, int height, bool flipX, bool flipY, float ax, float ay, float aw, float ah);
 // Test pattern for finding the right render target
 std::shared_ptr<OverlayImage> RenderScreenProbe(const std::wstring& label, int width, int height);
 
@@ -92,7 +95,7 @@ struct MenuView {
     int hoverControl = -1;      // MenuHit kind under the mouse for buttons (Save/Reset/Default/Close) or page index + 100
 };
 struct MenuHit {
-    enum Kind { None, Page, Row, Slider, ChoicePrev, ChoiceNext, Toggle, KeyCell, ButtonCell, ItemButton, Save, Reset, Default, Close, Panel } kind = None;
+    enum Kind { None, Page, Row, Slider, ChoicePrev, ChoiceNext, Toggle, KeyCell, ButtonCell, ItemButton, Save, Reset, Default, Close, Header, Panel } kind = None;
     int index = -1;             // page or row
     float frac = 0;             // slider position under the mouse
 };

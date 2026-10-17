@@ -18,12 +18,36 @@
 #include <amtrucks/scssdk_telemetry_ats.h>
 #include <common/scssdk_telemetry_common_channels.h>
 #include <common/scssdk_telemetry_truck_common_channels.h>
+#include <common/scssdk_telemetry_common_configs.h>
+#include <scssdk_telemetry_event.h>
 
 namespace {
 std::atomic<double> g_x{0}, g_z{0};
 std::atomic<bool> g_havePos{false};
 std::atomic<bool> g_electric{false}, g_engine{false};
 std::atomic<float> g_speed{0.f};   // m/s, negative when reversing
+
+// Truck identity (configuration event "truck"): used to pick the truck preset of the in-cab screen
+std::mutex g_truckMtx;
+std::string g_truckId, g_truckName;
+std::atomic<int> g_truckVersion{0};
+SCSAPI_VOID OnConfiguration(const scs_event_t, const void* const info, const scs_context_t) {
+    const auto* cfg = static_cast<const scs_telemetry_configuration_t*>(info);
+    if (!cfg || !cfg->id || strcmp(cfg->id, SCS_TELEMETRY_CONFIG_truck) != 0) return;
+    std::string id, brand, name;
+    for (const scs_named_value_t* a = cfg->attributes; a && a->name; ++a) {
+        if (a->value.type != SCS_VALUE_TYPE_string || !a->value.value_string.value) continue;
+        if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_id)) id = a->value.value_string.value;
+        else if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_brand)) brand = a->value.value_string.value;
+        else if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_name)) name = a->value.value_string.value;
+    }
+    if (id.empty()) return;
+    std::lock_guard<std::mutex> l(g_truckMtx);
+    if (id == g_truckId) return;
+    g_truckId = id;
+    g_truckName = brand.empty() ? name : (name.rfind(brand, 0) == 0 ? name : brand + " " + name);
+    ++g_truckVersion;
+}
 
 SCSAPI_VOID OnSpeed(const scs_string_t, const scs_u32_t, const scs_value_t* const value, const scs_context_t) {
     g_speed = (value && value->type == SCS_VALUE_TYPE_float) ? value->value_float.value : 0.f;
@@ -56,10 +80,17 @@ DWORD WINAPI RadioThread(LPVOID) {
     }
     { Config c; c.Load(dir + L"realistic-radio.json"); input.Init(c); }
     Log::Write("Radio thread running");
+    int truckVersion = 0;
     while (!g_quit) {
         if (radio.MenuOpen()) {   // key menu: keys go to the menu, no radio actions
             if (radio.MenuTick(input)) { input.Init(radio.Settings()); input.Resync(); }
         } else input.Poll([&](Action a) { Log::Write("Action: %s", ActionName(a)); radio.OnAction(a); });
+        if (int v = g_truckVersion.load(); v != truckVersion) {
+            truckVersion = v;
+            std::string id, name;
+            { std::lock_guard<std::mutex> l(g_truckMtx); id = g_truckId; name = g_truckName; }
+            radio.SetTruck(id, name);
+        }
         radio.Tick(g_x, g_z, g_havePos, g_electric, g_engine, g_speed);
         Sleep(radio.MenuOpen() ? 15 : 50);   // the menu reacts faster to the mouse
     }
@@ -143,6 +174,9 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnBool, nullptr);
     p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_engine_enabled, SCS_U32_NIL, SCS_VALUE_TYPE_bool,
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnBool, (scs_context_t)1);
+    // truck model (for the truck presets of the in-cab screen)
+    if (p->register_for_event(SCS_TELEMETRY_EVENT_configuration, OnConfiguration, nullptr) != SCS_RESULT_ok)
+        Log::Write("Truck presets: configuration event not available");
     // speed for the speed-dependent volume ("autoVolume")
     p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_speed, SCS_U32_NIL, SCS_VALUE_TYPE_float,
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnSpeed, nullptr);

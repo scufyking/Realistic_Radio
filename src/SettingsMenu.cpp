@@ -53,7 +53,7 @@ D Slider(const char* de, const char* en, const char* hde, const char* hen, std::
          std::function<std::wstring(double, bool)> fmt) {
     D d; d.kind = MenuItemKind::Slider; d.de = de; d.en = en; d.hde = hde; d.hen = hen; d.mn = mn; d.mx = mx; d.step = step; d.fmt = fmt;
     d.get = [ref](const Config& c) { return ref(const_cast<Config&>(c)); };
-    d.set = [ref, mn, mx, step](Config& c, double v) { ref(c) = std::clamp(mn + std::round((v - mn) / step) * step, mn, mx); };
+    d.set = [ref, mn, mx, step](Config& c, double v) { ref(c) = std::clamp(std::round((mn + std::round((v - mn) / step) * step) * 1e6) / 1e6, mn, mx); };   // 0.58, not 0.5800000000000001
     return d;
 }
 D Choice(const char* de, const char* en, const char* hde, const char* hen, std::function<std::string&(Config&)> ref,
@@ -74,6 +74,7 @@ const std::vector<Page>& Pages() {
         std::vector<Page> p;
         auto pct = [](double v, bool) { return std::to_wstring((int)std::lround(v * 100)) + L" %"; };
         auto secs = [](double v, bool en) { return Num(v, std::fmod(v, 1.0) == 0 ? 0 : 1, en) + L" s"; };
+        auto two = [](double v, bool en) { return Num(v, 2, en); };
         p.push_back({"Radio", "Radio", "Wiedergabe", "Playback", {
             Slider("Lautstärke", "Volume", "", "", [](Config& c) -> double& { return c.volume; }, 0, 1, 0.05, pct),
             Toggle("Stumm", "Mute", "", "", [](Config& c) -> bool& { return c.muted; }),
@@ -103,9 +104,24 @@ const std::vector<Page>& Pages() {
                    [](Config& c) -> bool& { return c.screen.enabled; }, true),
             Slider("Anzeigedauer", "Display time", "Wie lange Sender / Lautstärke zu sehen sind", "How long station / volume are shown",
                    [](Config& c) -> double& { return c.screen.durationSeconds; }, 1, 15, 0.5, secs),
+            Choice("Design", "Design", "Aussehen der Anzeige im LKW", "Look of the display in the truck", [](Config& c) -> std::string& { return c.screen.design; },
+                   {"modern", "ocean", "sport", "light", "retro"},
+                   {{"Modern", "Modern"}, {"Ozean", "Ocean"}, {"Sport", "Sport"}, {"Hell", "Light"}, {"Retro (LCD)", "Retro (LCD)"}}),
             page,
             KeyRow("Taste: Navi \u2194 Radio-Seite", "Key: navigation \u2194 radio page", "", "", Action::ScreenPage),
+            Heading("Position auf dem Bildschirm", "Position on the screen"),
+            Toggle("Testmodus", "Test mode", "Gitter + Rahmen der Anzeige im LKW (Men\u00fc am Titel verschiebbar)",
+                   "Grid + frame of the display in the truck (drag the menu by its title)", [](Config& c) -> bool& { return c.screen.grid; }),
+            Button("Automatisch erkennen (Beta)", "Detect automatically (beta)", "Im LKW sitzen, Navigation sichtbar", "Sit in the truck with the navigation visible",
+                   "Erkennen", "Detect", SettingsMenu::DetectScreen),
+            Slider("Bereich links (X)", "Area left (X)", "", "", [](Config& c) -> double& { return c.screen.areaX; }, 0, 0.95, 0.01, two),
+            Slider("Bereich oben (Y)", "Area top (Y)", "", "", [](Config& c) -> double& { return c.screen.areaY; }, 0, 0.95, 0.01, two),
+            Slider("Breite", "Width", "", "", [](Config& c) -> double& { return c.screen.areaW; }, 0.05, 1, 0.01, two),
+            Slider("H\u00f6he", "Height", "", "", [](Config& c) -> double& { return c.screen.areaH; }, 0.05, 1, 0.01, two),
+            Toggle("Umdrehen (oben/unten)", "Flip (up/down)", "", "", [](Config& c) -> bool& { return c.screen.flipY; }),
+            Toggle("Spiegeln (links/rechts)", "Mirror (left/right)", "", "", [](Config& c) -> bool& { return c.screen.flipX; }),
         }, false});
+        p.push_back({"LKW", "Trucks", "Radio und Navi-Presets je LKW", "Radio and screen presets per truck", {}, false});   // rows: BuildPresetDefs
         D pos = Choice("Position", "Position", "", "", [](Config& c) -> std::string& { return c.overlay.style == "radio" ? c.overlay.radio.position : c.overlay.position; },
                        {"top-left", "top-center", "top-right", "bottom-left", "bottom-center", "bottom-right"},
                        {{"Oben links", "Top left"}, {"Oben Mitte", "Top centre"}, {"Oben rechts", "Top right"},
@@ -238,8 +254,153 @@ std::wstring SettingsMenu::KeyText(const KeyBinding& b) const {
 bool SettingsMenu::KeysPage() const { return Pages()[page_].keys; }
 
 // Rows of the current page: the static settings, plus one media type row per music folder on the USB / CD page
+bool SettingsMenu::PresetsPage() const { return std::string(Pages()[page_].de) == "LKW"; }
+
+// Presets page: current truck, active preset (choice), automatic change by truck id, new / link / delete
+void SettingsMenu::BuildPresetDefs() {
+    std::wstring truck = truckName_.empty() ? Utf8ToWide(truckId_) : Utf8ToWide(truckName_);
+    const TruckPreset* own = PresetForTruck(edit_, truckId_);
+    D h = Button("", "", "", "", "Neues Preset", "New preset", PresetNew);
+    h.wlabel = truckId_.empty() ? T("Kein LKW erkannt", "No truck detected") : T("Dieser LKW: ", "This truck: ") + truck;
+    h.whint = truckId_.empty() ? T("Erst einsteigen \u2013 \u201eNeues Preset\u201c speichert die aktuellen Navi-Einstellungen",
+                                   "Get into a truck first - \"New preset\" saves the current screen settings")
+            : own ? T("Preset: ", "Preset: ") + Utf8ToWide(own->name) + L"  (" + Utf8ToWide(truckId_) + L")"
+                  : T("Noch kein Preset  (", "No preset yet  (") + Utf8ToWide(truckId_) + L")";
+    defs_.push_back(h);
+    defs_.push_back(Toggle("Radio-Speicher je LKW", "Radio memory per truck",
+                           "Sender, Favoriten, Lautst\u00e4rke, Quelle und USB-Titel merkt sich jeder LKW",
+                           "Every truck keeps its own stations, favourites, volume, source and USB track",
+                           [](Config& cfg) -> bool& { return cfg.truckMemory; }));
+    defs_.push_back(Heading("Navi-Presets", "Screen presets"));
+    // active preset
+    std::vector<std::string> names; names.push_back("");
+    const auto all = AllPresets(edit_);
+    for (auto* p : all) names.push_back(p->name);
+    D c; c.kind = MenuItemKind::Choice; c.de = "Aktives Preset"; c.en = "Active preset";
+    c.hde = "Wird geladen und merkt sich \u00c4nderungen der Navi-Seite"; c.hen = "Is loaded and keeps the changes of the screen page";
+    c.mx = (double)names.size() - 1;
+    for (auto& n : names) c.names.push_back(n.empty() ? T("(keins)", "(none)") : Utf8ToWide(n));
+    c.get = [names](const Config& cfg) {
+        for (size_t i = 1; i < names.size(); ++i) if (names[i] == cfg.activePreset) return (double)i;
+        return 0.0;
+    };
+    c.set = [names](Config& cfg, double v) {
+        int i = std::clamp((int)std::lround(v), 0, (int)names.size() - 1);
+        cfg.activePreset = names[i];
+        if (const TruckPreset* p = LookupPreset(cfg, cfg.activePreset)) ApplyPreset(cfg.screen, *p);
+    };
+    defs_.push_back(c);
+    defs_.push_back(Toggle("Automatisch je LKW wechseln", "Change automatically per truck",
+                           "Erkennt den LKW \u00fcber die LKW-ID der Telemetrie",
+                           "Detects the truck by the truck id of the telemetry", [](Config& cfg) -> bool& { return cfg.presetAuto; }));
+    defs_.push_back(Heading("Aktives Preset", "Active preset"));
+    defs_.push_back(Button("Mit diesem LKW verkn\u00fcpfen", "Link to this truck", "Das aktive Preset l\u00e4dt dann automatisch in diesem LKW",
+                           "The active preset then loads automatically in this truck", "Verkn\u00fcpfen", "Link", PresetLink));
+    defs_.push_back(Button("Verkn\u00fcpfung l\u00f6sen", "Unlink", "Dieser LKW l\u00e4dt das aktive Preset nicht mehr automatisch",
+                           "This truck no longer loads the active preset automatically", "L\u00f6sen", "Unlink", PresetUnlink));
+    D del = Button("Aktives Preset l\u00f6schen", "Delete active preset", "Die Navi-Einstellungen bleiben", "The screen settings stay",
+                   "L\u00f6schen", "Delete", PresetDelete);
+    if (confirmDelete_) { del.btnDe = "Wirklich?"; del.btnEn = "Sure?"; }
+    defs_.push_back(del);
+    if (all.empty()) return;
+    defs_.push_back(Heading("Gespeicherte Presets", "Saved presets"));
+    for (size_t i = 0; i < all.size(); ++i) {
+        const TruckPreset& p = *all[i];
+        D r = Button("", "", "", "", "Laden", "Load", PresetLoad);
+        r.index = (int)i;
+        r.wlabel = (p.name == edit_.activePreset ? L"\u25b6 " : L"") + Utf8ToWide(p.name);
+        if (p.trucks.empty()) r.whint = T("Kein LKW verkn\u00fcpft", "No truck linked");
+        else for (auto& id : p.trucks) {
+            if (!r.whint.empty()) r.whint += L", ";
+            r.whint += Utf8ToWide(id == truckId_ && !truckName_.empty() ? truckName_ : id);
+        }
+        bool hasStd = false;
+        for (auto& b : BuiltinPresets()) if (b.name == p.name) hasStd = true;
+        if (hasStd) r.whint += IsStandardPreset(edit_, p.name) ? T("  \u2022  Standard", "  \u2022  standard") : T("  \u2022  angepasst", "  \u2022  customised");
+        defs_.push_back(r);
+    }
+}
+
+void SettingsMenu::PresetCommand(int cmd, int index) {
+    auto unlinkEverywhere = [&](const std::string& id) {
+        for (auto& p : edit_.presets) p.trucks.erase(std::remove(p.trucks.begin(), p.trucks.end(), id), p.trucks.end());
+    };
+    const std::string active = edit_.activePreset;
+    const TruckPreset* act = LookupPreset(edit_, active);
+    auto quoted = [&](const std::string& n) { return T("\u201e", "\"") + Utf8ToWide(n) + T("\u201c", "\""); };
+    if (cmd != PresetDelete) confirmDelete_ = false;
+    switch (cmd) {
+    case PresetLoad: {
+        auto all = AllPresets(edit_);
+        if (index < 0 || index >= (int)all.size()) break;
+        edit_.activePreset = all[index]->name;
+        ApplyPreset(edit_.screen, *all[index]);
+        status_ = T("Preset ", "Preset ") + quoted(edit_.activePreset) + T(" geladen", " loaded");
+        break; }
+    case PresetNew: {
+        std::string base = !truckName_.empty() ? truckName_ : !truckId_.empty() ? truckId_ : std::string("Preset");
+        std::string name = base;
+        for (int n = 2; LookupPreset(edit_, name); ++n) name = base + " (" + std::to_string(n) + ")";
+        TruckPreset np = PresetFromScreen(name, edit_.screen);
+        if (!truckId_.empty()) { unlinkEverywhere(truckId_); np.trucks.push_back(truckId_); }
+        edit_.presets.push_back(np);
+        edit_.activePreset = name;
+        status_ = T("Preset ", "Preset ") + quoted(name) + T(" angelegt", " created");
+        break; }
+    case PresetLink: {
+        if (truckId_.empty()) { status_ = T("Kein LKW erkannt \u2013 erst einsteigen", "No truck detected - get into a truck first"); break; }
+        if (!act) { status_ = T("Erst ein Preset w\u00e4hlen oder anlegen", "Choose or create a preset first"); break; }
+        unlinkEverywhere(truckId_);
+        TruckPreset* own = OwnPreset(edit_, active);   // a standard preset becomes an own copy
+        if (std::find(own->trucks.begin(), own->trucks.end(), truckId_) == own->trucks.end()) own->trucks.push_back(truckId_);
+        status_ = T("Verkn\u00fcpft mit ", "Linked to ") + Utf8ToWide(truckName_.empty() ? truckId_ : truckName_);
+        break; }
+    case PresetUnlink: {
+        if (!act || truckId_.empty() || std::find(act->trucks.begin(), act->trucks.end(), truckId_) == act->trucks.end()) {
+            status_ = T("Dieser LKW ist nicht mit dem aktiven Preset verkn\u00fcpft", "This truck is not linked to the active preset"); break; }
+        OwnPreset(edit_, active);   // a standard preset is copied so the link can be removed
+        unlinkEverywhere(truckId_);
+        status_ = T("Verkn\u00fcpfung gel\u00f6st", "Link removed");
+        break; }
+    case PresetDelete: {
+        if (!act) { status_ = T("Kein Preset aktiv", "No preset active"); confirmDelete_ = false; break; }
+        if (IsStandardPreset(edit_, active)) {
+            status_ = T("Standard-Presets lassen sich nicht l\u00f6schen \u2013 eigenes Preset anlegen oder Verkn\u00fcpfung l\u00f6sen",
+                        "Standard presets cannot be deleted - create an own preset or unlink the truck");
+            confirmDelete_ = false; break;
+        }
+        if (!confirmDelete_) { confirmDelete_ = true; status_ = T("Zum L\u00f6schen nochmal klicken", "Click again to delete"); break; }
+        confirmDelete_ = false;
+        TruckPreset* own = FindPreset(edit_, active);
+        edit_.presets.erase(edit_.presets.begin() + (own - edit_.presets.data()));
+        if (const TruckPreset* base = LookupPreset(edit_, active)) {   // was a changed standard preset: back to the standard values
+            ApplyPreset(edit_.screen, *base);
+            status_ = T("Preset ", "Preset ") + quoted(active) + T(" auf Standard zur\u00fcckgesetzt", " reset to the standard values");
+        } else {
+            edit_.activePreset.clear();
+            status_ = T("Preset ", "Preset ") + quoted(active) + T(" gel\u00f6scht (Navi-Werte bleiben)", " deleted (screen values stay)");
+        }
+        break; }
+    default: break;
+    }
+    int keep = sel_;
+    Edited_();
+    BuildDefs();
+    sel_ = std::clamp(keep, 0, std::max(0, RowCount() - 1));
+    EnsureVisible();
+}
+
+void SettingsMenu::SetTruck(const std::string& id, const std::string& name) {
+    if (id == truckId_ && name == truckName_) return;
+    truckId_ = id; truckName_ = name;
+    if (edit_.presetAuto && AutoSelectPreset(edit_, id)) Edited_();
+    if (PresetsPage()) BuildDefs();
+    dirty_ = true;
+}
+
 void SettingsMenu::BuildDefs() {
     defs_ = Pages()[page_].defs;
+    if (PresetsPage()) { BuildPresetDefs(); return; }
     if (std::string(Pages()[page_].de) != "USB / CD" || folders_.empty()) return;
     D h = Heading("Musikordner und ihr Typ", "Music folders and their type");
     defs_.push_back(h);
@@ -266,6 +427,20 @@ void SettingsMenu::BuildDefs() {
     }
 }
 void SettingsMenu::SetFolders(const std::vector<Folder>& f) { folders_ = f; BuildDefs(); dirty_ = true; }
+void SettingsMenu::SetScreenArea(const float r[4]) {
+    auto in = [](double v) { return std::round(v * 100.0) / 100.0; };
+    double x0 = std::ceil(r[0] * 100.0 - 1e-6) / 100.0, y0 = std::ceil(r[1] * 100.0 - 1e-6) / 100.0;     // round inwards
+    double x1 = std::floor((r[0] + r[2]) * 100.0 + 1e-6) / 100.0, y1 = std::floor((r[1] + r[3]) * 100.0 + 1e-6) / 100.0;
+    edit_.screen.areaX = in(x0); edit_.screen.areaY = in(y0);
+    edit_.screen.areaW = in(std::max(0.05, x1 - x0)); edit_.screen.areaH = in(std::max(0.05, y1 - y0));
+    edit_.screen.grid = true;   // show the frame right away so the result can be checked
+    wchar_t b[160];
+    swprintf(b, 160, edit_.menuLanguage == "en" ? L"Detected: X %.2f  Y %.2f  W %.2f  H %.2f - check the frame in the truck, adjust if needed"
+                                                : L"Erkannt: X %.2f  Y %.2f  B %.2f  H %.2f \u2013 Rahmen im LKW pr\u00fcfen, bei Bedarf nachstellen",
+             edit_.screen.areaX, edit_.screen.areaY, edit_.screen.areaW, edit_.screen.areaH);
+    status_ = b;
+    Edited_();
+}
 void SettingsMenu::SetCacheInfo(uint64_t bytes, int files) { cacheBytes_ = bytes; cacheFiles_ = files; dirty_ = true; }
 int SettingsMenu::VisibleRows() const { return MenuVisibleRows(View(), renderH_); }
 void SettingsMenu::EnsureVisible() {
@@ -285,7 +460,7 @@ void SettingsMenu::Open(const Config& cfg) {
     if (open_) return;
     edit_ = cfg; saved_ = cfg; savedJson_ = cfg.MenuJson();
     page_ = 0; sel_ = 0; scroll_ = 0; hover_ = -1; hoverCtl_ = -1; capture_ = 0; drag_ = -1; cmd_ = None;
-    changed_ = false; saveReq_ = false; dirty_ = true; status_.clear();
+    changed_ = false; saveReq_ = false; dirty_ = true; status_.clear(); confirmDelete_ = false;
     BuildDefs();
     renderH_ = D3D11Overlay::ScreenHeight() >= 200 ? D3D11Overlay::ScreenHeight() : 1080;
     float cx = std::max(1, D3D11Overlay::ScreenWidth()) / 2.f, cy = renderH_ / 2.f;
@@ -315,7 +490,11 @@ void SettingsMenu::MarkSaved() {
     dirty_ = true;
 }
 
-void SettingsMenu::Edited_() { changed_ = true; dirty_ = true; }
+void SettingsMenu::Edited_() {
+    StoreActivePreset(edit_);   // the active preset follows the screen settings
+    if (PresetsPage()) { int keep = sel_; BuildDefs(); sel_ = std::clamp(keep, 0, std::max(0, RowCount() - 1)); }
+    changed_ = true; dirty_ = true;
+}
 
 void SettingsMenu::Adjust(int row, int dir) {
     if (IsKeyRow(row) || row < 0 || row >= RowCount()) return;
@@ -328,7 +507,7 @@ void SettingsMenu::Adjust(int row, int dir) {
     case MenuItemKind::Choice: { int n = (int)d.mx + 1; d.set(edit_, (double)(((int)std::lround(v) + dir + n) % n)); break; }
     default: break;
     }
-    status_.clear();
+    status_.clear(); confirmDelete_ = false;
     Edited_();
 }
 
@@ -349,7 +528,10 @@ void SettingsMenu::Activate(int row) {
     }
     const D& d = defs_[row];
     if (d.kind == MenuItemKind::Toggle || d.kind == MenuItemKind::Choice) Adjust(row, 1);
-    else if (d.kind == MenuItemKind::Button) { cmd_ = d.command; dirty_ = true; }
+    else if (d.kind == MenuItemKind::Button) {
+        if (d.command >= PresetNew) PresetCommand(d.command, d.index);
+        else { cmd_ = d.command; dirty_ = true; }
+    }
 }
 
 void SettingsMenu::BindKey(int row, const KeyBinding& b) {
@@ -457,7 +639,7 @@ SettingsMenu::Result SettingsMenu::Tick(InputManager& input) {
         D3D11Overlay::CursorPos(cx, cy);
         if (!D3D11Overlay::ImageRect(ix, iy, iw, ih)) continue;
         MenuHit h = HitTestMenu(View(), renderH_, cx - ix, cy - iy);
-        if (e.type == MenuInput::Event::MouseUp) { drag_ = -1; continue; }
+        if (e.type == MenuInput::Event::MouseUp) { drag_ = -1; moving_ = false; continue; }
         if (e.type == MenuInput::Event::Wheel) {
             int vis = VisibleRows();
             if (RowCount() > vis) scroll_ = std::clamp(scroll_ - e.wheel * 2, 0, RowCount() - vis);   // long page: the wheel scrolls
@@ -474,6 +656,7 @@ SettingsMenu::Result SettingsMenu::Tick(InputManager& input) {
         if (capture_ && h.kind != MenuHit::ButtonCell) { capture_ = 0; status_.clear(); }   // a click ends waiting for a key
         switch (h.kind) {
         case MenuHit::Close: return close();
+        case MenuHit::Header: moving_ = true; grabX_ = cx - ix; grabY_ = cy - iy; break;   // drag the menu by its title
         case MenuHit::Save: if (edit_.MenuJson() != savedJson_) saveReq_ = true; else status_ = T("Nichts zu speichern", "Nothing to save"); break;
         case MenuHit::Reset: Revert(); break;
         case MenuHit::Default: Defaults(); break;
@@ -496,6 +679,15 @@ SettingsMenu::Result SettingsMenu::Tick(InputManager& input) {
         }
     }
     if (capture_) { int b = input.PollNewButton(); if (b >= 0) BindButton(sel_, b); }
+    if (moving_) {
+        float cx, cy, ix, iy, iw, ih;
+        D3D11Overlay::CursorPos(cx, cy);
+        if (D3D11Overlay::ImageRect(ix, iy, iw, ih)) {
+            float sw = (float)std::max(1, D3D11Overlay::ScreenWidth()), sh = (float)std::max(1, D3D11Overlay::ScreenHeight());
+            float nx = std::clamp(cx - grabX_, 0.f, std::max(0.f, sw - iw)), ny = std::clamp(cy - grabY_, 0.f, std::max(0.f, sh - ih));
+            if (nx != posX_ || ny != posY_) { posX_ = nx; posY_ = ny; moved_ = true; }
+        }
+    }
     UpdateHover();
     return Result::Open;
 }
@@ -509,6 +701,8 @@ MenuView SettingsMenu::View() const {
     for (const Page& p : Pages()) v.pages.push_back(Utf8ToWide(en ? p.en : p.de));
     v.page = page_;
     v.section = Utf8ToWide(en ? pg.sen : pg.sde);
+    if (std::string(pg.de) == "Navi-Bildschirm" && !edit_.activePreset.empty())
+        v.section += T("  \u2022  Preset: ", "  \u2022  preset: ") + Utf8ToWide(edit_.activePreset);
     v.keyHeader = T("Taste", "Key"); v.buttonHeader = L"Controller";
     v.restartText = T("NEUSTART", "RESTART");
     if (pg.keys) {
@@ -525,6 +719,8 @@ MenuView SettingsMenu::View() const {
         for (const D& d : defs_) {
             MenuItem it; it.kind = d.kind; it.restart = d.restart;
             it.label = Utf8ToWide(en ? d.en : d.de); it.hint = Utf8ToWide(en ? d.hen : d.hde);
+            if (!d.wlabel.empty()) it.label = d.wlabel;
+            if (!d.whint.empty()) it.hint = d.whint;
             if (d.folderTracks >= 0) {   // media type of a music folder
                 it.label = d.folder.empty() ? T("(Dateien direkt im Ordner usb)", "(files directly in the usb folder)") : d.folder;
                 it.hint = std::to_wstring(d.folderTracks) + T(" Titel", d.folderTracks == 1 ? " track" : " tracks");
@@ -547,6 +743,7 @@ MenuView SettingsMenu::View() const {
             double val = d.get(edit_);
             if (d.kind == MenuItemKind::Toggle) it.on = val > 0.5;
             else if (d.kind == MenuItemKind::Slider) { it.frac = (float)((val - d.mn) / (d.mx - d.mn)); it.value = d.fmt ? d.fmt(val, en) : Num(val, 1, en); }
+            else if (d.kind == MenuItemKind::Choice && !d.names.empty()) it.value = d.names[std::clamp((int)std::lround(val), 0, (int)d.names.size() - 1)];
             else if (d.kind == MenuItemKind::Choice) { auto& l = d.labels[std::clamp((int)std::lround(val), 0, (int)d.labels.size() - 1)]; it.value = Utf8ToWide(en ? l.second : l.first); }
             v.items.push_back(it);
         }

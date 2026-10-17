@@ -23,6 +23,9 @@ struct MenuDef {
     std::wstring folder; int folderTracks = -1;                 // media type row of a music folder
     int command = 0;                                            // button row: SettingsMenu::Command
     const char *btnDe = "", *btnEn = "";
+    std::wstring wlabel, whint;                                 // generated rows: text instead of de/en
+    std::vector<std::wstring> names;                            // generated choice: one text per value (both languages)
+    int index = -1;                                             // generated button: preset index
 };
 
 // In-game settings menu (default Ctrl+0) with mouse and keyboard: pages for radio, reception, navigation screen,
@@ -31,7 +34,8 @@ struct MenuDef {
 class SettingsMenu {
 public:
     enum class Result { Open, Closed };
-    enum Command { None = 0, OpenMusicFolder, ClearLogos, OpenLogoFolder };
+    enum Command { None = 0, OpenMusicFolder, ClearLogos, OpenLogoFolder, DetectScreen,
+                   PresetNew, PresetLink, PresetUnlink, PresetDelete, PresetLoad };   // preset commands are handled by the menu itself
     struct Folder { std::wstring name; int tracks; };   // music folder = one USB / CD (name empty = main folder)
     void Open(const Config& cfg);
     bool IsOpen() const { return open_; }
@@ -45,8 +49,12 @@ public:
     void SetFolders(const std::vector<Folder>& f);                 // music folders, each gets a media type row
     void SetCacheInfo(uint64_t bytes, int files);
     void SetStatus(const std::wstring& s) { status_ = s; dirty_ = true; }
+    void SetStatus(const char* de, const char* en) { SetStatus(T(de, en)); }
+    void SetScreenArea(const float r[4]);
+    void SetTruck(const std::string& id, const std::string& name);   // current truck (telemetry) for the presets page     // result of the auto-detection: area sliders + test mode on
     std::shared_ptr<OverlayImage> TakeImage();   // new picture when something on the menu changed, else nullptr
     int RenderHeight() const { return renderH_; }
+    bool TakeMoved(float& x, float& y) { if (!moved_) return false; moved_ = false; x = posX_; y = posY_; return true; }   // dragged by the title
 
     using Def = MenuDef;
 private:
@@ -78,7 +86,14 @@ private:
     uint64_t cacheBytes_ = 0; int cacheFiles_ = 0;
     int cmd_ = None, scroll_ = 0;
     void BuildDefs();
+    void BuildPresetDefs();
+    void PresetCommand(int cmd, int index);
+    bool PresetsPage() const;
+    std::string truckId_, truckName_;
+    bool confirmDelete_ = false;
     void EnsureVisible();
     int VisibleRows() const;
     int renderH_ = 1080;
+    bool moving_ = false, moved_ = false;
+    float grabX_ = 0, grabY_ = 0, posX_ = 0, posY_ = 0;
 };
