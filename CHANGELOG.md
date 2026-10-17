@@ -2,6 +2,18 @@
 
 **English** · [Deutsch](#changelog-deutsch)
 
+## 1.2.1 – Fix: static in USB / CD mode, "no media detected"
+
+### Fixed
+- **Static or the tuning sound could stay audible in USB / CD mode** after switching between radio and USB several times in a row. When a radio station change was still fading in and you switched to USB, the fade-out of the static and the tuning sound was set twice and became extremely slow – the noise then stayed in the music for many seconds, and every further switch made it worse. Fades now always run at the intended speed, and USB / CD mode additionally makes sure static and tuning sound are off.
+- The same correction also makes fades on the radio more reliable (e.g. static after a station change).
+
+### Changed
+- If there is no music in the `usb` folder, the screen now shows **"Kein Medientyp erkannt"** (no media detected) like a car radio without a medium – with a question-mark picture, where to put the music and how to open the folder from the settings menu. Settings files that still contain the old text "Keine Musik im USB-Ordner" are updated automatically.
+
+### Upgrade notes
+- Replace `realistic-radio.dll` only. Settings, favourites, own stations, logos and music are kept.
+
 ## 1.2.0 – Several USB sticks / CDs, radio page and settings menu
 
 ### New
@@ -107,6 +119,18 @@
 
 <a id="changelog-deutsch"></a>
 # Changelog (Deutsch)
+
+## 1.2.1 – Fehlerbehebung: Rauschen im USB / CD-Modus, „Kein Medientyp erkannt“
+
+### Behoben
+- **Im USB / CD-Modus konnte Rauschen oder das Umschaltgeräusch hörbar bleiben**, wenn man mehrmals hintereinander zwischen Radio und USB gewechselt hat. Lief beim Wechsel auf USB gerade noch das Einblenden eines Senderwechsels, wurde das Ausblenden von Rauschen und Umschaltgeräusch doppelt gesetzt und dadurch extrem langsam – das Rauschen lag dann viele Sekunden über der Musik, und jeder weitere Wechsel machte es schlimmer. Ein- und Ausblendungen laufen jetzt immer im vorgesehenen Tempo, und der USB / CD-Modus sorgt zusätzlich dafür, dass Rauschen und Umschaltgeräusch aus sind.
+- Dieselbe Korrektur macht auch die Übergänge beim Radio zuverlässiger (z. B. das Rauschen nach einem Senderwechsel).
+
+### Geändert
+- Liegt keine Musik im Ordner `usb`, zeigt das Navi jetzt **„Kein Medientyp erkannt“** wie ein Autoradio ohne eingelegtes Medium – mit Fragezeichen-Bild, dem Hinweis, wo die Musik hingehört, und wie man den Ordner über das Einstellungsmenü öffnet. Einstellungsdateien mit dem alten Text „Keine Musik im USB-Ordner“ werden automatisch angepasst.
+
+### Hinweise zum Update
+- Nur `realistic-radio.dll` ersetzen. Einstellungen, Favoriten, eigene Sender, Logos und Musik bleiben erhalten.
 
 ## 1.2.0 – Mehrere USB-Sticks / CDs, Radio-Seite und Einstellungsmenü
 

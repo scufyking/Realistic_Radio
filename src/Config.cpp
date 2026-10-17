@@ -114,7 +114,7 @@ static const char* kDefaultConfig = R"({
     "repeat": "all",
     "textTrack": "Titel",
     "textPaused": "Pause",
-    "textEmpty": "Keine Musik im USB-Ordner"
+    "textEmpty": "Kein Medientyp erkannt"
   },
   "screen": {
     "enabled": true,
@@ -210,6 +210,7 @@ bool Config::Load(const std::wstring& path) {
             if (m.contains("types") && m["types"].is_object())
                 for (auto& [k, v] : m["types"].items()) if (v.is_string()) c.types[k] = v.get<std::string>();
             c.textTrack = m.value("textTrack", c.textTrack); c.textPaused = m.value("textPaused", c.textPaused); c.textEmpty = m.value("textEmpty", c.textEmpty);
+            if (c.textEmpty == "Keine Musik im USB-Ordner") { c.textEmpty = MediaConfig().textEmpty; migratedEmptyText = true; }   // old default (1.1.0 - 1.2.1)
         }
         if (j.contains("screen")) {
             auto& sc = j["screen"]; ScreenConfig& c = screen;
@@ -286,7 +287,7 @@ bool Config::Load(const std::wstring& path) {
         bool addSource = !missingKeys.empty();
         bool addMedia = !j.contains("media");
         bool addFolderPerDisc = !addMedia && j["media"].is_object() && !j["media"].contains("folderPerDisc");
-        if (migratedUrlPrefix || migratedKeys || addSource || addMedia || addFolderPerDisc) {   // write the changes back so the file matches what is used
+        if (migratedUrlPrefix || migratedKeys || addSource || addMedia || addFolderPerDisc || migratedEmptyText) {   // write the changes back so the file matches what is used
             f.close();
             try {
                 std::ifstream in{std::filesystem::path(path)};
@@ -301,10 +302,11 @@ bool Config::Load(const std::wstring& path) {
                     if (k.contains("buttons") && k["buttons"].is_object() && !k["buttons"].contains(n)) k["buttons"][n] = -1;
                     Log::Write("Added key '%s' to the settings", n.c_str());
                 }
+                if (migratedEmptyText) k["media"]["textEmpty"] = media.textEmpty;
                 if (addFolderPerDisc) { k["media"]["folderPerDisc"] = true; Log::Write("Added media.folderPerDisc (every sub folder of usb is its own USB / CD)"); }
                 if (addMedia) {
                     k["media"] = json::parse(R"({"enabled": true, "folder": "usb", "folderPerDisc": true, "label": "USB", "shuffle": false, "repeat": "all",
-                        "textTrack": "Titel", "textPaused": "Pause", "textEmpty": "Keine Musik im USB-Ordner"})");
+                        "textTrack": "Titel", "textPaused": "Pause", "textEmpty": "Kein Medientyp erkannt"})");
                     Log::Write("Added settings block 'media' (USB/CD mode)");
                 }
                 std::ofstream o{std::filesystem::path(path)}; o << k.dump(2);

@@ -22,6 +22,7 @@ public:
     void SetStaticGain(float g, float seconds);
     void SetSwitchGain(float g, float seconds);
     float StreamGain() const;
+    bool NoiseActive() const { return gStatic_.target.load() > 0.f || gSwitch_.target.load() > 0.f || gStatic_.now.load() > 0.f || gSwitch_.now.load() > 0.f; }
     void SetMaster(float v) { float c = std::clamp(v, 0.f, 1.f); master_ = c * c; }   // perceptual: 50 % slider = -12 dB, 10 % = -40 dB
     void SetMuted(bool m) { muted_ = m; }
     void SetBoost(float g) { boost_ = std::clamp(g, 1.f, 2.f); }   // speed-dependent volume: extra gain on top of the master
@@ -29,8 +30,16 @@ public:
     bool IsBuffering();
     int StreamFailures();
 private:
-    struct Ramp { std::atomic<float> target{0}; std::atomic<float> step{1}; float cur = 0; float Next() {
-        float t = target, s = step; if (cur < t) cur = std::min(t, cur + s); else if (cur > t) cur = std::max(t, cur - s); return cur; } };
+    // Gain that moves towards `target` by `step` per sample (audio thread). `now` mirrors the current value for SetRamp.
+    struct Ramp {
+        std::atomic<float> target{0}; std::atomic<float> step{1}; std::atomic<float> now{0}; float cur = 0;
+        float Next() {
+            float t = target.load(std::memory_order_relaxed), s = step.load(std::memory_order_relaxed);
+            if (cur < t) cur = std::min(t, cur + s); else if (cur > t) cur = std::max(t, cur - s);
+            now.store(cur, std::memory_order_relaxed);
+            return cur;
+        }
+    };
     static void Callback(ma_device* d, void* out, const void*, ma_uint32 frames);
     void Mix(float* out, ma_uint32 frames);
     static void SetRamp(Ramp& r, float g, float seconds);

@@ -14,7 +14,7 @@ By **ScufyKing**. The whole radio runs inside the game:
 
 Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ETS2, and the radio plays. Station data and sounds are built into the DLL.
 
-> **Version 1.2.0** · [Changes](CHANGELOG.md)
+> **Version 1.2.1** · [Changes](CHANGELOG.md)
 >
 > **Status:** Tested in ETS2 1.61 (Windows x64) with the MAN TGX: the plugin loads, reads the truck position, switches stations by region, plays audio and shows station and volume on the navigation screen. American Truck Simulator data is included but ATS is untested.
 
@@ -243,7 +243,7 @@ Independent of the pop-up overlay, which is off by default (`"overlay": { "mode"
 | `types` | `{}` | Type per music folder, e.g. `{ "Rock Music": "cd", "Rap Music": "cassette" }` (`usb`, `cd`, `sd`, `cassette`, `bluetooth`, `aux`); easiest in the settings menu |
 | `shuffle` | `false` | Shuffle (a new order every time you switch to USB) |
 | `repeat` | `"all"` | `"all"` = start again after the last track, `"one"` = repeat the track, `"off"` = stop after the last track |
-| `textTrack`, `textPaused`, `textEmpty` | `"Titel"`, `"Pause"`, `"Keine Musik im USB-Ordner"` | Texts on the screen; in English e.g. `"Track"`, `"Paused"`, `"No music in the USB folder"` |
+| `textTrack`, `textPaused`, `textEmpty` | `"Titel"`, `"Pause"`, `"Kein Medientyp erkannt"` | Texts on the screen; in English e.g. `"Track"`, `"Paused"`, `"No media detected"` |
 
 ### Truck screen display (`"display": { … }`, optional)
 
@@ -335,7 +335,7 @@ Almost every problem can be diagnosed from `realistic-radio\realistic-radio.log`
 | No station logo | Logos are downloaded from `radio.scufystudio.de` on first use; without internet, or if the server is down, the panel is shown without a logo and the download is retried after 10 minutes. |
 | Keys do nothing | Is the game the active window? Another program may be using the key; pick a different one. |
 | A station I expected is missing | It is not assigned to the region you are in. You only receive regions within range. Add it as your own station. |
-| "Keine Musik im USB-Ordner" (no music in the USB folder) | There is no file with a supported extension in `realistic-radio\usb\` (or the folder set in `media.folder`). The log shows `USB: 0 file(s) in …` with the exact path. |
+| "Kein Medientyp erkannt" (no media detected) | There is no file with a supported extension in `realistic-radio\usb\` (or the folder set in `media.folder`). The log shows `USB: 0 file(s) in …` with the exact path. |
 | A USB track is skipped | The file could not be played (`Cannot play file:` in the log), e.g. a copy-protected WMA. If no file plays at all, USB mode stops. |
 | Wrong title or artist | Check the MP3's ID3 tags (e.g. with Mp3tag). For other formats name the file `Artist - Title`. |
 

@@ -536,7 +536,7 @@ std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const Ov
         }
         rightEdge = x0 - U(14);
     }
-    if (info.volume < 0 && info.media) {   // play / pause symbol
+    if (info.volume < 0 && info.media && info.mediaType != "none") {   // play / pause symbol
         int s = U(20), x0 = rightEdge - s, y0 = headY0 + (chipH - s) / 2;
         if (info.paused) { cv.Round(x0 + U(2), y0, U(6), s, U(1.5f), TR, TG, TB); cv.Round(x0 + s - U(8), y0, U(6), s, U(1.5f), TR, TG, TB); }
         else cv.Poly({{(float)x0 + U(2), (float)y0}, {(float)x0 + s, y0 + s / 2.f}, {(float)x0 + U(2), (float)y0 + s}}, AR, AG, AB);
@@ -642,6 +642,11 @@ std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const Ov
             R(-0.04f, -0.25f, 0.04f, -0.23f, 0.0f, DR, DG, DB); R(-0.04f, -0.16f, 0.04f, -0.14f, 0.0f, DR, DG, DB);
             R(-0.09f, -0.04f, 0.09f, 0.30f, 0.04f, AR, AG, AB);
             R(-0.025f, 0.30f, 0.025f, 0.40f, 0.01f, L, LG, LB);
+        } else if (info.media && mt == "none") {       // no medium: empty slot with a question mark
+            R(-0.30f, -0.07f, 0.30f, 0.07f, 0.035f, 0.10f, 0.10f, 0.12f);
+            HFONT fQ = MakeFont((int)(T * 0.30f), FW_BOLD);
+            DrawText(mask, px, fQ, L"?", RECT{tileX, tileY + (int)(T * 0.06f), tileX + T, tileY + (int)(T * 0.44f)}, AR, AG, AB, DT_CENTER);
+            DeleteObject(fQ);
         } else if (info.media) {   // disc (CD)
             float r = T * 0.36f;
             cv.Circle(cx, cy, r, 0.80f, 0.82f, 0.86f);

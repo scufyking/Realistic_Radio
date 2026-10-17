@@ -43,7 +43,7 @@ struct MediaConfig {
     std::string repeat = "all";         // all (start again after the last track) | one (repeat the track) | off (stop at the end)
     std::string textTrack = "Titel";
     std::string textPaused = "Pause";
-    std::string textEmpty = "Keine Musik im USB-Ordner";
+    std::string textEmpty = "Kein Medientyp erkannt";
     // media type per folder (folder name -> usb | cd | sd | cassette | bluetooth | aux); folders not listed use `label`
     std::map<std::string, std::string> types;
 };
@@ -103,6 +103,7 @@ struct Config {
     int reconnectMaxSeconds = 30;
 
     bool migratedUrlPrefix = false;
+    bool migratedEmptyText = false;
     Config();
     bool Load(const std::wstring& path);   // creates default file if missing
     void SaveVolume(const std::wstring& path) const;   // volume, mute, source and USB track

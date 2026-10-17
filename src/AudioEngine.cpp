@@ -54,9 +54,15 @@ void AudioEngine::StopStream() {
     if (session_) { session_->Stop(); retired_.push_back(session_); session_.reset(); }
 }
 
+// The step is taken from the distance between the new target and where the gain is *now* (or was heading).
+// Up to 1.2.0 it used only the old target: setting the same target twice while a fade was still running (e.g.
+// "static 0" when switching to USB, then again when the first track starts) made the step almost zero, so static or
+// the tuning sound stayed audible in USB/CD mode after quick source changes.
 void AudioEngine::SetRamp(Ramp& r, float g, float seconds) {
-    r.step = seconds <= 0 ? 10.f : std::max(1e-6f, std::abs(g - r.target.load() + 1e-6f) / (seconds * kRate));
-    r.target = std::clamp(g, 0.f, 1.f);
+    g = std::clamp(g, 0.f, 1.f);
+    float dist = std::max(std::abs(g - r.target.load()), std::abs(g - r.now.load()));
+    r.step = seconds <= 0 ? 10.f : std::max(dist, 0.05f) / (seconds * kRate);
+    r.target = g;
 }
 void AudioEngine::SetStreamGain(float g, float s) { SetRamp(gStream_, g, s); }
 void AudioEngine::SetStaticGain(float g, float s) { SetRamp(gStatic_, g, s); }

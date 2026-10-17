@@ -71,5 +71,7 @@ int main() {
         OverlayInfo t; t.source = L"X"; t.media = true; t.mediaType = types[k]; t.headline = L"Titel 1 / 9"; t.title = L"Ohne Cover"; t.subtitle = L"Interpret"; t.posSec = 30; t.lenSec = 200;
         char n[32]; snprintf(n, 32, "t%d.raw", k); Save(RenderScreenCard(t, nullptr, 819, 410), n);
     }
+    { OverlayInfo e; e.source = L"Medien"; e.media = true; e.mediaType = "none"; e.paused = true; e.title = L"Kein Medientyp erkannt";
+      e.subtitle = L"Musik in realistic-radio\\usb ablegen"; e.detail = L"Ctrl+0 → USB / CD → Musikordner öffnen"; Save(RenderScreenCard(e, nullptr, 819, 410), "empty.raw"); }
     Save(RenderMenuCursor(1080), "cursor.raw");
 }

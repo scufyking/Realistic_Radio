@@ -14,7 +14,7 @@ Von **ScufyKing**. Das ganze Radio läuft im Spiel:
 
 Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels kopieren, ETS2 starten, das Radio läuft. Senderdaten und Sounds stecken in der DLL.
 
-> **Version 1.2.0** · [Änderungen](CHANGELOG.md#changelog-deutsch)
+> **Version 1.2.1** · [Änderungen](CHANGELOG.md#changelog-deutsch)
 >
 > **Stand:** Getestet in ETS2 1.61 (Windows x64) mit dem MAN TGX: Das Plugin wird geladen, liest die LKW-Position, wechselt Sender nach Region, spielt Ton ab und zeigt Sender und Lautstärke auf dem Navi-Bildschirm. Daten für American Truck Simulator sind enthalten, ATS ist aber ungetestet.
 
@@ -243,7 +243,7 @@ Unabhängig vom Popup-Overlay, das standardmäßig aus ist (`"overlay": { "mode"
 | `types` | `{}` | Typ je Musikordner, z. B. `{ "Rock Music": "cd", "Rap Music": "cassette" }` (`usb`, `cd`, `sd`, `cassette`, `bluetooth`, `aux`); am einfachsten im Einstellungsmenü |
 | `shuffle` | `false` | Zufallswiedergabe (neue Reihenfolge bei jedem Umschalten auf USB) |
 | `repeat` | `"all"` | `"all"` = nach dem letzten Titel von vorn, `"one"` = Titel wiederholen, `"off"` = nach dem letzten Titel anhalten |
-| `textTrack`, `textPaused`, `textEmpty` | `"Titel"`, `"Pause"`, `"Keine Musik im USB-Ordner"` | Texte auf dem Navi |
+| `textTrack`, `textPaused`, `textEmpty` | `"Titel"`, `"Pause"`, `"Kein Medientyp erkannt"` | Texte auf dem Navi |
 
 ### Anzeige auf dem LKW-Bildschirm (`"display": { … }`, optional)
 
@@ -334,7 +334,7 @@ Fast jedes Problem lässt sich an `realistic-radio\realistic-radio.log` erkennen
 | Overlay verdeckt einen Teil des HUD | `position`, `offsetY` oder `scale` ändern. |
 | Kein Senderlogo | Logos werden beim ersten Gebrauch von `radio.scufystudio.de` geladen; ohne Internet oder bei Serverausfall erscheint das Panel ohne Logo, und nach 10 Minuten wird es erneut versucht. |
 | Tasten tun nichts | Ist das Spiel das aktive Fenster? Eventuell belegt ein anderes Programm die Taste; eine andere wählen. |
-| „Keine Musik im USB-Ordner“ | Im Ordner `realistic-radio\usb\` (oder dem unter `media.folder` eingestellten) liegt keine Datei mit unterstützter Endung. Im Log steht `USB: 0 file(s) in …` mit dem genauen Pfad. |
+| „Kein Medientyp erkannt“ | Im Ordner `realistic-radio\usb\` (oder dem unter `media.folder` eingestellten) liegt keine Datei mit unterstützter Endung. Im Log steht `USB: 0 file(s) in …` mit dem genauen Pfad. |
 | Ein USB-Titel wird übersprungen | Die Datei ließ sich nicht abspielen (`Cannot play file:` im Log), z. B. ein kopiergeschütztes WMA. Spielt keine einzige Datei, hält der USB-Modus an. |
 | Falscher Titel oder Interpret | Die ID3-Tags der MP3 prüfen (z. B. mit Mp3tag). Bei anderen Formaten den Dateinamen als `Interpret - Titel` benennen. |
 | Ein erwarteter Sender fehlt | Er ist der Region, in der du bist, nicht zugeordnet. Du empfängst nur Regionen in Reichweite. Als eigenen Sender ergänzen. |

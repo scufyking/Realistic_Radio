@@ -61,9 +61,14 @@ bool RadioManager::EnterMedia(int disc, bool rescan) {
     const int n = (int)lib_.Discs().size();
     if (n == 0) {
         cfg_.source = "radio";
-        OverlayInfo i; i.source = Utf8ToWide(cfg_.media.label); i.media = true; i.paused = true;
+        // no music in the folder: like a car radio without a medium ("no media detected")
+        const bool en = cfg_.menuLanguage == "en";
+        OverlayInfo i; i.source = en ? L"Media" : L"Medien"; i.media = true; i.mediaType = "none"; i.paused = true;
         i.title = Utf8ToWide(cfg_.media.textEmpty); i.lcd = i.title;
-        i.subtitle = L"realistic-radio\\" + Utf8ToWide(cfg_.media.folder);
+        i.subtitle = (en ? L"Add music to realistic-radio\\" : L"Musik in realistic-radio\\") + Utf8ToWide(cfg_.media.folder) + (en ? L"" : L" ablegen");
+        std::wstring menuKey = Utf8ToWide(KeyBindingName(cfg_.keys[(int)Action::Menu]));
+        if (!en && menuKey.rfind(L"Ctrl+", 0) == 0) menuKey = L"Strg+" + menuKey.substr(5);
+        if (!menuKey.empty()) i.detail = menuKey + (en ? L" \u2192 USB / CD \u2192 Music folder" : L" \u2192 USB / CD \u2192 Musikordner \u00f6ffnen");
         overlay_.Show(i, "");
         return false;
     }
@@ -141,6 +146,8 @@ void RadioManager::StepTrack(int dir) {
 }
 
 void RadioManager::TickMedia(ULONGLONG now) {
+    // USB/CD never has static or the tuning sound (safety net for a radio fade that was still running)
+    if (audio_.NoiseActive()) { audio_.SetStaticGain(0, 0.2f); audio_.SetSwitchGain(0, 0.1f); }
     if (track_ < 0 || order_.empty()) return;
     auto t = audio_.Track();
     if (!mediaPaused_ && t.active && t.ended) {
