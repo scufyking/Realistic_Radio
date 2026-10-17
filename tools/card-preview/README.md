@@ -8,5 +8,5 @@ slightly from Segoe UI in the game. Not part of the plugin.
 cd tools/card-preview
 python3 extract.py && python3 make_inputs.py
 g++ -std=c++17 -O2 -w main.cpp shim.cpp $(pkg-config --cflags --libs freetype2) -o preview
-./preview && python3 sheet.py      # -> sheet.png
+./preview && python3 sheet.py && python3 menusheet.py   # -> sheet.png, menu.png
 ```

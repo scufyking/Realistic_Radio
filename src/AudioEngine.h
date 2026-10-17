@@ -24,6 +24,7 @@ public:
     float StreamGain() const;
     void SetMaster(float v) { float c = std::clamp(v, 0.f, 1.f); master_ = c * c; }   // perceptual: 50 % slider = -12 dB, 10 % = -40 dB
     void SetMuted(bool m) { muted_ = m; }
+    void SetBoost(float g) { boost_ = std::clamp(g, 1.f, 2.f); }   // speed-dependent volume: extra gain on top of the master
     bool Running() const { return device_ok_; }
     bool IsBuffering();
     int StreamFailures();
@@ -43,6 +44,7 @@ private:
     std::atomic<float> master_{0.f};
     float masterCur_ = 0.f;   // audio thread only: smoothed master (no sudden jumps)
     std::atomic<bool> muted_{false}, paused_{false};
+    std::atomic<float> boost_{1.f};
     std::mutex sessMtx_;
     std::shared_ptr<StreamSession> session_;
     std::vector<std::shared_ptr<StreamSession>> retired_;

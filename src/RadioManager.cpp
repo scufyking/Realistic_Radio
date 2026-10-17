@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <algorithm>
 #include <random>
+#include <shellapi.h>
 
 bool RadioManager::Init(const std::wstring& dir, const std::string& game) {
     dir_ = dir; cfgPath_ = dir + L"realistic-radio.json";
@@ -23,9 +24,11 @@ bool RadioManager::Init(const std::wstring& dir, const std::string& game) {
     overlay_.Init(cfg_.overlay, cfg_.screen, dir);
     display_.Start(cfg_.display);
     if (cfg_.media.enabled) {
-        lib_.Scan(MediaFolder());   // creates realistic-radio\usb\ on first start
-        if (cfg_.source == "usb") EnterMedia(false);
+        lib_.Scan(MediaFolder(), cfg_.media.folderPerDisc);   // creates realistic-radio\usb\ on first start
+        if (cfg_.source == "usb") EnterMedia(-1, false);
     }
+    overlay_.Update(CurrentInfo());
+    overlay_.SetScreenPinned(cfg_.screenPage == "radio");   // radio page stays on the screen from the last session
     return true;
 }
 
@@ -40,16 +43,23 @@ std::wstring RadioManager::MediaFolder() const {
     return f;
 }
 
-void RadioManager::BuildOrder() {
-    int n = (int)lib_.Tracks().size();
-    order_.resize(n);
-    for (int i = 0; i < n; ++i) order_[i] = i;
-    if (cfg_.media.shuffle && n > 1) { std::mt19937 rng((unsigned)GetTickCount64()); std::shuffle(order_.begin(), order_.end(), rng); }
+void RadioManager::BuildOrder() {   // play order of the current USB / CD
+    order_.clear();
+    if (disc_ < 0 || disc_ >= (int)lib_.Discs().size()) return;
+    const MediaDisc& d = lib_.Discs()[disc_];
+    for (int i = 0; i < d.count; ++i) order_.push_back(d.first + i);
+    if (cfg_.media.shuffle && order_.size() > 1) { std::mt19937 rng((unsigned)GetTickCount64()); std::shuffle(order_.begin(), order_.end(), rng); }
 }
 
-bool RadioManager::EnterMedia(bool rescan) {
-    if (rescan) lib_.Scan(MediaFolder());   // pick up files added while the game is running
-    if (lib_.Tracks().empty()) {
+std::string RadioManager::DiscKey() const {
+    return disc_ >= 0 && disc_ < (int)lib_.Discs().size() ? WideToUtf8(lib_.Discs()[disc_].name) : "";
+}
+
+// disc: index of the USB / CD, -1 = the one of the last played track (game start), -2 = the last one
+bool RadioManager::EnterMedia(int disc, bool rescan) {
+    if (rescan) lib_.Scan(MediaFolder(), cfg_.media.folderPerDisc);   // pick up files added while the game is running
+    const int n = (int)lib_.Discs().size();
+    if (n == 0) {
         cfg_.source = "radio";
         OverlayInfo i; i.source = Utf8ToWide(cfg_.media.label); i.media = true; i.paused = true;
         i.title = Utf8ToWide(cfg_.media.textEmpty); i.lcd = i.title;
@@ -57,15 +67,26 @@ bool RadioManager::EnterMedia(bool rescan) {
         overlay_.Show(i, "");
         return false;
     }
-    swapAt_ = 0; switchUntil_ = 0; pendingUrl_.clear();
-    audio_.StopStream(); audio_.SetStaticGain(0, 0.2f); audio_.SetSwitchGain(0, 0.1f);
+    if (disc == -1) disc = std::max(0, lib_.DiscOf(lib_.IndexOf(Utf8ToWide(cfg_.mediaTrack))));
+    else if (disc == -2) disc = n - 1;
+    disc = ((disc % n) + n) % n;
+    if (source_ == Source::Radio) {
+        swapAt_ = 0; switchUntil_ = 0; pendingUrl_.clear();
+        audio_.StopStream(); audio_.SetStaticGain(0, 0.2f); audio_.SetSwitchGain(0, 0.1f);
+    }
     source_ = Source::Media; cfg_.source = "usb";
+    disc_ = disc;
     BuildOrder();
-    int idx = lib_.IndexOf(Utf8ToWide(cfg_.mediaTrack));
+    // resume where this USB / CD was left; 1.1.0 only stored "mediaTrack", which is used if it belongs to this disc
+    std::string rel;
+    auto it = cfg_.mediaResume.find(DiscKey());
+    if (it != cfg_.mediaResume.end()) rel = it->second;
+    else if (lib_.DiscOf(lib_.IndexOf(Utf8ToWide(cfg_.mediaTrack))) == disc_) rel = cfg_.mediaTrack;
+    int idx = lib_.IndexOf(Utf8ToWide(rel));
     int pos = 0;
     if (idx >= 0) for (int k = 0; k < (int)order_.size(); ++k) if (order_[k] == idx) { pos = k; break; }
     mediaFailStreak_ = 0;
-    Log::Write("Source: %s (%d tracks)", cfg_.media.label.c_str(), (int)order_.size());
+    Log::Write("Source: %s %d/%d \"%s\" (%d tracks)", cfg_.media.label.c_str(), disc_ + 1, n, DiscKey().c_str(), (int)order_.size());
     PlayTrack(pos, true);
     return true;
 }
@@ -73,7 +94,7 @@ bool RadioManager::EnterMedia(bool rescan) {
 void RadioManager::EnterRadio() {
     source_ = Source::Radio; cfg_.source = "radio";
     audio_.StopStream(); audio_.SetPaused(false);
-    track_ = -1; mediaPaused_ = false; mediaLogo_.clear();
+    track_ = -1; disc_ = -1; mediaPaused_ = false; mediaLogo_.clear();
     Log::Write("Source: radio");
     playing_ = true;
     auto it = last_.available.find(currentCountry_);
@@ -81,9 +102,19 @@ void RadioManager::EnterRadio() {
     else { currentCountry_.clear(); currentIndex_ = -1; lastNearestCountry_.clear(); lastRefresh_ = 0; ShowCurrent(); }   // next refresh picks a station
 }
 
+// Source key, like on a car radio: Radio -> USB 1 -> USB 2 -> ... -> Radio
 void RadioManager::ToggleSource() {
     if (!cfg_.media.enabled) { Log::Write("USB mode is disabled (media.enabled = false)"); return; }
-    if (source_ == Source::Radio) EnterMedia(); else EnterRadio();
+    if (source_ == Source::Radio) EnterMedia(0, true);
+    else if (disc_ + 1 < (int)lib_.Discs().size()) EnterMedia(disc_ + 1, false);
+    else EnterRadio();
+}
+
+// nextDisc / previousDisc keys: change the USB / CD directly (from the radio: first / last one)
+void RadioManager::StepDisc(int dir) {
+    if (!cfg_.media.enabled) return;
+    if (source_ == Source::Radio) EnterMedia(dir > 0 ? 0 : -2, true);
+    else EnterMedia(disc_ + dir, false);
 }
 
 void RadioManager::PlayTrack(int pos, bool show) {
@@ -96,6 +127,7 @@ void RadioManager::PlayTrack(int pos, bool show) {
     mediaPaused_ = false;
     audio_.SetPaused(!powered_);
     cfg_.mediaTrack = WideToUtf8(t.rel);
+    cfg_.mediaResume[DiscKey()] = cfg_.mediaTrack;
     std::wstring cover = lib_.CoverFor(t, dir_ + L"logos\\");
     mediaLogo_ = cover.empty() ? "" : "file:" + WideToUtf8(cover);
     Log::Write("USB track %d/%d: %s", pos + 1, (int)order_.size(), WideToUtf8(t.rel).c_str());
@@ -126,6 +158,7 @@ void RadioManager::TickMedia(ULONGLONG now) {
             else if (cfg_.media.repeat == "off" && orderPos_ + 1 >= (int)order_.size()) {   // end of the list: stop on track 1
                 audio_.StopStream(); orderPos_ = 0; track_ = order_[0]; mediaPaused_ = true;
                 cfg_.mediaTrack = WideToUtf8(lib_.Tracks()[track_].rel);
+                cfg_.mediaResume[DiscKey()] = cfg_.mediaTrack;
                 std::wstring cover = lib_.CoverFor(lib_.Tracks()[track_], dir_ + L"logos\\");
                 mediaLogo_ = cover.empty() ? "" : "file:" + WideToUtf8(cover);
                 ShowCurrent();
@@ -136,13 +169,37 @@ void RadioManager::TickMedia(ULONGLONG now) {
     if (now - lastMediaInfoAt_ >= 500) { lastMediaInfoAt_ = now; overlay_.Update(CurrentInfo()); }   // running time on the card
 }
 
+// Media type of a music folder: media.types[folder] or, if not set, media.label (USB / CD / ... or any own text)
+std::string RadioManager::DiscType(int disc) const {
+    if (disc >= 0 && disc < (int)lib_.Discs().size()) {
+        auto it = cfg_.media.types.find(WideToUtf8(lib_.Discs()[disc].name));
+        if (it != cfg_.media.types.end() && !MediaTypeId(it->second).empty()) return MediaTypeId(it->second);
+    }
+    return MediaTypeId(cfg_.media.label);   // "" = own label text
+}
+// Text of the source tag, numbered when several folders have the same type ("USB 2", "CD 1")
+std::wstring RadioManager::DiscChip(int disc, std::string* typeOut) const {
+    std::string t = DiscType(disc);
+    if (typeOut) *typeOut = t.empty() ? "usb" : t;
+    std::wstring chip = t.empty() ? Utf8ToWide(cfg_.media.label) : MediaTypeLabel(t, cfg_.menuLanguage == "en");
+    int same = 0, nr = 0;
+    for (int k = 0; k < (int)lib_.Discs().size(); ++k) if (DiscType(k) == t) { ++same; if (k == disc) nr = same; }
+    if (same > 1 && nr > 0) chip += L" " + std::to_wstring(nr);
+    return chip;
+}
+
 OverlayInfo RadioManager::MediaInfo(const std::wstring& sub) {
     OverlayInfo i;
-    i.media = true; i.source = Utf8ToWide(cfg_.media.label); i.paused = mediaPaused_;
+    i.media = true; i.paused = mediaPaused_;
+    const int discs = (int)lib_.Discs().size();
+    i.source = DiscChip(disc_, &i.mediaType);   // "USB 2", "CD", "KASSETTE" ...
+    std::wstring discName = disc_ >= 0 && disc_ < discs ? lib_.Discs()[disc_].name : L"";
     if (track_ < 0 || track_ >= (int)lib_.Tracks().size()) { i.title = Utf8ToWide(cfg_.media.textEmpty); i.lcd = i.title; return i; }
     const MediaTrack& t = lib_.Tracks()[track_];
     i.title = t.title; i.subtitle = t.artist; i.detail = t.album;
     i.headline = Utf8ToWide(cfg_.media.textTrack) + L" " + std::to_wstring(orderPos_ + 1) + L" / " + std::to_wstring(order_.size());
+    if (!discName.empty()) i.headline = discName + L"  \u2022  " + i.headline;   // folder name of the USB / CD
+    if (!discName.empty() && i.detail == discName) i.detail.clear();              // album fallback = folder name: shown once
     if (mediaPaused_) i.headline += L"  \u2022  " + Utf8ToWide(cfg_.media.textPaused);
     auto ts = audio_.Track();
     if (ts.active) { i.posSec = (int)ts.pos; i.lenSec = ts.len > 0 ? (int)(ts.len + 0.5) : -1; }
@@ -152,7 +209,50 @@ OverlayInfo RadioManager::MediaInfo(const std::wstring& sub) {
     if (!sub.empty()) { i.subtitle = sub; i.lcd = sub; }
     return i;
 }
-void RadioManager::Shutdown() { display_.Stop(); overlay_.Shutdown(); audio_.Shutdown(); cfg_.SaveVolume(cfgPath_); }
+bool RadioManager::MenuTick(InputManager& input) {
+    SettingsMenu::Result res = menu_.Tick(input);
+    if (menu_.TakeChanged()) ApplySettings(menu_.Edited());   // changes apply immediately
+    switch (menu_.TakeCommand()) {
+    case SettingsMenu::OpenMusicFolder: {
+        std::wstring f = MediaFolder();
+        CreateDirectoryW(f.c_str(), nullptr);
+        HINSTANCE r = ShellExecuteW(nullptr, L"open", f.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        Log::Write("Open music folder %s (%s)", WideToUtf8(f).c_str(), (INT_PTR)r > 32 ? "ok" : "failed");
+        menu_.SetStatus(Utf8ToWide(cfg_.menuLanguage == "en" ? "Folder opened in Explorer - new music appears when you switch to USB"
+                                                             : "Ordner im Explorer ge\u00f6ffnet \u2013 neue Musik erscheint beim Umschalten auf USB"));
+        break; }
+    case SettingsMenu::OpenLogoFolder:
+        ShellExecuteW(nullptr, L"open", overlay_.LogoDir().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        break;
+    case SettingsMenu::ClearLogos: {
+        overlay_.ClearLogoCache();
+        uint64_t b = 0; int n = 0; overlay_.LogoCacheUsage(b, n);
+        menu_.SetCacheInfo(b, n);
+        menu_.SetStatus(Utf8ToWide(cfg_.menuLanguage == "en" ? "Logo storage cleared - logos are downloaded again when needed"
+                                                             : "Logo-Speicher geleert \u2013 Logos werden bei Bedarf neu geladen"));
+        break; }
+    default: break;
+    }
+    if (menu_.TakeSaveRequest()) { cfg_.SaveMenuSettings(cfgPath_); menu_.MarkSaved(); }
+    if (res == SettingsMenu::Result::Open) {
+        if (auto img = menu_.TakeImage()) overlay_.ShowMenu(img);
+        return false;
+    }
+    overlay_.HideMenu();
+    return true;
+}
+
+void RadioManager::ApplySettings(const Config& e) {
+    CopyMenuSettings(cfg_, e);
+    audio_.SetMaster((float)cfg_.volume); audio_.SetMuted(cfg_.muted);
+    if (!cfg_.whitenoise) audio_.SetStaticGain(0, 0.3f);
+    overlay_.Reconfigure(cfg_.overlay, cfg_.screen);
+    overlay_.SetScreenPinned(powered_ && cfg_.screenPage == "radio");
+    if (source_ == Source::Media && !cfg_.media.enabled) EnterRadio();
+    if (source_ == Source::Media) overlay_.Update(CurrentInfo());   // media type of the folder may have changed
+}
+
+void RadioManager::Shutdown() { menu_.Close(); overlay_.HideMenu(); display_.Stop(); overlay_.Shutdown(); audio_.Shutdown(); cfg_.SaveVolume(cfgPath_); }
 
 
 std::string RadioManager::ResolveUrl(const std::string& url) const {
@@ -211,6 +311,8 @@ void RadioManager::SetPower(bool on) {
     if (on == powered_) return;
     powered_ = on;
     Log::Write(on ? "Power on (%s) - radio on" : "Power off (%s) - radio off", cfg_.powerSource.c_str());
+    if (on) overlay_.Update(CurrentInfo());                        // page content = current station/track, not the power-off message
+    overlay_.SetScreenPinned(on && cfg_.screenPage == "radio");   // radio off: navigation only
     if (source_ == Source::Media) { audio_.SetPaused(!on || mediaPaused_); return; }   // USB keeps its position
     if (!on) {
         swapAt_ = 0; switchUntil_ = 0;
@@ -222,8 +324,21 @@ void RadioManager::SetPower(bool on) {
     }
 }
 
-void RadioManager::Tick(double x, double z, bool valid, bool electric, bool engine) {
+// Speed-dependent volume (like GALA in real car radios): from 30 km/h the volume rises smoothly and reaches the
+// configured boost at 90 km/h. autoVolume 0..1 = up to +0..+6 dB (gain x1..x2). Changes are smoothed over ~3 s.
+void RadioManager::UpdateSpeedVolume(float speed, ULONGLONG now) {
+    float dt = lastSpeedAt_ ? std::min(0.5f, (now - lastSpeedAt_) / 1000.f) : 0.f;
+    lastSpeedAt_ = now;
+    float kmh = std::abs(speed) * 3.6f;
+    float target = cfg_.autoVolume > 0 ? std::clamp((kmh - 30.f) / 60.f, 0.f, 1.f) : 0.f;
+    float rate = dt / 3.f;
+    speedBoost_ += std::clamp(target - speedBoost_, -rate, rate);
+    audio_.SetBoost(1.f + (float)cfg_.autoVolume * speedBoost_);
+}
+
+void RadioManager::Tick(double x, double z, bool valid, bool electric, bool engine, float speed) {
     ULONGLONG now = GetTickCount64();
+    UpdateSpeedVolume(speed, now);
     SetPower(cfg_.powerSource == "always" || !valid ? true : cfg_.powerSource == "engine" ? engine : electric);
     // station-switch timeline (port of the jQuery animate() chain in setRadioStation)
     if (swapAt_ && now >= swapAt_) {
@@ -369,11 +484,34 @@ void RadioManager::NextStation(int amount) {
 }
 
 void RadioManager::OnAction(Action a) {
+    if (a == Action::Menu) {
+        overlay_.PrepareMenu();
+        menu_.Open(cfg_);
+        if (cfg_.media.enabled) {   // music folders for the media type rows (read again: files may have been added)
+            if (source_ != Source::Media) lib_.Scan(MediaFolder(), cfg_.media.folderPerDisc);
+            std::vector<SettingsMenu::Folder> f;
+            for (auto& d : lib_.Discs()) f.push_back({d.name, d.count});
+            menu_.SetFolders(f);
+        }
+        uint64_t b = 0; int n = 0; overlay_.LogoCacheUsage(b, n);
+        menu_.SetCacheInfo(b, n);
+        overlay_.ShowMenu(menu_.TakeImage());
+        return;
+    }
+    if (a == Action::ScreenPage) {   // in-cab screen: navigation <-> radio page
+        bool page = cfg_.screenPage != "radio";
+        cfg_.screenPage = page ? "radio" : "navi";
+        Log::Write(page ? "Screen: radio page" : "Screen: navigation");
+        overlay_.Update(CurrentInfo());
+        overlay_.SetScreenPinned(page && powered_);
+        return;
+    }
     if (!powered_ && a != Action::VolumeUp && a != Action::VolumeDown && a != Action::Mute) {
         overlay_.Show(OverlayInfo{L"", L"Realistic Radio", Utf8ToWide(cfg_.overlay.textPowerOff), -1, false, Utf8ToWide(cfg_.overlay.textPowerOff)}, "");
         return;
     }
     if (a == Action::Source) { ToggleSource(); return; }
+    if (a == Action::NextDisc || a == Action::PreviousDisc) { StepDisc(a == Action::NextDisc ? 1 : -1); return; }
     if (source_ == Source::Media) {
         switch (a) {
         case Action::Next: StepTrack(1); return;

@@ -12,7 +12,7 @@
 
 using nlohmann::json;
 
-static const char* kActionNames[] = {"next", "previous", "stop", "volumeUp", "volumeDown", "makeFavourite", "goToFavourite", "mute", "showOverlay", "source"};
+static const char* kActionNames[] = {"next", "previous", "stop", "volumeUp", "volumeDown", "makeFavourite", "goToFavourite", "mute", "showOverlay", "source", "nextDisc", "previousDisc", "screenPage", "menu"};
 const char* ActionName(Action a) { return kActionNames[(int)a]; }
 
 Config::Config() {
@@ -25,6 +25,8 @@ Config::Config() {
     keys[(int)Action::VolumeDown] = ParseKeyBinding("Down");
     keys[(int)Action::MakeFavourite] = ParseKeyBinding("Pause");
     keys[(int)Action::Source] = ParseKeyBinding("Home");
+    keys[(int)Action::ScreenPage] = ParseKeyBinding("Insert");
+    keys[(int)Action::Menu] = ParseKeyBinding("Ctrl+0");
 }
 
 int ParseKeyName(const std::string& in) {
@@ -70,6 +72,7 @@ static const char* kDefaultConfig = R"({
   "whitenoise": true,
   "transitionWhitenoise": true,
   "volume": 0.6,
+  "autoVolume": 0,
   "muted": false,
   "autoPlay": true,
   "powerSource": "ignition",
@@ -86,18 +89,27 @@ static const char* kDefaultConfig = R"({
     "goToFavourite": "",
     "mute": "",
     "showOverlay": "",
-    "source": "Home"
+    "source": "Home",
+    "nextDisc": "",
+    "previousDisc": "",
+    "screenPage": "Insert",
+    "menu": "Ctrl+0"
   },
   "controllerIndex": 0,
   "buttons": {
     "previous": -1, "next": -1, "stop": -1, "volumeUp": -1,
-    "volumeDown": -1, "makeFavourite": -1, "goToFavourite": -1, "mute": -1, "showOverlay": -1, "source": -1
+    "volumeDown": -1, "makeFavourite": -1, "goToFavourite": -1, "mute": -1, "showOverlay": -1, "source": -1,
+    "nextDisc": -1, "previousDisc": -1, "screenPage": -1, "menu": -1
   },
+  "menuLanguage": "de",
+  "screenPage": "navi",
   "source": "radio",
   "media": {
     "enabled": true,
     "folder": "usb",
+    "folderPerDisc": true,
     "label": "USB",
+    "types": {},
     "shuffle": false,
     "repeat": "all",
     "textTrack": "Titel",
@@ -146,6 +158,7 @@ static const char* kDefaultConfig = R"({
     "durationSeconds": 6,
     "alwaysVisible": false,
     "showLogos": true,
+    "logoCacheMB": 30,
     "urlPrefix": "https://radio.scufystudio.de/logo/",
     "textNowPlaying": "Jetzt l\u00e4uft:",
     "textVolume": "Lautst\u00e4rke",
@@ -175,6 +188,7 @@ bool Config::Load(const std::wstring& path) {
         whitenoise = j.value("whitenoise", whitenoise);
         transitionWhitenoise = j.value("transitionWhitenoise", transitionWhitenoise);
         volume = std::clamp(j.value("volume", volume), 0.0, 1.0);
+        autoVolume = std::clamp(j.value("autoVolume", autoVolume), 0.0, 1.0);
         muted = j.value("muted", muted);
         autoPlay = j.value("autoPlay", autoPlay);
         powerSource = j.value("powerSource", powerSource);
@@ -184,10 +198,17 @@ bool Config::Load(const std::wstring& path) {
         controllerIndex = j.value("controllerIndex", controllerIndex);
         source = j.value("source", source);
         mediaTrack = j.value("mediaTrack", mediaTrack);
+        screenPage = j.value("screenPage", screenPage);
+        menuLanguage = j.value("menuLanguage", menuLanguage);
+        if (j.contains("mediaResume") && j["mediaResume"].is_object())
+            for (auto& [k, v] : j["mediaResume"].items()) if (v.is_string()) mediaResume[k] = v.get<std::string>();
         if (j.contains("media")) {
             auto& m = j["media"]; MediaConfig& c = media;
             c.enabled = m.value("enabled", c.enabled); c.folder = m.value("folder", c.folder); c.label = m.value("label", c.label);
+            c.folderPerDisc = m.value("folderPerDisc", c.folderPerDisc);
             c.shuffle = m.value("shuffle", c.shuffle); c.repeat = m.value("repeat", c.repeat);
+            if (m.contains("types") && m["types"].is_object())
+                for (auto& [k, v] : m["types"].items()) if (v.is_string()) c.types[k] = v.get<std::string>();
             c.textTrack = m.value("textTrack", c.textTrack); c.textPaused = m.value("textPaused", c.textPaused); c.textEmpty = m.value("textEmpty", c.textEmpty);
         }
         if (j.contains("screen")) {
@@ -224,6 +245,7 @@ bool Config::Load(const std::wstring& path) {
             c.offsetX = o.value("offsetX", c.offsetX); c.offsetY = o.value("offsetY", c.offsetY);
             c.scale = std::clamp(o.value("scale", c.scale), 0.3, 4.0); c.durationSeconds = o.value("durationSeconds", c.durationSeconds);
             c.alwaysVisible = o.value("alwaysVisible", c.alwaysVisible); c.showLogos = o.value("showLogos", c.showLogos);
+            c.logoCacheMB = std::clamp(o.value("logoCacheMB", c.logoCacheMB), 5, 2000);
             c.urlPrefix = o.value("urlPrefix", c.urlPrefix);
             if (c.urlPrefix.find("localradio.koenvh.nl") != std::string::npos) {   // old default from earlier versions
                 c.urlPrefix = OverlayConfig().urlPrefix;
@@ -257,9 +279,14 @@ bool Config::Load(const std::wstring& path) {
             }
         }
         // 1.1.0: add the USB/CD settings to files written by older versions, so they can be found and changed
-        bool addSource = j.contains("keys") && j["keys"].is_object() && !j["keys"].contains("source");
+        // 1.2.0: keys nextDisc / previousDisc and media.folderPerDisc
+        std::vector<std::string> missingKeys;
+        if (j.contains("keys") && j["keys"].is_object())
+            for (const char* n : {"source", "nextDisc", "previousDisc", "screenPage", "menu"}) if (!j["keys"].contains(n)) missingKeys.push_back(n);
+        bool addSource = !missingKeys.empty();
         bool addMedia = !j.contains("media");
-        if (migratedUrlPrefix || migratedKeys || addSource || addMedia) {   // write the changes back so the file matches what is used
+        bool addFolderPerDisc = !addMedia && j["media"].is_object() && !j["media"].contains("folderPerDisc");
+        if (migratedUrlPrefix || migratedKeys || addSource || addMedia || addFolderPerDisc) {   // write the changes back so the file matches what is used
             f.close();
             try {
                 std::ifstream in{std::filesystem::path(path)};
@@ -269,13 +296,14 @@ bool Config::Load(const std::wstring& path) {
                     k["keys"]["previous"] = "Left"; k["keys"]["next"] = "Right"; k["keys"]["volumeUp"] = "Up"; k["keys"]["volumeDown"] = "Down";
                     Log::Write("Keys updated to the new defaults: Left/Right = station, Up/Down = volume");
                 }
-                if (addSource) {
-                    k["keys"]["source"] = "Home";
-                    if (k.contains("buttons") && k["buttons"].is_object()) k["buttons"]["source"] = -1;
-                    Log::Write("Added key 'source' (Home): switches between radio and USB");
+                for (auto& n : missingKeys) {
+                    k["keys"][n] = n == "source" ? "Home" : n == "screenPage" ? "Insert" : n == "menu" ? "Ctrl+0" : "";
+                    if (k.contains("buttons") && k["buttons"].is_object() && !k["buttons"].contains(n)) k["buttons"][n] = -1;
+                    Log::Write("Added key '%s' to the settings", n.c_str());
                 }
+                if (addFolderPerDisc) { k["media"]["folderPerDisc"] = true; Log::Write("Added media.folderPerDisc (every sub folder of usb is its own USB / CD)"); }
                 if (addMedia) {
-                    k["media"] = json::parse(R"({"enabled": true, "folder": "usb", "label": "USB", "shuffle": false, "repeat": "all",
+                    k["media"] = json::parse(R"({"enabled": true, "folder": "usb", "folderPerDisc": true, "label": "USB", "shuffle": false, "repeat": "all",
                         "textTrack": "Titel", "textPaused": "Pause", "textEmpty": "Keine Musik im USB-Ordner"})");
                     Log::Write("Added settings block 'media' (USB/CD mode)");
                 }
@@ -289,12 +317,95 @@ bool Config::Load(const std::wstring& path) {
     }
 }
 
+std::string KeyBindingName(const KeyBinding& b) {
+    if (!b.vk) return "";
+    std::string n;
+    int vk = b.vk;
+    if ((vk >= 'A' && vk <= 'Z') || (vk >= '0' && vk <= '9')) n = std::string(1, (char)vk);
+    else if (vk >= VK_F1 && vk <= VK_F24) n = "F" + std::to_string(vk - VK_F1 + 1);
+    else if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9) n = "NumPad" + std::to_string(vk - VK_NUMPAD0);
+    else {
+        static const std::map<int, const char*> m = {
+            {VK_PRIOR, "PageUp"}, {VK_NEXT, "Next"}, {VK_END, "End"}, {VK_HOME, "Home"}, {VK_INSERT, "Insert"}, {VK_DELETE, "Delete"},
+            {VK_LEFT, "Left"}, {VK_RIGHT, "Right"}, {VK_UP, "Up"}, {VK_DOWN, "Down"}, {VK_PAUSE, "Pause"}, {VK_SCROLL, "Scroll"},
+            {VK_SPACE, "Space"}, {VK_TAB, "Tab"}, {VK_RETURN, "Enter"}, {VK_BACK, "Back"}, {VK_OEM_PLUS, "Oemplus"},
+            {VK_OEM_MINUS, "OemMinus"}, {VK_OEM_COMMA, "Oemcomma"}, {VK_OEM_PERIOD, "OemPeriod"}, {VK_ADD, "Add"},
+            {VK_SUBTRACT, "Subtract"}, {VK_MULTIPLY, "Multiply"}, {VK_DIVIDE, "Divide"}, {VK_DECIMAL, "Decimal"},
+            {VK_MEDIA_NEXT_TRACK, "MediaNextTrack"}, {VK_MEDIA_PREV_TRACK, "MediaPreviousTrack"}, {VK_MEDIA_PLAY_PAUSE, "MediaPlayPause"},
+            {VK_MEDIA_STOP, "MediaStop"}, {VK_VOLUME_UP, "VolumeUp"}, {VK_VOLUME_DOWN, "VolumeDown"}, {VK_VOLUME_MUTE, "VolumeMute"}};
+        auto it = m.find(vk);
+        if (it != m.end()) n = it->second;
+        else { char h[8]; snprintf(h, sizeof(h), "0x%02X", vk); n = h; }   // any other key (e.g. umlauts): virtual-key code
+    }
+    return std::string(b.ctrl ? "Ctrl+" : "") + (b.shift ? "Shift+" : "") + (b.alt ? "Alt+" : "") + n;
+}
+
+void Config::SaveBindings(const std::wstring& path) const {
+    try {
+        std::ifstream f{std::filesystem::path(path)};
+        json j = f ? json::parse(f, nullptr, true, true) : json::object();
+        f.close();
+        for (int i = 0; i < (int)Action::Count; ++i) {
+            j["keys"][kActionNames[i]] = KeyBindingName(keys[i]);
+            j["buttons"][kActionNames[i]] = buttons[i];
+        }
+        std::ofstream o{std::filesystem::path(path)}; o << j.dump(2);
+    } catch (...) { Log::Write("Could not save key bindings"); }
+}
+
+static json MenuJsonObj(const Config& c) {
+    json j;
+    j["radius"] = c.radius; j["threshold"] = c.threshold; j["whitenoise"] = c.whitenoise; j["transitionWhitenoise"] = c.transitionWhitenoise;
+    j["volume"] = c.volume; j["muted"] = c.muted; j["autoVolume"] = c.autoVolume; j["autoPlay"] = c.autoPlay; j["powerSource"] = c.powerSource;
+    j["menuLanguage"] = c.menuLanguage; j["screenPage"] = c.screenPage;
+    j["screen"]["enabled"] = c.screen.enabled; j["screen"]["durationSeconds"] = c.screen.durationSeconds;
+    auto& o = j["overlay"];
+    o["mode"] = c.overlay.mode; o["style"] = c.overlay.style; o["position"] = c.overlay.position; o["scale"] = c.overlay.scale;
+    o["durationSeconds"] = c.overlay.durationSeconds; o["showLogos"] = c.overlay.showLogos; o["logoCacheMB"] = c.overlay.logoCacheMB;
+    o["radio"]["position"] = c.overlay.radio.position; o["radio"]["scale"] = c.overlay.radio.scale;
+    auto& m = j["media"];
+    m["enabled"] = c.media.enabled; m["folderPerDisc"] = c.media.folderPerDisc; m["label"] = c.media.label;
+    m["shuffle"] = c.media.shuffle; m["repeat"] = c.media.repeat;
+    m["types"] = json::object();
+    for (auto& [k, v] : c.media.types) m["types"][k] = v;
+    for (int i = 0; i < (int)Action::Count; ++i) { j["keys"][kActionNames[i]] = KeyBindingName(c.keys[i]); j["buttons"][kActionNames[i]] = c.buttons[i]; }
+    return j;
+}
+std::string Config::MenuJson() const { return MenuJsonObj(*this).dump(); }
+
+void Config::SaveMenuSettings(const std::wstring& path) const {
+    try {
+        std::ifstream f{std::filesystem::path(path)};
+        json j = f ? json::parse(f, nullptr, true, true) : json::object();
+        f.close();
+        j.merge_patch(MenuJsonObj(*this));
+        std::ofstream o{std::filesystem::path(path)}; o << j.dump(2);
+        Log::Write("Settings saved");
+    } catch (...) { Log::Write("Could not save the settings"); }
+}
+
+void CopyMenuSettings(Config& d, const Config& s) {
+    d.radius = s.radius; d.threshold = s.threshold; d.whitenoise = s.whitenoise; d.transitionWhitenoise = s.transitionWhitenoise;
+    d.volume = s.volume; d.muted = s.muted; d.autoVolume = s.autoVolume; d.autoPlay = s.autoPlay; d.powerSource = s.powerSource;
+    d.menuLanguage = s.menuLanguage; d.screenPage = s.screenPage;
+    d.screen.enabled = s.screen.enabled; d.screen.durationSeconds = s.screen.durationSeconds;
+    d.overlay.mode = s.overlay.mode; d.overlay.style = s.overlay.style; d.overlay.position = s.overlay.position; d.overlay.scale = s.overlay.scale;
+    d.overlay.durationSeconds = s.overlay.durationSeconds; d.overlay.showLogos = s.overlay.showLogos; d.overlay.logoCacheMB = s.overlay.logoCacheMB;
+    d.overlay.radio.position = s.overlay.radio.position; d.overlay.radio.scale = s.overlay.radio.scale;
+    d.media.enabled = s.media.enabled; d.media.folderPerDisc = s.media.folderPerDisc; d.media.label = s.media.label;
+    d.media.shuffle = s.media.shuffle; d.media.repeat = s.media.repeat; d.media.types = s.media.types;
+    for (int i = 0; i < (int)Action::Count; ++i) { d.keys[i] = s.keys[i]; d.buttons[i] = s.buttons[i]; }
+}
+
 void Config::SaveVolume(const std::wstring& path) const {
     try {
         std::ifstream f{std::filesystem::path(path)};
         json j = f ? json::parse(f, nullptr, true, true) : json::object();
         j["volume"] = volume; j["muted"] = muted;
-        j["source"] = source; j["mediaTrack"] = mediaTrack;
+        j["source"] = source; j["mediaTrack"] = mediaTrack; j["screenPage"] = screenPage;
+        json r = json::object();
+        for (auto& [k, v] : mediaResume) r[k] = v;
+        j["mediaResume"] = r;
         std::ofstream o{std::filesystem::path(path)}; o << j.dump(2);
     } catch (...) {}
 }

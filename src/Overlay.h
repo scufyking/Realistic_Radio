@@ -17,11 +17,27 @@ public:
     void Show(const OverlayInfo& info, const std::string& logoPath);   // shows for durationSeconds
     void Update(const OverlayInfo& info);                               // changes content without extending display time
     void Tick();                                                        // ~20x per second
+    // Radio page: keep the card on the in-cab screen permanently (instead of the navigation) until switched off
+    void SetScreenPinned(bool pinned);
+    // Key menu: shown in the middle of the upper half of the game picture while open
+    void PrepareMenu();                                   // makes sure the D3D11 hook is installed
+    void ShowMenu(std::shared_ptr<OverlayImage> img);
+    void Reconfigure(const OverlayConfig& cfg, const ScreenConfig& screen);
+    void LogoCacheUsage(uint64_t& bytes, int& files) const;
+    void ClearLogoCache();
+    const std::wstring& LogoDir() const { return logoDir_; }   // settings menu: style, position, size, times
+    void HideMenu();
+    bool ScreenPinned() const { return pinned_; }
     bool Visible() const { return visibleUntil_ > GetTickCount64() || cfg_.alwaysVisible; }
     const OverlayConfig& Cfg() const { return cfg_; }
     std::shared_ptr<const OverlayImage> CurrentLogo() const { return logo_; }
 private:
     void Rerender();
+    void ApplyStyle();
+    void PruneLogoCache(bool force);
+    void RememberLogo(const std::string& key, const std::shared_ptr<OverlayImage>& img);
+    static void TouchFile(const std::wstring& file);
+    ULONGLONG lastPruneAt_ = 0;
     void RequestLogo(const std::string& logoPath);
     void UseWindow(bool on);
     void UpdateWindow(float alpha);
@@ -45,6 +61,12 @@ private:
     ScreenConfig scfg_;
     bool screenOn_ = false, collecting_ = false;
     OverlayInfo scrInfo_;
+    OverlayInfo pageInfo_;              // latest station/track info: content of the radio page
+    bool pinned_ = false;
+    bool menu_ = false;
+    std::shared_ptr<OverlayImage> menuImg_;
+    ULONGLONG pinShownAt_ = 0;
+    bool ScreenUsable() const { return screenOn_ && !scfg_.probe && !scfg_.grid && scfg_.width > 0 && scfg_.height > 0; }
     ULONGLONG scrShownAt_ = 0, scrUntil_ = 0, nextStatAt_ = 0, nextProbeAt_ = 0;
     struct Cand { int w, h, fmt; long long binds; };
     std::vector<Cand> cands_;

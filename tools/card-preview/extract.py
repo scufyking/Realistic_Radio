@@ -7,4 +7,6 @@ structs = hdr[hdr.index('struct OverlayImage {'):hdr.index('// Draws the panel w
 a = src[src.index('namespace {'):src.index('std::shared_ptr<OverlayImage> RenderOverlay(')]
 b = src[src.index('namespace {\nvoid FillRect'):src.index('std::shared_ptr<OverlayImage> RenderDisplay(')]
 c = src[src.index('// In-cab screen card (1.1.0 design)'):src.index('std::shared_ptr<OverlayImage> RenderScreenProbe')]
-open('card_preview.cpp', 'w', encoding='utf-8').write('#include "shim.h"\n' + structs + '\n' + a + '\n' + b + '\n' + c)
+menu_struct = hdr[hdr.index('enum class MenuItemKind'):hdr.index('std::shared_ptr<OverlayImage> RenderMenu(')]
+m = src[src.index('// Settings menu (Ctrl+0). Layout'):]
+open('card_preview.cpp', 'w', encoding='utf-8').write('#include "shim.h"\n' + structs + '\n' + menu_struct + '\n' + a + '\n' + b + '\n' + c + '\n' + m)

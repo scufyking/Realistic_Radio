@@ -10,14 +10,19 @@
 #include "AudioEngine.h"
 #include "Overlay.h"
 #include "MediaLibrary.h"
+#include "SettingsMenu.h"
 
 // Replaces main.js (refresh, setRadioStation, setWhitenoise, nextStation, favourites) + the server's command handling.
 class RadioManager {
 public:
     bool Init(const std::wstring& dataDir, const std::string& game);
     void Shutdown();
-    void Tick(double x, double z, bool positionValid, bool electric, bool engine);   // called ~4x per second from the radio thread
+    void Tick(double x, double z, bool positionValid, bool electric, bool engine, float speed = 0.f);   // speed in m/s   // called ~4x per second from the radio thread
     void OnAction(Action a);
+    // key menu (Ctrl+0)
+    bool MenuOpen() const { return menu_.IsOpen(); }
+    bool MenuTick(InputManager& input);   // true = menu closed and new bindings applied (re-init the input)
+    const Config& Settings() const { return cfg_; }
 private:
     void Refresh(double x, double z);
     void SetRadioStation(const std::string& country, size_t index, double whitenoise);
@@ -54,20 +59,29 @@ private:
     // USB / CD mode
     enum class Source { Radio, Media };
     Source source_ = Source::Radio;
+    SettingsMenu menu_;
+    float speedBoost_ = 0.f;     // speed-dependent volume, smoothed (0..1 of the configured boost)
+    ULONGLONG lastSpeedAt_ = 0;
+    void UpdateSpeedVolume(float speed, ULONGLONG now);
+    void ApplySettings(const Config& e);
     MediaLibrary lib_;
     std::vector<int> order_;    // play order (shuffled or folder order), indices into lib_.Tracks()
-    int orderPos_ = -1, track_ = -1;
+    int orderPos_ = -1, track_ = -1, disc_ = -1;
     bool mediaPaused_ = false;
     int mediaFailStreak_ = 0;
     ULONGLONG lastMediaInfoAt_ = 0;
     std::string mediaLogo_;
     std::wstring MediaFolder() const;
     void ToggleSource();
-    bool EnterMedia(bool rescan = true);
+    bool EnterMedia(int disc, bool rescan);
+    void StepDisc(int dir);
+    std::string DiscKey() const;
     void EnterRadio();
     void BuildOrder();
     void PlayTrack(int orderPos, bool show);
     void StepTrack(int dir);
     void TickMedia(ULONGLONG now);
     OverlayInfo MediaInfo(const std::wstring& sub);
+    std::string DiscType(int disc) const;
+    std::wstring DiscChip(int disc, std::string* typeOut = nullptr) const;
 };

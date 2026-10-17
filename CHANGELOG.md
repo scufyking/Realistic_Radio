@@ -2,6 +2,55 @@
 
 **English** · [Deutsch](#changelog-deutsch)
 
+## 1.2.0 – Several USB sticks / CDs, radio page and settings menu
+
+### New
+- **Settings menu in the game** (**Ctrl + 0**), with mouse and keyboard. Pages on the left, settings on the right:
+  - **Radio:** volume, mute, radio on with ignition / engine / always, start automatically, menu language.
+  - **Reception:** broadcast range, switch threshold, auto volume, static, tuning sound.
+  - **Navigation screen:** on/off, display time, keep the radio page on, and the key that switches between navigation and radio page.
+  - **Pop-up overlay:** mode, style, position, size, display time, logos.
+  - **USB / CD:** on/off, every folder its own USB, default type, shuffle, repeat, a button that **opens the music folder** in Explorer, and a **type for every music folder** (see below).
+  - **Storage:** maximum size of the logo storage, load station logos on/off, used space with a **Clear** button, open the logo folder.
+  - **Keys:** click a key or controller field (or Enter) and press the new key, key combination or controller button. Right click or Delete removes a binding. If a key is already used by another function, it is removed there and the menu says so.
+  - Changes take effect immediately. **Save** writes them to `realistic-radio.json`, **Revert** goes back to the saved state, **Defaults** restores the default values of the current page. **Esc** or **✕** saves and closes. Pop-up mode and switching the navigation display on/off take effect after a restart (marked in the menu).
+  - With the mouse: click, drag sliders, mouse wheel over sliders and choices. With the keyboard: ↑ / ↓ select, ← / → change, Enter, Tab = next page.
+  - While the menu is open, keyboard and mouse only control the menu, not the game (the mouse no longer moves the camera; the game's raw input and DirectInput mouse reads are filtered while the menu is open).
+- **Media type per music folder.** Every folder in `usb\` can be a **USB stick, CD, SD card, cassette, Bluetooth or AUX** – set in the settings menu on the USB / CD page, saved as `"media": { "types": { "Rock Music": "cd" } }`. The type is shown on the source tag ("CD 2", "KASSETTE"), and tracks without a cover show a matching picture (CD, USB stick, SD card, cassette, Bluetooth symbol, jack plug). Folders without their own type use the default type (`media.label`).
+- **Logo storage limit.** Downloaded station logos and USB covers in `realistic-radio\logos\` are kept below **30 MB** (setting `"overlay": { "logoCacheMB": 30 }`, 5–500 MB). When the limit is reached, the logos used longest ago are deleted; they are downloaded again if needed. Only a few dozen logos are kept in memory.
+- **Auto volume (speed-dependent volume)**, like GALA in real car radios: the faster the truck, the louder the radio, to cover wind and engine noise. It starts at 30 km/h and reaches the full boost at 90 km/h; changes are smooth (about 3 seconds). Set in the settings menu on the **Reception** page with the slider **Auto volume** (off up to +6 dB), or with `"autoVolume"` (0 to 1) in `realistic-radio.json`. Off by default. The volume never goes above 100 %, so there is no distortion.
+- **Radio page on the navigation screen.** The **Insert** key switches the in-cab screen between navigation and a permanent radio page. The page shows the current station or track (logo/cover, title, signal or playing time) and updates live; station changes and volume appear on it too, after a volume change it returns to the page. **Insert** again brings the navigation back. The choice is remembered (`"screenPage"` in `realistic-radio.json`); with the ignition off the navigation is shown.
+- **Every folder is its own USB stick / CD.** Folders inside `realistic-radio\usb\` are now separate sources, for example:
+  ```
+  usb\
+  ├── Privat Music\
+  ├── Rock Music\
+  ├── Rap Music\
+  └── YouTube Playlist\
+  ```
+  Folders inside these folders (e.g. albums) still belong to the same USB / CD. Files placed directly in `usb\` form one more USB, as before.
+- **The Home key steps through all sources** like on a car radio: Radio → USB 1 → USB 2 → … → Radio. With only one USB nothing changes: Radio ↔ USB.
+- New keys `"nextDisc"` and `"previousDisc"` to change the USB / CD directly (unassigned by default, e.g. `"PageUp"` / `"Next"`). From the radio they jump to the first / last USB.
+- **On the navigation screen:** the source tag shows the number (`USB 2`), the header line shows the folder name, e.g. "Rock Music • Titel 3 / 12".
+- **Every USB / CD remembers its own last track.** Switching to it continues there (from the beginning of the track). The positions are saved in `"mediaResume"` in `realistic-radio.json`.
+- New setting `"media": { "folderPerDisc": true }`. `false` treats the whole folder as one USB, exactly as in 1.1.0.
+
+### Changed
+- The read-me in a newly created `usb` folder explains the folder layout.
+- The album line on the screen is left out when it only repeats the folder name of the USB / CD.
+
+### Fixed
+- With the pop-up overlay off (the default), a station logo that finished downloading while the card was visible only appeared at the next station change. It now appears right away.
+
+### Compatibility
+- Settings from 1.1.0 keep working; `"folderPerDisc"`, `"nextDisc"`, `"previousDisc"`, `"screenPage"` and `"menu"` are added automatically on the first start.
+- Files directly in `usb\` play as before, and the last track saved by 1.1.0 is resumed.
+- If you used sub folders in 1.1.0 (e.g. one per album), each of them is now its own USB. To keep everything on one USB, set `"folderPerDisc": false`.
+
+### Upgrade notes
+- Replace `realistic-radio.dll` only. Settings, favourites, own stations, logos and your music are kept.
+- If **Insert** is already bound to something in ETS2, choose another key under `"keys": { "screenPage": "…" }`.
+
 ## 1.1.0 – USB / CD mode and new screen design
 
 ### New
@@ -26,7 +75,6 @@
 
 ### Upgrade notes
 - Replace `realistic-radio.dll` only. Settings, favourites, own stations and logos are kept.
-- The USB/CD mode and the new design compile, but have **not been tested in the game yet**. Please report problems with the `realistic-radio.log`.
 - If **Home** is already bound to something in ETS2, choose another key under `"keys": { "source": "…" }`.
 
 ## 1.0.3 – Navigation screen display
@@ -60,6 +108,55 @@
 <a id="changelog-deutsch"></a>
 # Changelog (Deutsch)
 
+## 1.2.0 – Mehrere USB-Sticks / CDs, Radio-Seite und Einstellungsmenü
+
+### Neu
+- **Einstellungsmenü im Spiel** (**Strg + 0**), mit Maus und Tastatur. Links die Seiten, rechts die Einstellungen:
+  - **Radio:** Lautstärke, Stumm, Radio an bei Zündung / Motor / immer, automatisch starten, Sprache des Menüs.
+  - **Empfang:** Sendereichweite, Wechselschwelle, Auto-Lautstärke, Rauschen, Umschaltgeräusch.
+  - **Navi-Bildschirm:** an/aus, Anzeigedauer, Radio-Seite dauerhaft zeigen und die Taste, die zwischen Navigation und Radio-Seite umschaltet.
+  - **Popup-Overlay:** Modus, Stil, Position, Größe, Anzeigedauer, Logos.
+  - **USB / CD:** an/aus, jeder Ordner ein eigener USB, Standard-Typ, Zufall, Wiederholen, ein Knopf, der den **Musikordner im Explorer öffnet**, und ein **Typ für jeden Musikordner** (siehe unten).
+  - **Speicher:** Höchstgröße des Logo-Speichers, Senderlogos laden an/aus, belegter Platz mit Knopf **Leeren**, Logo-Ordner öffnen.
+  - **Tasten:** Feld für Taste oder Controller anklicken (oder Enter) und die neue Taste, Tastenkombination oder den Controller-Knopf drücken. Rechtsklick oder Entf löscht eine Belegung. Ist eine Taste schon bei einer anderen Funktion, wird sie dort entfernt, und das Menü zeigt das an.
+  - Änderungen wirken sofort. **Speichern** schreibt sie in die `realistic-radio.json`, **Zurücksetzen** holt den gespeicherten Stand zurück, **Standard** setzt die Werte der aktuellen Seite auf die Standardwerte. **Esc** oder **✕** speichert und schließt. Popup-Modus und das Ein-/Ausschalten der Navi-Anzeige wirken nach einem Neustart (im Menü markiert).
+  - Mit der Maus: klicken, Schieberegler ziehen, Mausrad über Reglern und Auswahlfeldern. Mit der Tastatur: ↑ / ↓ auswählen, ← / → ändern, Enter, Tab = nächste Seite.
+  - Solange das Menü offen ist, steuern Tastatur und Maus nur das Menü, nicht das Spiel (die Maus dreht nicht mehr die Kamera; die Mausabfragen des Spiels über Raw Input und DirectInput werden dafür gefiltert, solange das Menü offen ist).
+- **Medientyp pro Musikordner.** Jeder Ordner in `usb\` kann ein **USB-Stick, eine CD, SD-Karte, Kassette, Bluetooth oder AUX** sein – einstellbar im Einstellungsmenü auf der Seite USB / CD, gespeichert als `"media": { "types": { "Rock Music": "cd" } }`. Der Typ steht auf dem Quellen-Schild („CD 2“, „KASSETTE“), und Titel ohne Cover zeigen ein passendes Bild (CD, USB-Stick, SD-Karte, Kassette, Bluetooth-Zeichen, Klinkenstecker). Ordner ohne eigenen Typ nutzen den Standard-Typ (`media.label`).
+- **Begrenzter Logo-Speicher.** Heruntergeladene Senderlogos und USB-Cover in `realistic-radio\logos\` bleiben unter **30 MB** (Einstellung `"overlay": { "logoCacheMB": 30 }`, 5–500 MB). Ist die Grenze erreicht, werden die am längsten nicht benutzten Logos gelöscht; bei Bedarf werden sie neu geladen. Im Arbeitsspeicher bleiben nur wenige Dutzend Logos.
+- **Auto-Lautstärke (geschwindigkeitsabhängige Lautstärke)**, wie GALA bei echten Autoradios: Je schneller der LKW fährt, desto lauter wird das Radio, damit es Wind- und Motorgeräusche übertönt. Sie setzt ab 30 km/h ein und erreicht bei 90 km/h die volle Anhebung; Änderungen erfolgen sanft (etwa 3 Sekunden). Einstellbar im Einstellungsmenü auf der Seite **Empfang** mit dem Regler **Auto-Lautstärke** (aus bis +6 dB) oder mit `"autoVolume"` (0 bis 1) in der `realistic-radio.json`. Standardmäßig aus. Die Lautstärke geht nie über 100 %, es übersteuert also nicht.
+- **Radio-Seite auf dem Navi-Bildschirm.** Die Taste **Einfg** (Insert) schaltet den Cockpit-Bildschirm zwischen Navigation und einer dauerhaften Radio-Seite um. Die Seite zeigt den aktuellen Sender bzw. Titel (Logo/Cover, Titel, Empfang oder Spielzeit) und aktualisiert sich laufend; Senderwechsel und Lautstärke erscheinen ebenfalls darauf, nach einer Lautstärkeänderung geht es zurück zur Seite. Noch einmal **Einfg** holt die Navigation zurück. Die Wahl wird gespeichert (`"screenPage"` in `realistic-radio.json`); bei Zündung aus ist die Navigation zu sehen.
+- **Jeder Ordner ist ein eigener USB-Stick / eine eigene CD.** Ordner in `realistic-radio\usb\` sind jetzt eigene Quellen, zum Beispiel:
+  ```
+  usb\
+  ├── Privat Music\
+  ├── Rock Music\
+  ├── Rap Music\
+  └── YouTube Playlist\
+  ```
+  Ordner innerhalb dieser Ordner (z. B. Alben) gehören weiter zum selben USB / zur selben CD. Dateien direkt in `usb\` bilden wie bisher einen weiteren USB.
+- **Die Taste Pos1 schaltet durch alle Quellen** wie beim Autoradio: Radio → USB 1 → USB 2 → … → Radio. Mit nur einem USB bleibt alles wie vorher: Radio ↔ USB.
+- Neue Tasten `"nextDisc"` und `"previousDisc"`, um direkt den USB / die CD zu wechseln (standardmäßig nicht belegt, z. B. `"PageUp"` / `"Next"`). Vom Radio aus springen sie zum ersten bzw. letzten USB.
+- **Auf dem Navi:** Das Quellen-Schild zeigt die Nummer (`USB 2`), die Kopfzeile den Ordnernamen, z. B. „Rock Music • Titel 3 / 12“.
+- **Jeder USB / jede CD merkt sich den eigenen letzten Titel.** Beim Umschalten geht es dort weiter (am Anfang des Titels). Gespeichert wird das unter `"mediaResume"` in `realistic-radio.json`.
+- Neue Einstellung `"media": { "folderPerDisc": true }`. Mit `false` gilt der ganze Ordner wie in 1.1.0 als ein einziger USB.
+
+### Geändert
+- Die Anleitung in einem neu angelegten `usb`-Ordner erklärt den Aufbau mit Ordnern.
+- Die Album-Zeile auf dem Navi entfällt, wenn sie nur den Ordnernamen des USB / der CD wiederholen würde.
+
+### Behoben
+- Bei ausgeschaltetem Popup-Overlay (Standard) erschien ein Senderlogo, das erst während der Anzeige fertig geladen war, erst beim nächsten Senderwechsel. Jetzt erscheint es sofort.
+
+### Kompatibilität
+- Einstellungen aus 1.1.0 funktionieren weiter; `"folderPerDisc"`, `"nextDisc"`, `"previousDisc"`, `"screenPage"` und `"menu"` werden beim ersten Start automatisch ergänzt.
+- Dateien direkt in `usb\` spielen wie bisher, und der in 1.1.0 gespeicherte letzte Titel wird fortgesetzt.
+- Wer in 1.1.0 Unterordner benutzt hat (z. B. einen pro Album), hat jetzt pro Ordner einen eigenen USB. Soll alles auf einem USB bleiben: `"folderPerDisc": false`.
+
+### Hinweise zum Update
+- Nur `realistic-radio.dll` ersetzen. Einstellungen, Favoriten, eigene Sender, Logos und deine Musik bleiben erhalten.
+- Ist **Einfg** in ETS2 schon belegt, unter `"keys": { "screenPage": "…" }` eine andere Taste wählen.
+
 ## 1.1.0 – USB / CD-Modus und neues Design
 
 ### Neu
@@ -84,7 +181,6 @@
 
 ### Hinweise zum Update
 - Nur `realistic-radio.dll` ersetzen. Einstellungen, Favoriten, eigene Sender und Logos bleiben erhalten.
-- USB/CD-Modus und neues Design sind kompiliert, aber **noch nicht im Spiel getestet**. Probleme bitte mit der `realistic-radio.log` melden.
 - Ist **Pos1** in ETS2 schon belegt, unter `"keys": { "source": "…" }` eine andere Taste wählen.
 
 ## 1.0.3 – Anzeige auf dem Navi-Bildschirm

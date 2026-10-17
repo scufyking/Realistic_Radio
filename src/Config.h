@@ -6,7 +6,7 @@
 #include "Common.h"
 #include "DisplayWindow.h"
 
-enum class Action { Next, Previous, Stop, VolumeUp, VolumeDown, MakeFavourite, GoToFavourite, Mute, ShowOverlay, Source, Count };
+enum class Action { Next, Previous, Stop, VolumeUp, VolumeDown, MakeFavourite, GoToFavourite, Mute, ShowOverlay, Source, NextDisc, PreviousDisc, ScreenPage, Menu, Count };
 
 struct KeyBinding { int vk = 0; bool ctrl = false, shift = false, alt = false; };
 
@@ -38,11 +38,14 @@ struct MediaConfig {
     bool enabled = true;
     std::string folder = "usb";         // relative to the realistic-radio folder, or a full path (e.g. D:\\Music)
     std::string label = "USB";          // name of the source on the screen, e.g. USB or CD
+    bool folderPerDisc = true;          // every sub folder of the usb folder is its own USB / CD (false = one USB, as in 1.1.0)
     bool shuffle = false;
     std::string repeat = "all";         // all (start again after the last track) | one (repeat the track) | off (stop at the end)
     std::string textTrack = "Titel";
     std::string textPaused = "Pause";
     std::string textEmpty = "Keine Musik im USB-Ordner";
+    // media type per folder (folder name -> usb | cd | sd | cassette | bluetooth | aux); folders not listed use `label`
+    std::map<std::string, std::string> types;
 };
 
 struct OverlayConfig {
@@ -56,6 +59,7 @@ struct OverlayConfig {
     double durationSeconds = 6.0;
     bool alwaysVisible = false;
     bool showLogos = true;
+    int logoCacheMB = 30;               // downloaded logos / covers in realistic-radio\\logos\\: oldest are deleted above this size
     std::string urlPrefix = "https://radio.scufystudio.de/logo/";   // logos: <urlPrefix><logo path>, cached in realistic-radio\\logos\\; empty = local only
     std::string textNowPlaying = "Jetzt l\u00e4uft:";
     std::string textVolume = "Lautst\u00e4rke";
@@ -76,6 +80,9 @@ struct Config {
     MediaConfig media;
     std::string source = "radio";   // radio | usb (remembered)
     std::string mediaTrack;         // last USB track, relative to the folder (remembered)
+    std::map<std::string, std::string> mediaResume;
+    std::string screenPage = "navi";
+    std::string menuLanguage = "de";   // key menu (Ctrl+0): de | en   // navi | radio: radio page kept on the in-cab screen (remembered)   // last track per USB / CD (folder name -> track), remembered
     // Reception (original web/config.js)
     double radius = 7500.0;
     double threshold = 0.15;
@@ -83,6 +90,7 @@ struct Config {
     bool transitionWhitenoise = true;
     // Playback
     double volume = 0.6;          // 0..1 slider position; output gain = volume^2
+    double autoVolume = 0.0;      // speed-dependent volume: 0 = off, 1 = up to +6 dB at 90 km/h (starts at 30 km/h)
     bool muted = false;
     bool autoPlay = true;
     std::string powerSource = "ignition";   // ignition (truck.electric.enabled) | engine (truck.engine.enabled) | always
@@ -98,8 +106,15 @@ struct Config {
     Config();
     bool Load(const std::wstring& path);   // creates default file if missing
     void SaveVolume(const std::wstring& path) const;   // volume, mute, source and USB track
+    void SaveBindings(const std::wstring& path) const; // keys + buttons
+    // settings menu (Ctrl+0): every value it can change, as JSON in the file layout; saved by merging into the file
+    std::string MenuJson() const;
+    void SaveMenuSettings(const std::wstring& path) const;
 };
 
 int ParseKeyName(const std::string& name);
 KeyBinding ParseKeyBinding(const std::string& s);
 const char* ActionName(Action a);
+std::string KeyBindingName(const KeyBinding& b);
+void CopyMenuSettings(Config& dst, const Config& src);   // only the values the settings menu edits   // inverse of ParseKeyBinding, e.g. "Ctrl+0", "Right", "" = none
+inline bool operator==(const KeyBinding& a, const KeyBinding& b) { return a.vk == b.vk && a.ctrl == b.ctrl && a.shift == b.shift && a.alt == b.alt; }

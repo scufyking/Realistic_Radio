@@ -31,10 +31,18 @@ std::string UrlEncodePath(const std::string& s) {   // percent-encode, keep RFC 
 }
 }
 
-void Overlay::Init(const OverlayConfig& cfg, const ScreenConfig& screen, const std::wstring& dataDir) {
-    cfg_ = cfg; scfg_ = screen; start_ = GetTickCount64();
-    logoDir_ = dataDir + L"logos\\";
-    CreateDirectoryW(logoDir_.c_str(), nullptr);
+void Overlay::Reconfigure(const OverlayConfig& cfg, const ScreenConfig& screen) {
+    std::string mode = cfg_.mode;   // the mode needs a restart (hooks / window are set up once)
+    cfg_ = cfg; cfg_.mode = mode;
+    scfg_.durationSeconds = screen.durationSeconds;
+    ApplyStyle();
+    PruneLogoCache(true);
+    if (!menu_) D3D11Overlay::SetPlacement(anchor_, offX_, offY_);
+    if (!off_ && Visible()) Rerender();
+}
+
+void Overlay::ApplyStyle() {
+    const OverlayConfig& cfg = cfg_;
     radioStyle_ = cfg.style == "radio";
     anchor_ = AnchorFromName(radioStyle_ ? cfg.radio.position : cfg.position);
     offX_ = (float)(radioStyle_ ? cfg.radio.offsetX : cfg.offsetX);
@@ -48,6 +56,14 @@ void Overlay::Init(const OverlayConfig& cfg, const ScreenConfig& screen, const s
         if (it != named.end()) lcdColor_ = it->second;
         else if (c.size() == 7 && c[0] == '#') lcdColor_ = (uint32_t)strtoul(c.c_str() + 1, nullptr, 16);
     }
+}
+
+void Overlay::Init(const OverlayConfig& cfg, const ScreenConfig& screen, const std::wstring& dataDir) {
+    cfg_ = cfg; scfg_ = screen; start_ = GetTickCount64();
+    logoDir_ = dataDir + L"logos\\";
+    CreateDirectoryW(logoDir_.c_str(), nullptr);
+    ApplyStyle();
+    PruneLogoCache(true);
     if (radioStyle_) Log::Write("Overlay style: car radio display");
     off_ = cfg.mode == "off";
     if (scfg_.enabled) {
@@ -79,7 +95,8 @@ void Overlay::Shutdown() {
 void Overlay::Show(const OverlayInfo& info, const std::string& logoPath) {
     if (cfg_.showLogos && !logoPath.empty()) { if (logoPath != logoKey_) RequestLogo(logoPath); }
     else { logoKey_.clear(); logo_.reset(); }   // no logo (USB track without cover, message without station)
-    if (screenOn_ && !scfg_.probe && !scfg_.grid && scfg_.width > 0 && scfg_.height > 0) {
+    if (info.volume < 0) pageInfo_ = info;
+    if (ScreenUsable()) {
         ULONGLONG t = GetTickCount64();
         if (t >= scrUntil_) scrShownAt_ = t;
         scrUntil_ = t + (ULONGLONG)(scfg_.durationSeconds * 1000);
@@ -102,7 +119,8 @@ void Overlay::Show(const OverlayInfo& info, const std::string& logoPath) {
 
 void Overlay::Update(const OverlayInfo& info) {
     // in-cab card: refresh while it is visible (status, track time) - but never replace a volume card
-    if (screenOn_ && !scfg_.probe && !scfg_.grid && GetTickCount64() < scrUntil_ && scrInfo_.volume < 0 && !(info == scrInfo_)) {
+    if (info.volume < 0) pageInfo_ = info;
+    if (ScreenUsable() && (pinned_ || GetTickCount64() < scrUntil_) && scrInfo_.volume < 0 && !(info == scrInfo_)) {
         scrInfo_ = info;
         RenderScreen();
     }
@@ -111,20 +129,79 @@ void Overlay::Update(const OverlayInfo& info) {
     if (Visible()) Rerender();
 }
 
+// ---- logo cache on disk: realistic-radio\logos\ (station logos and USB covers) ------------------------------
+// Logos are only downloaded when a station is shown, but over months of driving that can add up. The folder is kept
+// below overlay.logoCacheMB: the files used longest ago are deleted first (every use updates a file's time).
+namespace {
+struct CacheFile { std::wstring path; ULONGLONG time; uint64_t size; };
+std::vector<CacheFile> ListCache(const std::wstring& dir) {
+    std::vector<CacheFile> v;
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileExW((dir + L"*").c_str(), FindExInfoBasic, &fd, FindExSearchNameMatch, nullptr, 0);
+    if (h == INVALID_HANDLE_VALUE) return v;
+    do {
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+        size_t n = wcslen(fd.cFileName);
+        if (n > 5 && _wcsicmp(fd.cFileName + n - 5, L".part") == 0) continue;   // download in progress
+        v.push_back({dir + fd.cFileName, ((ULONGLONG)fd.ftLastWriteTime.dwHighDateTime << 32) | fd.ftLastWriteTime.dwLowDateTime,
+                     ((uint64_t)fd.nFileSizeHigh << 32) | fd.nFileSizeLow});
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    return v;
+}
+}
+void Overlay::TouchFile(const std::wstring& file) {
+    HANDLE h = CreateFileW(file.c_str(), FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return;
+    FILETIME ft; GetSystemTimeAsFileTime(&ft);
+    SetFileTime(h, nullptr, nullptr, &ft);
+    CloseHandle(h);
+}
+void Overlay::RememberLogo(const std::string& key, const std::shared_ptr<OverlayImage>& img) {
+    if (logoCache_.size() >= 48) logoCache_.clear();   // decoded logos in memory: a few MB at most
+    logoCache_[key] = img;
+}
+void Overlay::PruneLogoCache(bool force) {
+    ULONGLONG now = GetTickCount64();
+    if (!force && now - lastPruneAt_ < 60000) return;
+    lastPruneAt_ = now;
+    auto files = ListCache(logoDir_);
+    uint64_t total = 0; for (auto& f : files) total += f.size;
+    const uint64_t limit = (uint64_t)std::max(5, cfg_.logoCacheMB) * 1024 * 1024;
+    if (total <= limit) return;
+    std::sort(files.begin(), files.end(), [](const CacheFile& a, const CacheFile& b) { return a.time < b.time; });
+    int removed = 0;
+    for (auto& f : files) {
+        if (total <= limit * 8 / 10) break;   // some room, so this does not run after every download
+        if (DeleteFileW(f.path.c_str())) { total -= f.size; ++removed; }
+    }
+    Log::Write("Logo cache: removed %d old file(s), %.1f MB left (limit %d MB)", removed, total / 1048576.0, cfg_.logoCacheMB);
+}
+void Overlay::LogoCacheUsage(uint64_t& bytes, int& files) const {
+    auto v = ListCache(logoDir_);
+    bytes = 0; files = (int)v.size();
+    for (auto& f : v) bytes += f.size;
+}
+void Overlay::ClearLogoCache() {
+    int n = 0;
+    for (auto& f : ListCache(logoDir_)) if (DeleteFileW(f.path.c_str())) ++n;
+    logoCache_.clear();
+    Log::Write("Logo cache cleared (%d file(s))", n);
+}
+
 void Overlay::RequestLogo(const std::string& logoPath) {
     logoKey_ = logoPath; logo_.reset();
     auto it = logoCache_.find(logoPath);
     if (it != logoCache_.end()) { logo_ = it->second; return; }
     if (logoPath.rfind("file:", 0) == 0) {   // USB/CD cover: local image file
         logo_ = ShrinkImage(LoadImageFile(Utf8ToWide(logoPath.substr(5))), 512);
-        if (logoCache_.size() > 64) logoCache_.clear();
-        if (logo_) logoCache_[logoPath] = logo_;
+        if (logo_) RememberLogo(logoPath, logo_);
         return;
     }
     std::wstring file = logoDir_ + SafeFileName(logoPath);
     if (GetFileAttributesW(file.c_str()) != INVALID_FILE_ATTRIBUTES) {
         logo_ = LoadImageFile(file);
-        if (logo_) { logoCache_[logoPath] = logo_; return; }
+        if (logo_) { RememberLogo(logoPath, logo_); TouchFile(file); return; }
     }
     if (logoPath.rfind("http", 0) != 0 && cfg_.urlPrefix.empty()) return;   // bundled logos only, no network
     { auto f = logoFailedAt_.find(logoPath); if (f != logoFailedAt_.end() && GetTickCount64() - f->second < 600000) return; }
@@ -178,7 +255,7 @@ void Overlay::Rerender() {
     renderedH_ = h;
     if (radioStyle_) image_ = RenderRadioLcd(LcdText(), scroll_, cfg_.radio.columns, info_.bars, info_.favourite, h, scale_, lcdColor_);
     else image_ = RenderOverlay(info_, h, cfg_.scale, logo_.get());
-    D3D11Overlay::SetImage(image_);
+    if (!menu_) D3D11Overlay::SetImage(image_);   // while the settings menu is open it owns the picture
 }
 
 void Overlay::UseWindow(bool on) {
@@ -234,11 +311,20 @@ void Overlay::Tick() {
     if (screenOn_) TickScreen(now);
     // pump messages for the overlay window (it lives on this thread)
     MSG m; while (PeekMessageW(&m, nullptr, 0, 0, PM_REMOVE)) { TranslateMessage(&m); DispatchMessageW(&m); }
+    if (menu_) {   // key menu covers the pop-up panel while it is open
+        D3D11Overlay::SetAlpha(d3d_ && !window_ ? 1.f : 0.f);
+        if (window_) UpdateWindow(1.f);
+        return;
+    }
     if (off_) {   // overlay off: still finish logo downloads for the infotainment display
         if (job_ && job_->done) {
             auto j = job_; job_.reset();
             if (!j->ok) logoFailedAt_[j->key] = GetTickCount64();
-            if (j->ok && SafeFileName(logoKey_) == j->file.substr(logoDir_.size())) { logo_ = LoadImageFile(j->file); if (logo_) logoCache_[logoKey_] = logo_; }
+            if (j->ok && SafeFileName(logoKey_) == j->file.substr(logoDir_.size())) {
+                logo_ = LoadImageFile(j->file);
+                if (logo_) { RememberLogo(logoKey_, logo_); if (ScreenUsable() && (pinned_ || now < scrUntil_)) RenderScreen(); }   // logo arrived: show it now
+            }
+            if (j->ok) PruneLogoCache(false);
         }
         return;
     }
@@ -253,8 +339,9 @@ void Overlay::Tick() {
         if (!j->ok) logoFailedAt_[j->key] = GetTickCount64();
         if (j->ok && SafeFileName(logoKey_) == j->file.substr(logoDir_.size())) {
             logo_ = LoadImageFile(j->file);
-            if (logo_) { logoCache_[logoKey_] = logo_; if (Visible()) Rerender(); if (screenOn_ && now < scrUntil_) RenderScreen(); }
+            if (logo_) { RememberLogo(logoKey_, logo_); if (Visible()) Rerender(); if (ScreenUsable() && (pinned_ || now < scrUntil_)) RenderScreen(); }
         }
+        if (j->ok) PruneLogoCache(false);
     }
     int h = D3D11Overlay::ScreenHeight();
     if (image_ && h >= 200 && std::abs(h - renderedH_) > 2) Rerender();   // resolution changed -> crisp text again
@@ -326,6 +413,48 @@ void Overlay::TickScreen(ULONGLONG now) {
         return;
     }
     float a = 0.f;
-    if (now < scrUntil_) a = std::min({1.f, (now - scrShownAt_) / 200.f, (scrUntil_ - now) / 400.f});
+    if (pinned_ && ScreenUsable()) {
+        if (now >= scrUntil_ && scrInfo_.volume >= 0) { scrInfo_ = pageInfo_; RenderScreen(); }   // volume card over: back to the page
+        a = std::min(1.f, (now - pinShownAt_) / 250.f);
+    } else if (now < scrUntil_) a = std::min({1.f, (now - scrShownAt_) / 200.f, (scrUntil_ - now) / 400.f});
     D3D11Overlay::SetScreenAlpha(a);
+}
+
+void Overlay::PrepareMenu() {
+    if (!d3d_ && !window_) d3d_ = D3D11Overlay::Install();   // overlay and screen both off: hook only for the menu
+}
+
+void Overlay::ShowMenu(std::shared_ptr<OverlayImage> img) {
+    if (!img) return;
+    menuImg_ = img;
+    menu_ = true;
+    int sh = D3D11Overlay::ScreenHeight() >= 200 ? D3D11Overlay::ScreenHeight() : img->renderedForScreenHeight;
+    D3D11Overlay::SetPlacement(1, 0.f, std::max(0.f, (sh - img->height) / 2.f / sh));   // centred
+    D3D11Overlay::SetImage(menuImg_);
+    if (window_) { image_ = menuImg_; lastImg_ = nullptr; }
+    D3D11Overlay::SetAlpha(d3d_ && !window_ ? 1.f : 0.f);
+}
+
+void Overlay::HideMenu() {
+    if (!menu_) return;
+    menu_ = false; menuImg_.reset();
+    D3D11Overlay::SetAlpha(0.f);
+    D3D11Overlay::SetPlacement(anchor_, offX_, offY_);
+    if (!off_ && info_.title.size()) Rerender(); else { image_.reset(); D3D11Overlay::SetImage(nullptr); }
+    if (window_) { lastImg_ = nullptr; UpdateWindow(0.f); }
+}
+
+void Overlay::SetScreenPinned(bool p) {
+    if (p == pinned_) return;
+    pinned_ = p;
+    ULONGLONG now = GetTickCount64();
+    if (!ScreenUsable()) return;
+    if (p) {
+        pinShownAt_ = now < scrUntil_ ? now - 1000 : now;   // already visible: no fade
+        if (now >= scrUntil_ || scrInfo_.volume < 0) scrInfo_ = pageInfo_;
+        RenderScreen();
+    } else {   // fade out, the navigation comes back
+        scrShownAt_ = now - 1000;
+        scrUntil_ = now + 400;
+    }
 }

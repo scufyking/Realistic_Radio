@@ -83,7 +83,7 @@ void AudioEngine::Mix(float* out, ma_uint32 frames) {
         std::unique_lock<std::mutex> l(sessMtx_, std::try_to_lock);
         if (l.owns_lock() && session_ && !paused_) got = session_->Read(tmp_.data(), frames);
     }
-    const float masterTarget = muted_ ? 0.f : master_.load();
+    const float masterTarget = muted_ ? 0.f : std::min(1.f, master_.load() * boost_.load());   // never louder than full volume (no clipping); 0 stays silent
     const float masterStep = 1.f / (0.08f * kRate);   // full range in 80 ms
     for (ma_uint32 i = 0; i < frames; ++i) {
         if (masterCur_ < masterTarget) masterCur_ = std::min(masterTarget, masterCur_ + masterStep);

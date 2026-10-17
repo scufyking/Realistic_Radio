@@ -163,7 +163,8 @@ void FromFileName(const std::wstring& name, std::wstring& title, std::wstring& a
     else title = Trim(n);
 }
 
-void Collect(const std::wstring& dir, const std::wstring& rel, int depth, std::vector<MediaTrack>& out) {
+void Collect(const std::wstring& dir, const std::wstring& rel, int depth, std::vector<MediaTrack>& out, bool recurse = true,
+             std::vector<std::wstring>* subDirs = nullptr) {
     if (depth > 8 || out.size() >= kMaxTracks) return;
     WIN32_FIND_DATAW fd;
     HANDLE h = FindFirstFileExW((dir + L"*").c_str(), FindExInfoBasic, &fd, FindExSearchNameMatch, nullptr, 0);
@@ -190,7 +191,8 @@ void Collect(const std::wstring& dir, const std::wstring& rel, int depth, std::v
         if (t.album.empty() && !rel.empty()) { std::wstring r = rel.substr(0, rel.size() - 1); size_t s = r.find_last_of(L'\\'); t.album = s == std::wstring::npos ? r : r.substr(s + 1); }
         out.push_back(std::move(t));
     }
-    for (auto& d : dirs) Collect(dir + d + L"\\", rel + d + L"\\", depth + 1, out);
+    if (subDirs) *subDirs = dirs;
+    if (recurse) for (auto& d : dirs) Collect(dir + d + L"\\", rel + d + L"\\", depth + 1, out);
 }
 
 uint64_t Fnv(const std::wstring& s) {
@@ -201,7 +203,7 @@ uint64_t Fnv(const std::wstring& s) {
 bool Exists(const std::wstring& p) { DWORD a = GetFileAttributesW(p.c_str()); return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY); }
 } // namespace
 
-void MediaLibrary::Scan(const std::wstring& folder) {
+void MediaLibrary::Scan(const std::wstring& folder, bool folderPerDisc) {
     folder_ = folder;
     if (GetFileAttributesW(folder.c_str()) == INVALID_FILE_ATTRIBUTES) {
         CreateDirectoryW(folder.c_str(), nullptr);
@@ -211,16 +213,22 @@ void MediaLibrary::Scan(const std::wstring& folder) {
                 "Realistic Radio - USB / CD\r\n"
                 "==========================\r\n\r\n"
                 "DEUTSCH\r\n"
-                "Kopiere hier deine eigenen Musikdateien hinein (auch in Unterordnern, z. B. ein Ordner pro Album).\r\n"
+                "Kopiere hier deine eigenen Musikdateien hinein.\r\n"
+                "Jeder Unterordner ist ein eigener USB-Stick / eine eigene CD, z. B.:\r\n"
+                "  usb\\Rock Music\\   usb\\Rap Music\\   usb\\YouTube Playlist\\\r\n"
+                "Dateien direkt in diesem Ordner bilden einen weiteren USB-Stick.\r\n"
                 "Unterstuetzt: MP3, WAV, FLAC, M4A, AAC, WMA.\r\n"
-                "Im Spiel mit der Taste \"Pos1\" (Home) zwischen Radio und USB umschalten.\r\n"
+                "Im Spiel schaltet die Taste \"Pos1\" (Home) weiter: Radio -> USB 1 -> USB 2 -> ... -> Radio.\r\n"
                 "Pfeil links/rechts = Titel zurueck/vor, Ende = Pause.\r\n"
                 "Titel und Interpret kommen aus den MP3-Tags, sonst aus dem Dateinamen (\"Interpret - Titel.mp3\").\r\n"
                 "Ein Cover wird angezeigt, wenn es in der MP3 steckt oder als cover.jpg / folder.jpg im Ordner liegt.\r\n\r\n"
                 "ENGLISH\r\n"
-                "Put your own music files here (sub folders are fine, e.g. one folder per album).\r\n"
+                "Put your own music files here.\r\n"
+                "Every sub folder is its own USB stick / CD, e.g.:\r\n"
+                "  usb\\Rock Music\\   usb\\Rap Music\\   usb\\YouTube Playlist\\\r\n"
+                "Files directly in this folder form one more USB stick.\r\n"
                 "Supported: MP3, WAV, FLAC, M4A, AAC, WMA.\r\n"
-                "In the game press \"Home\" to switch between radio and USB.\r\n"
+                "In the game the \"Home\" key steps through: radio -> USB 1 -> USB 2 -> ... -> radio.\r\n"
                 "Left/Right arrow = previous/next track, End = pause.\r\n"
                 "Title and artist come from the MP3 tags, otherwise from the file name (\"Artist - Title.mp3\").\r\n"
                 "A cover is shown if it is embedded in the MP3 or saved as cover.jpg / folder.jpg in the folder.\r\n";
@@ -228,10 +236,34 @@ void MediaLibrary::Scan(const std::wstring& folder) {
         }
         Log::Write("Created USB folder %s", WideToUtf8(folder).c_str());
     }
-    tracks_.clear();
+    tracks_.clear(); discs_.clear();
     ULONGLONG t0 = GetTickCount64();
-    Collect(folder, L"", 0, tracks_);
+    if (!folderPerDisc) {   // 1.1.0 behaviour: the whole folder is one USB stick
+        Collect(folder, L"", 0, tracks_);
+        if (!tracks_.empty()) discs_.push_back({L"", 0, (int)tracks_.size()});
+    } else {
+        // files directly in the folder = first USB (as in 1.1.0), then every sub folder = its own USB / CD
+        std::vector<std::wstring> dirs;
+        Collect(folder, L"", 0, tracks_, false, &dirs);
+        if (!tracks_.empty()) discs_.push_back({L"", 0, (int)tracks_.size()});
+        for (auto& d : dirs) {
+            int first = (int)tracks_.size();
+            Collect(folder + d + L"\\", d + L"\\", 1, tracks_);
+            if ((int)tracks_.size() > first) discs_.push_back({d, first, (int)tracks_.size() - first});
+        }
+    }
+    for (size_t k = 0; k < discs_.size(); ++k)
+        Log::Write("USB %d: \"%s\" (%d file(s))", (int)k + 1, discs_[k].name.empty() ? "(main folder)" : WideToUtf8(discs_[k].name).c_str(), discs_[k].count);
     Log::Write("USB: %d file(s) in %s (%llu ms)", (int)tracks_.size(), WideToUtf8(folder).c_str(), GetTickCount64() - t0);
+}
+
+int MediaLibrary::DiscOf(int track) const {
+    for (size_t k = 0; k < discs_.size(); ++k) if (track >= discs_[k].first && track < discs_[k].first + discs_[k].count) return (int)k;
+    return -1;
+}
+int MediaLibrary::DiscByName(const std::wstring& name) const {
+    for (size_t k = 0; k < discs_.size(); ++k) if (_wcsicmp(discs_[k].name.c_str(), name.c_str()) == 0) return (int)k;
+    return -1;
 }
 
 int MediaLibrary::IndexOf(const std::wstring& rel) const {
@@ -260,4 +292,28 @@ std::wstring MediaLibrary::CoverFor(const MediaTrack& t, const std::wstring& cac
     for (const wchar_t* n : {L"cover.jpg", L"cover.png", L"folder.jpg", L"folder.png", L"front.jpg", L"front.png", L"albumart.jpg"})
         if (Exists(dir + n)) return dir + n;
     return L"";
+}
+
+const std::vector<MediaTypeInfo>& MediaTypes() {
+    static const std::vector<MediaTypeInfo> t = {
+        {"usb", "USB", "USB"}, {"cd", "CD", "CD"}, {"sd", "SD-Karte", "SD card"}, {"cassette", "Kassette", "Cassette"},
+        {"bluetooth", "Bluetooth", "Bluetooth"}, {"aux", "AUX", "AUX"}};
+    return t;
+}
+std::string MediaTypeId(const std::string& s) {
+    std::string l = s; for (auto& c : l) c = (char)tolower((unsigned char)c);
+    for (auto& t : MediaTypes()) {
+        std::string de = t.de, en = t.en;
+        for (auto& c : de) c = (char)tolower((unsigned char)c);
+        for (auto& c : en) c = (char)tolower((unsigned char)c);
+        if (l == t.id || l == de || l == en) return t.id;
+    }
+    if (l == "sd") return "sd";
+    if (l == "tape" || l == "mc") return "cassette";
+    if (l == "bt") return "bluetooth";
+    return "";
+}
+std::wstring MediaTypeLabel(const std::string& id, bool en) {
+    for (auto& t : MediaTypes()) if (id == t.id) return Utf8ToWide(en ? t.en : t.de);
+    return Utf8ToWide(id);
 }

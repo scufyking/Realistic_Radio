@@ -14,9 +14,9 @@ By **ScufyKing**. The whole radio runs inside the game:
 
 Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ETS2, and the radio plays. Station data and sounds are built into the DLL.
 
-> **Version 1.1.0** · [Changes](CHANGELOG.md)
+> **Version 1.2.0** · [Changes](CHANGELOG.md)
 >
-> **Status:** Tested in ETS2 1.61 (Windows x64) with the MAN TGX: the plugin loads, reads the truck position, switches stations by region, plays audio and shows station and volume on the navigation screen. American Truck Simulator data is included but ATS is untested. The USB/CD mode and the new navigation screen design (both new in 1.1.0) compile but have not been tested in the game yet.
+> **Status:** Tested in ETS2 1.61 (Windows x64) with the MAN TGX: the plugin loads, reads the truck position, switches stations by region, plays audio and shows station and volume on the navigation screen. American Truck Simulator data is included but ATS is untested.
 
 ---
 
@@ -25,6 +25,7 @@ Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ET
 - [Features](#features)
 - [Installation](#installation)
 - [Controls](#controls)
+- [Settings menu (Ctrl + 0)](#settings-menu-ctrl--0)
 - [Configuration](#configuration)
 - [USB / CD: your own music](#usb--cd-your-own-music)
 - [Adding your own stations](#adding-your-own-stations)
@@ -40,15 +41,18 @@ Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ET
 ## Features
 
 - **Stations by location.** About 2,100 internet radio stations, assigned to 2,064 cities on the base map, the DLC maps and many map mods (ProMods, RusMap and others).
+- **Auto volume:** gets louder at higher speed like a real car radio (adjustable, off by default).
 - **Realistic range and switching.** Every city has a broadcast range; regions overlap at borders, and the radio only switches automatically when another region is clearly better received.
 - **Reception and static.** The further you are from a region, the more static you hear, and weak signals drop out now and then.
 - **Smooth transitions** with a tuning sound.
+- **Radio page on the navigation screen.** Press **Insert** to switch between the navigation and a permanent radio page that shows the station or track live.
 - **Display on the truck's navigation screen.** On every station change the logo, station name, country, signal and "station 3 / 12" appear on the in-cab navigation screen for a few seconds, on volume changes a speaker symbol, a large percentage and a 20-segment bar; then the navigation is back. Set up for the MAN TGX by default (see "In-cab screen").
 - **Optional pop-up overlay** (off by default): a panel at the top of the screen or a car-radio style dot-matrix display. Works in fullscreen.
 - **Radio only with the ignition on** (or only with the engine running, or always; your choice).
 - **Keyboard and controller controls**, freely configurable.
+- **Settings menu in the game** (**Ctrl + 0**) with mouse and keyboard: volume, reception, navigation display, overlay, USB/CD and key bindings, without editing the JSON file.
 - **Favourites per country.**
-- **USB / CD mode for your own music.** Put music files into `realistic-radio\usb\` and press **Home** to switch between radio and USB. Title, artist, album, cover, track number and playing time appear on the navigation screen.
+- **USB / CD mode for your own music.** Put music files into `realistic-radio\usb\`; every sub folder is its own USB stick or CD. **Home** steps through: radio → USB 1 → USB 2 → … → radio. Title, artist, album, cover, track number and playing time appear on the navigation screen.
 - **Your own stations** in a separate file that survives updates.
 - **Automatic reconnect** when a stream drops.
 - **Plays MP3, AAC and HLS streams** (MP3 with a built-in decoder, AAC/HLS through Windows Media Foundation) and local audio files.
@@ -104,7 +108,10 @@ plugins\
 | Go to favourite | – | `keys.goToFavourite` |
 | Mute | – | `keys.mute` |
 | Show overlay | – | `keys.showOverlay` |
-| Switch source: radio ↔ USB/CD | Home | `keys.source` |
+| Switch source: radio → USB 1 → USB 2 → … → radio | Home | `keys.source` |
+| Next / previous USB or CD | – | `keys.nextDisc`, `keys.previousDisc` |
+| Navigation screen: navigation ↔ radio page | Insert | `keys.screenPage` |
+| Open the settings menu | Ctrl + 0 | `keys.menu` |
 
 "Next" and "Previous" step through every station of every region you currently receive. In USB/CD mode the keys work differently, see [USB / CD](#usb--cd-your-own-music).
 
@@ -112,9 +119,32 @@ Keys only react while ETS2 is the active window, so they do not interfere with o
 
 If the arrow keys are also bound to driving or menus in ETS2, both happen at the same time. In that case use other keys or a combination such as `"Ctrl+Right"`.
 
-**Key names** use the .NET key names: letters `A`–`Z`, digits `0`–`9`, `F1`–`F24`, `NumPad0`–`NumPad9`, `PageUp`, `Next` (= Page Down), `Home`, `End`, `Insert`, `Delete`, `Up`, `Down`, `Left`, `Right`, `Pause`, `Space`, `Oemplus`, `OemMinus`, `Add`, `Subtract`, `MediaNextTrack`, `MediaPlayPause` and more. Combinations work too, e.g. `"Ctrl+Shift+R"`. An empty value `""` disables a key.
+**Changing keys in the game:** **Ctrl + 0** opens the [settings menu](#settings-menu-ctrl--0). On the **Keys** page click the field of a function and press the new key, key combination or controller button.
+
+You can still enter keys in the file as well. **Key names** use the .NET key names: letters `A`–`Z`, digits `0`–`9`, `F1`–`F24`, `NumPad0`–`NumPad9`, `PageUp`, `Next` (= Page Down), `Home`, `End`, `Insert`, `Delete`, `Up`, `Down`, `Left`, `Right`, `Pause`, `Space`, `Oemplus`, `OemMinus`, `Add`, `Subtract`, `MediaNextTrack`, `MediaPlayPause` and more. Combinations work too, e.g. `"Ctrl+Shift+R"`. An empty value `""` disables a key.
 
 **Controller:** set `controllerIndex` (0 = first controller) and give each action a button number under `buttons`, counting from 0. `-1` disables it. The button numbers match those shown in the Windows controller settings minus 1.
+
+## Settings menu (Ctrl + 0)
+
+The most important settings can be changed right in the game. **Ctrl + 0** opens the menu in the middle of the screen; it works with mouse and keyboard.
+
+| Page | Contents |
+|---|---|
+| Radio | Volume, mute, radio on with (ignition / engine running / always), start automatically, menu language |
+| Reception | Broadcast range, switch threshold, auto volume, static, tuning sound |
+| Navigation screen | Display on/off, display time, keep the radio page on, key for navigation ↔ radio page |
+| Pop-up overlay | Mode, style, position, size, display time, station logos |
+| USB / CD | Mode on/off, every folder its own USB, default type, shuffle, repeat, open the music folder, type of every music folder (USB, CD, SD card, cassette, Bluetooth, AUX) |
+| Storage | Maximum size of the logo storage, load station logos, used space and clear, open the logo folder |
+| Keys | Key and controller button for every function |
+
+- **Mouse:** click pages and switches, drag sliders, use the wheel over sliders and choices. On the Keys page click a field and press the new key or controller button; right click clears it.
+- **Keyboard:** ↑ / ↓ select, ← / → change, Enter toggles or starts recording a key, Tab / Page Up / Page Down changes the page, Delete clears a key binding.
+- Changes take effect immediately. **Save** writes them to `realistic-radio.json`, **Revert** goes back to the saved state, **Defaults** restores the current page's default values. **Esc** or **✕** saves and closes.
+- Settings marked **Restart** (pop-up mode, navigation display on/off) take effect after restarting the game.
+- While the menu is open, keyboard and mouse do not reach the game; the mouse moves the menu's own cursor.
+- Everything else (e.g. screen area, texts, folder) stays in the file as before, see below.
 
 ## Configuration
 
@@ -129,6 +159,7 @@ All settings are in `realistic-radio\realistic-radio.json`. The file is created 
 | `whitenoise` | `true` | Static when reception is weak |
 | `transitionWhitenoise` | `true` | Tuning sound when changing stations |
 | `volume` | `0.6` | Volume from 0.0 to 1.0 (saved automatically). The scale is perceptual: 50 % is clearly quieter than full, 10 % is very quiet, 0 is always silent |
+| `autoVolume` | `0` | Auto volume: louder at higher speed (from 30 km/h, full at 90 km/h). `0` = off, `1` = up to +6 dB. Never louder than 100 % |
 | `muted` | `false` | Muted (saved automatically) |
 | `autoPlay` | `true` | Start playing automatically |
 | `powerSource` | `"ignition"` | `"ignition"` = only with ignition on, `"engine"` = only with the engine running, `"always"` = always |
@@ -137,6 +168,9 @@ All settings are in `realistic-radio\realistic-radio.json`. The file is created 
 | `reconnectMaxSeconds` | `30` | Maximum wait between reconnect attempts after a stream drops |
 | `source` | `"radio"` | Last chosen source, `"radio"` or `"usb"` (saved automatically, resumed on start) |
 | `mediaTrack` | – | Last USB track played (saved automatically) |
+| `mediaResume` | – | Last track per USB / CD (saved automatically) |
+| `menuLanguage` | `"de"` | Language of the settings menu: `"de"` or `"en"` |
+| `screenPage` | `"navi"` | `"radio"` = radio page permanently on the navigation screen (switched with the `screenPage` key and saved) |
 
 ### Overlay (`"overlay": { … }`)
 
@@ -149,7 +183,8 @@ All settings are in `realistic-radio\realistic-radio.json`. The file is created 
 | `scale` | `1.0` | Size; also scales automatically with your resolution |
 | `durationSeconds` | `6` | How long the panel stays visible |
 | `alwaysVisible` | `false` | Keep the panel on screen all the time |
-| `showLogos` | `true` | Show station logos |
+| `showLogos` | `true` | Show station logos (off = no logos are downloaded either) |
+| `logoCacheMB` | `30` | Maximum size of the `logos` folder (station logos and USB covers) in MB, 5–500. Above it, the logos used longest ago are deleted |
 | `urlPrefix` | `"https://radio.scufystudio.de/logo/"` | Where missing logos are downloaded from. Downloaded logos are kept in `realistic-radio\logos\` and never downloaded again. Empty = only logos already in that folder, no network access |
 | `textNowPlaying`, `textVolume`, `textStopped`, `textMuted`, `textFavourite`, `textConnecting`, `textUnavailable`, `textPowerOff`, `textRadio`, `textStations` | German texts | All texts on the overlay and the navigation screen. For English, use e.g. `"Now playing:"`, `"Volume"`, `"Radio off"`, `"Muted"`, `"Saved as favourite"`, `"connecting…"`, `"Station unavailable"`, `"Ignition off"`, `"Radio"`, `"Station"` (`textRadio` = label of the source tag, `textStations` = the word in "Station 3 / 12") |
 
@@ -171,6 +206,8 @@ The dot-matrix characters use the classic 5×7 font from the Adafruit GFX Librar
 ### In-cab screen (`"screen": { … }`, experimental)
 
 Shows the station change (logo, name, country, signal) or a volume bar with percentage **on the truck's own infotainment/GPS screen** for a few seconds; afterwards the navigation is visible again. It needs no other plugin: the game renders each cab screen into its own render target, and when the game has finished drawing into the matching one, the plugin draws its card on top of it.
+
+**Radio page:** with the `screenPage` key (default **Insert**) the card stays on the screen permanently instead of disappearing after a few seconds: a radio page with the station or USB track that keeps updating. Press again to bring the navigation back. The game's own menus are not switched (the SDK offers no way to do that); the radio page is drawn over the navigation in the configured area.
 
 Because every truck and mod uses different render targets, the right one must be found once:
 
@@ -201,7 +238,9 @@ Independent of the pop-up overlay, which is off by default (`"overlay": { "mode"
 |---|---|---|
 | `enabled` | `true` | Allow the USB/CD mode. `false` = the `source` key does nothing |
 | `folder` | `"usb"` | Music folder: relative to the `realistic-radio` folder, or a full path such as `"D:\\Music\\Truck"` (double backslashes or `/` in JSON) |
-| `label` | `"USB"` | Name of the source on the screen, e.g. `"CD"` |
+| `folderPerDisc` | `true` | Every sub folder of the music folder is its own USB / CD. `false` = the whole folder is one USB (as in 1.1.0) |
+| `label` | `"USB"` | Default type for folders without their own type: `"USB"`, `"CD"`, `"SD"`, `"Cassette"`, `"Bluetooth"`, `"AUX"` or any text. With several of the same, the number is added (`USB 2`) |
+| `types` | `{}` | Type per music folder, e.g. `{ "Rock Music": "cd", "Rap Music": "cassette" }` (`usb`, `cd`, `sd`, `cassette`, `bluetooth`, `aux`); easiest in the settings menu |
 | `shuffle` | `false` | Shuffle (a new order every time you switch to USB) |
 | `repeat` | `"all"` | `"all"` = start again after the last track, `"one"` = repeat the track, `"off"` = stop after the last track |
 | `textTrack`, `textPaused`, `textEmpty` | `"Titel"`, `"Pause"`, `"Keine Musik im USB-Ordner"` | Texts on the screen; in English e.g. `"Track"`, `"Paused"`, `"No music in the USB folder"` |
@@ -219,9 +258,22 @@ The plugin can open a native window called "Realistic Radio Display" that shows 
 
 ## USB / CD: your own music
 
-1. Copy music files into `plugins\realistic-radio\usb\`. The folder is created automatically on the first start of version 1.1.0 (with a short `LIES-MICH - READ-ME.txt`). Sub folders are fine, e.g. one folder per album.
-2. In the game press **Home**: the radio goes quiet and the first track (or the last one played) starts. Press **Home** again to go back to the radio, on the station you last listened to.
-3. The folder is read again every time you switch to USB, so you can add files while the game is running.
+1. Copy music files into `plugins\realistic-radio\usb\`. The folder is created automatically on the first start (with a short `LIES-MICH - READ-ME.txt`).
+2. **Every folder in it is its own USB stick / CD**, named after the folder:
+   ```
+   usb\
+   ├── Privat Music\        → USB 1
+   ├── Rock Music\          → USB 2
+   │   ├── Album A\         (part of USB 2)
+   │   └── Album B\         (part of USB 2)
+   ├── Rap Music\           → USB 3
+   └── YouTube Playlist\    → USB 4
+   ```
+   Files placed directly in `usb\` form one more USB (which then is USB 1). Empty folders are skipped.
+3. In the game press **Home**: the radio goes quiet and USB 1 starts with the track last played on it. Every further **Home** goes to the next USB, after the last one back to the radio, on the station you last listened to. To jump between USBs directly, assign `keys.nextDisc` and `keys.previousDisc`.
+4. The folder is read again when you switch from the radio to USB, so you can add files and folders while the game is running.
+
+To make the whole folder one single USB as in version 1.1.0 (sub folders = albums), set `"media": { "folderPerDisc": false }`.
 
 | Key in USB/CD mode | Effect |
 |---|---|
@@ -232,10 +284,12 @@ The plugin can open a native window called "Realistic Radio Display" that shows 
 | Pause (favourite) | no function, favourites are for stations only |
 
 - **Formats:** MP3, WAV and FLAC are decoded by the plugin itself; M4A, AAC and WMA through Windows Media Foundation (included in Windows 10/11; not in "N" editions without the Media Feature Pack).
-- **Order:** sorted by name like Windows Explorer ("2" before "10"), the files of a folder first, then its sub folders. Up to 5,000 files, 8 folder levels.
+- **Order:** USBs and tracks are sorted by name like Windows Explorer ("2" before "10"); within a USB the files of a folder come first, then its sub folders. Up to 5,000 files in total, 8 folder levels.
+- **Resume:** every USB remembers its last track. When the game starts, the last chosen source is resumed.
 - **Display:** title, artist and album come from the ID3 tags of MP3 files. Other formats and MP3s without tags use the file name: `Artist - Title.mp3` (a leading track number such as `01 - ` is removed); the folder name is used as album.
-- **Cover:** a picture embedded in the MP3, or a `cover.jpg`, `folder.jpg` or `front.jpg` (also `.png`) in the track's folder. Embedded covers are written once to `realistic-radio\logos\`. Without a cover the screen shows a stylised CD.
-- With the ignition off the track pauses and continues at the same position when it comes back on. When the game starts, the last source and the last track are resumed (from the beginning of the track).
+- **Cover:** a picture embedded in the MP3, or a `cover.jpg`, `folder.jpg` or `front.jpg` (also `.png`) in the track's folder. Embedded covers are written once to `realistic-radio\logos\`. Without a cover the screen shows a picture of the folder's type (CD, USB stick, SD card, cassette, Bluetooth, jack plug).
+- **Type per folder:** in the settings menu (USB / CD page) every music folder can be set to USB, CD, SD card, cassette, Bluetooth or AUX; the **Open** button there opens the music folder in Explorer.
+- With the ignition off the track pauses and continues at the same position when it comes back on. After switching sources or starting the game, the remembered track starts from the beginning.
 - In USB mode there is no static and no automatic station change; reception keeps being calculated in the background, so switching back gives you the right station straight away.
 
 ## Adding your own stations
@@ -287,7 +341,7 @@ Almost every problem can be diagnosed from `realistic-radio\realistic-radio.log`
 
 ## Known limitations
 
-- **USB/CD mode:** tags are read from MP3 files only (ID3v1/ID3v2); no seeking within a track; Ogg/Opus are not supported. The mode and the new screen design compile but have not been tested in the game yet.
+- **USB/CD mode:** tags are read from MP3 files only (ID3v1/ID3v2); no seeking within a track; Ogg/Opus are not supported.
 - **The in-cab screen display is set up for one truck.** The default values fit the navigation screen of the MAN TGX (ETS2 1.61). Other trucks render their screens into other render targets; use the probe and grid modes to set them up, or turn the screen display off. The SCS Telemetry SDK itself offers no way to write to cab screens; this works by hooking the game's Direct3D 11 rendering.
 - **The game's own radio is not controlled.** The plugin plays its own audio through Windows.
 - **Not every stream works.** Station URLs change over time. Some AAC/HLS streams cannot be opened by Windows Media Foundation; you can replace any URL with your own stations.
@@ -302,7 +356,7 @@ Everything a radio of this kind needs runs inside the plugin, with no separate p
 
 | Part | Implementation |
 |---|---|
-| Truck position, ignition, engine | Read directly from the SCS Telemetry SDK (`truck.world.placement`, `truck.electric.enabled`, `truck.engine.enabled`) |
+| Truck position, ignition, engine, speed | Read directly from the SCS Telemetry SDK (`truck.world.placement`, `truck.electric.enabled`, `truck.engine.enabled`, `truck.speed`) |
 | Station choice, reception, static | `RadioManager` and `ReceptionCalculator` in C++ |
 | Playback | miniaudio (WASAPI), WinHTTP and Windows Media Foundation |
 | Controls, favourites, settings | Radio thread in the DLL; settings and favourites as JSON files |
@@ -397,6 +451,9 @@ The folder `server/logo/` contains all logos (downscaled to 200 px) in exactly t
 │   ├── Overlay.*, OverlayImage.*, D3D11Overlay.*   in-game overlay
 │   ├── DisplayWindow.*        optional display window
 │   ├── InputManager.*         keyboard and controller
+│   ├── InputBlock.*           keeps the mouse from the game while the menu is open
+│   ├── SettingsMenu.*         settings menu (Ctrl + 0)
+│   ├── MenuInput.*            keyboard and mouse for the menu (kept from the game)
 │   ├── Config.*, Logger.*     settings and log
 │   ├── EmbeddedData.*, resources.rc.in   embedded data files, unpacked on first start
 │   └── MiniaudioImpl.cpp      miniaudio compilation unit

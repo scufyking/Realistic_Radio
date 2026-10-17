@@ -18,6 +18,13 @@ void SetPlacement(int anchor, float offsetX, float offsetY);   // anchor 0..5 = 
 long long D3D11Frames();         // frames presented by a D3D11 device (overlay drawable)
 long long OtherFrames();         // frames from D3D12/other devices (overlay not drawable here)
 int ScreenHeight();              // back-buffer height of the last frame, 0 if unknown
+int ScreenWidth();
+// settings menu: mouse cursor drawn above the overlay image; positions in back-buffer pixels
+void SetCursorImage(std::shared_ptr<const OverlayImage> img);
+void SetCursorVisible(bool on);
+void SetCursorPos(float x, float y);
+void CursorPos(float& x, float& y);
+bool ImageRect(float& x, float& y, float& w, float& h);   // where the overlay image was drawn last frame
 
 // --- experimental: draw into the game's in-cab screen render target (e.g. the infotainment / GPS screen) ---
 // The game renders the cab screens into their own render targets. When the game switches away from a render

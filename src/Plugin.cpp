@@ -23,6 +23,11 @@ namespace {
 std::atomic<double> g_x{0}, g_z{0};
 std::atomic<bool> g_havePos{false};
 std::atomic<bool> g_electric{false}, g_engine{false};
+std::atomic<float> g_speed{0.f};   // m/s, negative when reversing
+
+SCSAPI_VOID OnSpeed(const scs_string_t, const scs_u32_t, const scs_value_t* const value, const scs_context_t) {
+    g_speed = (value && value->type == SCS_VALUE_TYPE_float) ? value->value_float.value : 0.f;
+}
 
 SCSAPI_VOID OnBool(const scs_string_t, const scs_u32_t, const scs_value_t* const value, const scs_context_t ctx) {
     bool v = value && value->type == SCS_VALUE_TYPE_bool && value->value_bool.value != 0;
@@ -52,9 +57,11 @@ DWORD WINAPI RadioThread(LPVOID) {
     { Config c; c.Load(dir + L"realistic-radio.json"); input.Init(c); }
     Log::Write("Radio thread running");
     while (!g_quit) {
-        input.Poll([&](Action a) { Log::Write("Action: %s", ActionName(a)); radio.OnAction(a); });
-        radio.Tick(g_x, g_z, g_havePos, g_electric, g_engine);
-        Sleep(50);
+        if (radio.MenuOpen()) {   // key menu: keys go to the menu, no radio actions
+            if (radio.MenuTick(input)) { input.Init(radio.Settings()); input.Resync(); }
+        } else input.Poll([&](Action a) { Log::Write("Action: %s", ActionName(a)); radio.OnAction(a); });
+        radio.Tick(g_x, g_z, g_havePos, g_electric, g_engine, g_speed);
+        Sleep(radio.MenuOpen() ? 15 : 50);   // the menu reacts faster to the mouse
     }
     radio.Shutdown();
     CoUninitialize();
@@ -136,6 +143,9 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnBool, nullptr);
     p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_engine_enabled, SCS_U32_NIL, SCS_VALUE_TYPE_bool,
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnBool, (scs_context_t)1);
+    // speed for the speed-dependent volume ("autoVolume")
+    p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_speed, SCS_U32_NIL, SCS_VALUE_TYPE_float,
+                            SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnSpeed, nullptr);
     p->common.log(SCS_LOG_TYPE_message, "[realistic-radio] Realistic Radio plugin initialised");
     g_quit = false;
     g_thread = CreateThread(nullptr, 0, RadioThread, nullptr, 0, nullptr);

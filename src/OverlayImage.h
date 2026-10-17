@@ -28,10 +28,11 @@ struct OverlayInfo {
     std::wstring source;     // source chip: "RADIO", "USB", "CD"
     std::wstring detail;     // small third line (e.g. "Sender 3 / 12", album)
     bool media = false;      // USB/CD track: progress bar instead of signal bars
+    std::string mediaType;   // usb | cd | sd | cassette | bluetooth | aux: picture when there is no cover
     bool paused = false;
     int posSec = -1, lenSec = -1;   // track position / length in seconds (-1 = unknown)
     bool operator==(const OverlayInfo& o) const { return headline == o.headline && title == o.title && subtitle == o.subtitle && bars == o.bars && favourite == o.favourite && lcd == o.lcd && volume == o.volume && muted == o.muted &&
-                                                         source == o.source && detail == o.detail && media == o.media && paused == o.paused && posSec == o.posSec && lenSec == o.lenSec; }
+                                                         source == o.source && mediaType == o.mediaType && detail == o.detail && media == o.media && paused == o.paused && posSec == o.posSec && lenSec == o.lenSec; }
 };
 
 // Draws the panel with GDI (text, full Unicode incl. Cyrillic/Greek/Arabic via font fallback) + optional logo.
@@ -64,5 +65,42 @@ std::shared_ptr<OverlayImage> RenderScreenProbe(const std::wstring& label, int w
 
 // Box-filtered copy that fits into maxSide x maxSide (returns the input if it is already small enough)
 std::shared_ptr<OverlayImage> ShrinkImage(const std::shared_ptr<OverlayImage>& img, int maxSide);
+// Settings menu (Ctrl+0): pages on the left, settings or key bindings on the right, buttons at the bottom
+enum class MenuItemKind { Toggle, Slider, Choice, Key, Button, Heading };
+struct MenuItem {
+    MenuItemKind kind = MenuItemKind::Toggle;
+    std::wstring label, hint;
+    bool on = false;            // toggle
+    float frac = 0;             // slider position 0..1
+    std::wstring value;         // slider / choice text
+    std::wstring key, button;   // key binding row; Button: `button` = text on the button, `value` = info left of it
+    bool restart = false;       // takes effect after a game restart
+};
+struct MenuView {
+    std::wstring title, subtitle, section, keyHeader, buttonHeader, restartText;
+    std::vector<std::wstring> pages;
+    int page = 0;
+    std::vector<MenuItem> items;
+    int selected = -1;          // keyboard selection
+    int firstRow = 0;           // scrolling: first visible row
+    int hover = -1;             // row under the mouse
+    int capture = 0;            // selected key row waits for: 1 = key, 2 = controller button
+    std::wstring captureText;
+    std::wstring status;        // left of the buttons
+    bool unsaved = false;
+    std::wstring btnSave, btnReset, btnDefault, footer;
+    int hoverControl = -1;      // MenuHit kind under the mouse for buttons (Save/Reset/Default/Close) or page index + 100
+};
+struct MenuHit {
+    enum Kind { None, Page, Row, Slider, ChoicePrev, ChoiceNext, Toggle, KeyCell, ButtonCell, ItemButton, Save, Reset, Default, Close, Panel } kind = None;
+    int index = -1;             // page or row
+    float frac = 0;             // slider position under the mouse
+};
+std::shared_ptr<OverlayImage> RenderMenu(const MenuView& v, int screenHeight);
+MenuHit HitTestMenu(const MenuView& v, int screenHeight, float x, float y);   // x, y in image pixels
+std::shared_ptr<OverlayImage> RenderMenuCursor(int screenHeight);
+float MenuSliderFrac(const MenuView& v, int screenHeight, int row, float x);
+int MenuVisibleRows(const MenuView& v, int screenHeight);   // rows that fit; more rows scroll   // slider value at image x (dragging)
+
 // Decodes PNG/JPG/BMP via WIC to premultiplied BGRA (nullptr on failure). COM must be initialised.
 std::shared_ptr<OverlayImage> LoadImageFile(const std::wstring& path);

@@ -59,6 +59,13 @@ std::mutex g_statMtx;
 struct StatEntry { int w, h, fmt; long long binds; };
 std::map<long long, StatEntry> g_stats;
 std::atomic<int> g_bbW{0};
+// mouse cursor of the settings menu (drawn as its own small quad, position updated by the input thread)
+std::mutex g_curImgMtx;
+std::shared_ptr<const OverlayImage> g_curImg;
+std::atomic<unsigned> g_curImgVersion{0};
+std::atomic<bool> g_cursorOn{false};
+std::atomic<float> g_cursorX{0}, g_cursorY{0};
+std::atomic<float> g_imgX{0}, g_imgY{0}, g_imgW{0}, g_imgH{0};   // where the overlay image was drawn last (back-buffer pixels)
 // render-thread only
 ID3D11RenderTargetView* g_curRtv = nullptr;
 int g_curW = 0, g_curH = 0;
@@ -72,9 +79,10 @@ struct Res {
     ID3DDeviceContextState* state = nullptr;
     ID3D11Texture2D* tex = nullptr; ID3D11ShaderResourceView* srv = nullptr; unsigned texVersion = 0; int texW = 0, texH = 0, texScreenH = 1080;
     ID3D11Texture2D* stex = nullptr; ID3D11ShaderResourceView* ssrv = nullptr; unsigned stexVersion = 0;
+    ID3D11Texture2D* ctex = nullptr; ID3D11ShaderResourceView* csrv = nullptr; unsigned ctexVersion = 0; int cW = 0, cH = 0;
     bool failed = false;
     template <class T> static void R(T*& p) { if (p) { p->Release(); p = nullptr; } }
-    void ReleaseAll() { R(vs); R(ps); R(cb); R(samp); R(blend); R(rast); R(state); R(tex); R(srv); R(stex); R(ssrv); dev = nullptr; texVersion = 0; stexVersion = 0; failed = false; }
+    void ReleaseAll() { R(vs); R(ps); R(cb); R(samp); R(blend); R(rast); R(state); R(tex); R(srv); R(stex); R(ssrv); R(ctex); R(csrv); dev = nullptr; texVersion = 0; stexVersion = 0; ctexVersion = 0; failed = false; }
 } g_res;
 
 const char* kShader = R"(
@@ -239,6 +247,18 @@ bool EnsureScreenTexture(ID3D11Device* dev) {
     return MakeTexture(dev, *img, g_res.stex, g_res.ssrv);
 }
 
+bool EnsureCursorTexture(ID3D11Device* dev) {
+    unsigned v = g_curImgVersion.load();
+    if (g_res.csrv && g_res.ctexVersion == v) return true;
+    std::shared_ptr<const OverlayImage> img;
+    { std::unique_lock<std::mutex> l(g_curImgMtx, std::try_to_lock); if (!l.owns_lock()) return g_res.csrv != nullptr; img = g_curImg; }
+    Res::R(g_res.csrv); Res::R(g_res.ctex);
+    g_res.ctexVersion = v;
+    if (!img || img->width <= 0) return false;
+    g_res.cW = img->width; g_res.cH = img->height;
+    return MakeTexture(dev, *img, g_res.ctex, g_res.csrv);
+}
+
 // Draws the screen image into the given render target (one the game has just finished rendering into)
 void DrawIntoTarget(ID3D11DeviceContext* ctx, ID3D11RenderTargetView* rtv, int w, int h) {
     float alpha = g_scrAlpha.load();
@@ -373,8 +393,14 @@ void Draw(IDXGISwapChain* sc) {
             x = (a % 3 == 0) ? ox : (a % 3 == 1) ? (sw - w) / 2 + ox : sw - w - ox;
             y = (a < 3) ? oy : sh - h - oy;
             x = std::floor(x); y = std::floor(y);
+            g_imgX = x; g_imgY = y; g_imgW = w; g_imgH = h;
             float cbdata[8] = {x / sw * 2 - 1, 1 - y / sh * 2, (x + w) / sw * 2 - 1, 1 - (y + h) / sh * 2, alpha, 0, 0, 0};
             DrawQuad(ctx, rtv, sw, sh, g_res.srv, cbdata);
+            if (g_cursorOn && EnsureCursorTexture(dev) && g_res.csrv) {   // menu cursor on top
+                float cx = std::floor(g_cursorX.load()), cy = std::floor(g_cursorY.load()), cw = (float)g_res.cW, ch = (float)g_res.cH;
+                float cc[8] = {cx / sw * 2 - 1, 1 - cy / sh * 2, (cx + cw) / sw * 2 - 1, 1 - (cy + ch) / sh * 2, 1.f, 0, 0, 0};
+                DrawQuad(ctx, rtv, sw, sh, g_res.csrv, cc);
+            }
         }
         if (rtv) rtv->Release();
         if (ctx) ctx->Release();
@@ -468,4 +494,10 @@ void SetPlacement(int anchor, float ox, float oy) { g_anchor = anchor; g_offX = 
 long long D3D11Frames() { return g_d3d11Frames; }
 long long OtherFrames() { return g_otherFrames; }
 int ScreenHeight() { return g_screenH; }
+int ScreenWidth() { return g_bbW; }
+void SetCursorImage(std::shared_ptr<const OverlayImage> img) { std::lock_guard<std::mutex> l(g_curImgMtx); g_curImg = std::move(img); ++g_curImgVersion; }
+void SetCursorVisible(bool on) { g_cursorOn = on; }
+void SetCursorPos(float x, float y) { g_cursorX = x; g_cursorY = y; }
+void CursorPos(float& x, float& y) { x = g_cursorX; y = g_cursorY; }
+bool ImageRect(float& x, float& y, float& w, float& h) { x = g_imgX; y = g_imgY; w = g_imgW; h = g_imgH; return w > 0; }
 }

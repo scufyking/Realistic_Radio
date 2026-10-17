@@ -13,6 +13,8 @@ class InputManager {
 public:
     void Init(const Config& cfg);
     void Poll(const std::function<void(Action)>& fire);
+    void Resync();          // take the current key state as "already pressed" (no action for keys still held)
+    int PollNewButton();    // key menu: number of a controller button pressed since the last call, -1 = none
 private:
     bool GameFocused() const;
     Config cfg_;

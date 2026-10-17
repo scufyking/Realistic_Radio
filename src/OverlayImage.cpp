@@ -43,18 +43,34 @@ SIZE Measure(HDC dc, HFONT f, const std::wstring& s) {
     RECT r{0, 0, 4000, 1000}; DrawTextW(dc, s.c_str(), (int)s.size(), &r, DT_CALCRECT | DT_SINGLELINE | DT_NOPREFIX);
     SelectObject(dc, o); sz.cx = r.right; sz.cy = r.bottom; return sz;
 }
-// Draws white text into the mask, then blends it with the given colour into out.
-void DrawText(Gdi& mask, std::vector<uint32_t>& out, HFONT f, const std::wstring& s, RECT r, float R, float G, float B, UINT align = 0) {
-    if (s.empty()) return;
-    mask.Clear();
-    HGDIOBJ o = SelectObject(mask.dc, f);
-    DrawTextW(mask.dc, s.c_str(), (int)s.size(), &r, DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS | DT_VCENTER | align);
-    SelectObject(mask.dc, o); GdiFlush();
-    for (int i = 0; i < mask.w * mask.h; ++i) {
+// Text is drawn white into the mask (DrawTextW clips to the rectangle) and blended with the given colour into out.
+// Only the rectangle is cleared and blended, so many small texts on a large image stay cheap.
+RECT ClipRect(const Gdi& m, RECT r) {
+    r.left = std::max<LONG>(0, r.left); r.top = std::max<LONG>(0, r.top);
+    r.right = std::min<LONG>(m.w, r.right); r.bottom = std::min<LONG>(m.h, r.bottom);
+    return r;
+}
+void BlendMask(Gdi& mask, std::vector<uint32_t>& out, RECT c, float R, float G, float B) {
+    for (int y = c.top; y < c.bottom; ++y) for (int x = c.left; x < c.right; ++x) {
+        size_t i = (size_t)y * mask.w + x;
         uint32_t p = mask.bits[i];
         float cov = std::max({(p >> 16) & 255u, (p >> 8) & 255u, p & 255u}) / 255.f;
         if (cov > 0) Over(out[i], cov, R * cov, G * cov, B * cov);
     }
+}
+void ClearMask(Gdi& mask, RECT c) {
+    GdiFlush();
+    for (int y = c.top; y < c.bottom; ++y) std::fill(mask.bits + (size_t)y * mask.w + c.left, mask.bits + (size_t)y * mask.w + c.right, 0u);
+}
+void DrawText(Gdi& mask, std::vector<uint32_t>& out, HFONT f, const std::wstring& s, RECT r, float R, float G, float B, UINT align = 0) {
+    if (s.empty()) return;
+    RECT c = ClipRect(mask, r);
+    if (c.right <= c.left || c.bottom <= c.top) return;
+    ClearMask(mask, c);
+    HGDIOBJ o = SelectObject(mask.dc, f);
+    DrawTextW(mask.dc, s.c_str(), (int)s.size(), &r, DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS | DT_VCENTER | align);
+    SelectObject(mask.dc, o); GdiFlush();
+    BlendMask(mask, out, c, R, G, B);
 }
 float RoundedCoverage(int x, int y, int w, int h, float rad) {
     float px = x + 0.5f, py = y + 0.5f;
@@ -459,15 +475,13 @@ std::wstring Initials(const std::wstring& name) {
 // text that wraps onto at most two lines (DT_EDITCONTROL hides a partly visible third line)
 void DrawText2(Gdi& mask, std::vector<uint32_t>& out, HFONT f, const std::wstring& s, RECT r, float R, float G, float B) {
     if (s.empty()) return;
-    mask.Clear();
+    RECT c = ClipRect(mask, r);
+    if (c.right <= c.left || c.bottom <= c.top) return;
+    ClearMask(mask, c);
     HGDIOBJ o = SelectObject(mask.dc, f);
     DrawTextW(mask.dc, s.c_str(), (int)s.size(), &r, DT_WORDBREAK | DT_EDITCONTROL | DT_END_ELLIPSIS | DT_NOPREFIX);
     SelectObject(mask.dc, o); GdiFlush();
-    for (int i = 0; i < mask.w * mask.h; ++i) {
-        uint32_t p = mask.bits[i];
-        float cov = std::max({(p >> 16) & 255u, (p >> 8) & 255u, p & 255u}) / 255.f;
-        if (cov > 0) Over(out[i], cov, R * cov, G * cov, B * cov);
-    }
+    BlendMask(mask, out, c, R, G, B);
 }
 } // namespace
 
@@ -597,8 +611,39 @@ std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const Ov
     } else {
         cv.Round(tileX, tileY, T, T, (float)U(18), 0.17f, 0.18f, 0.22f);
         cv.Glow(tileX + T * 0.3f, tileY + T * 0.25f, T * 0.9f, AR, AG, AB, 0.12f);
-        if (info.media) {   // disc
-            float cx = tileX + T / 2.f, cy = tileY + T / 2.f, r = T * 0.36f;
+        const float cx = tileX + T / 2.f, cy = tileY + T / 2.f, L = 0.80f, LG = 0.82f, LB = 0.86f, DR = 0.17f, DG = 0.18f, DB = 0.22f;
+        const std::string& mt = info.mediaType;
+        auto R = [&](float x0, float y0, float x1, float y1, float rad, float r, float g, float b) {
+            cv.Round((int)(cx + x0 * T), (int)(cy + y0 * T), (int)((x1 - x0) * T), (int)((y1 - y0) * T), rad * T, r, g, b); };
+        if (info.media && mt == "usb") {            // USB stick
+            R(-0.11f, -0.36f, 0.11f, -0.14f, 0.02f, 0.62f, 0.64f, 0.68f);
+            R(-0.06f, -0.30f, -0.02f, -0.24f, 0.005f, DR, DG, DB); R(0.02f, -0.30f, 0.06f, -0.24f, 0.005f, DR, DG, DB);
+            R(-0.17f, -0.15f, 0.17f, 0.36f, 0.06f, L, LG, LB);
+            R(-0.17f, 0.10f, 0.17f, 0.17f, 0.0f, AR, AG, AB);
+        } else if (info.media && mt == "sd") {      // SD card
+            float x0 = cx - 0.24f * T, x1 = cx + 0.24f * T, y0 = cy - 0.32f * T, y1 = cy + 0.32f * T, cut = 0.13f * T;
+            cv.Poly({{x0, y0}, {x1 - cut, y0}, {x1, y0 + cut}, {x1, y1}, {x0, y1}}, L, LG, LB);
+            for (int k = 0; k < 5; ++k) R(-0.19f + k * 0.07f, -0.29f, -0.15f + k * 0.07f, -0.16f, 0.008f, AR, AG, AB);
+            R(-0.17f, 0.02f, 0.17f, 0.25f, 0.03f, DR, DG, DB);
+        } else if (info.media && mt == "cassette") {  // cassette
+            R(-0.38f, -0.24f, 0.38f, 0.24f, 0.05f, L, LG, LB);
+            R(-0.30f, -0.17f, 0.30f, 0.06f, 0.03f, AR, AG, AB);
+            R(-0.18f, -0.08f, 0.18f, 0.03f, 0.03f, DR, DG, DB);
+            for (float sx : {-0.10f, 0.10f}) { cv.Circle(cx + sx * T, cy - 0.025f * T, 0.045f * T, 1.f, 1.f, 1.f); cv.Circle(cx + sx * T, cy - 0.025f * T, 0.018f * T, DR, DG, DB); }
+            cv.Poly({{cx - 0.22f * T, cy + 0.24f * T}, {cx - 0.16f * T, cy + 0.13f * T}, {cx + 0.16f * T, cy + 0.13f * T}, {cx + 0.22f * T, cy + 0.24f * T}}, 0.62f, 0.64f, 0.68f);
+        } else if (info.media && mt == "bluetooth") {  // bluetooth rune on a round badge
+            cv.Circle(cx, cy, 0.30f * T, 0.20f, 0.45f, 0.95f);
+            float w = 0.035f * T, t = -0.17f * T, b = 0.17f * T, rx = 0.09f * T, lx = -0.09f * T;
+            cv.Line(cx, cy + t, cx, cy + b, w, 1.f, 1.f, 1.f);
+            cv.Line(cx, cy + t, cx + rx, cy + t / 2, w, 1.f, 1.f, 1.f); cv.Line(cx + rx, cy + t / 2, cx + lx, cy + b / 2, w, 1.f, 1.f, 1.f);
+            cv.Line(cx, cy + b, cx + rx, cy + b / 2, w, 1.f, 1.f, 1.f); cv.Line(cx + rx, cy + b / 2, cx + lx, cy + t / 2, w, 1.f, 1.f, 1.f);
+        } else if (info.media && mt == "aux") {        // 3.5 mm plug
+            R(-0.035f, -0.36f, 0.035f, -0.04f, 0.03f, 0.75f, 0.77f, 0.80f);
+            R(-0.04f, -0.25f, 0.04f, -0.23f, 0.0f, DR, DG, DB); R(-0.04f, -0.16f, 0.04f, -0.14f, 0.0f, DR, DG, DB);
+            R(-0.09f, -0.04f, 0.09f, 0.30f, 0.04f, AR, AG, AB);
+            R(-0.025f, 0.30f, 0.025f, 0.40f, 0.01f, L, LG, LB);
+        } else if (info.media) {   // disc (CD)
+            float r = T * 0.36f;
             cv.Circle(cx, cy, r, 0.80f, 0.82f, 0.86f);
             cv.Arc(cx, cy, r * 0.72f, r * 0.10f, 0.35f, 1.25f, 1.f, 1.f, 1.f);
             cv.Circle(cx, cy, r * 0.42f, AR, AG, AB);
@@ -690,5 +735,283 @@ std::shared_ptr<OverlayImage> RenderScreenGrid(int W, int H, bool flipX, bool fl
         FillRect(px, W, H, 0, y, W, y + t, 1.f, 1.f, 0.f, 0.85f);
     }
     DeleteObject(f);
+    return img;
+}
+
+
+// ------------------------------------------------------------------------------------------------
+// Settings menu (Ctrl+0). Layout is computed in one place and used by both the renderer and the hit test.
+namespace {
+struct MenuLayout {
+    float s = 1;
+    int W = 0, H = 0, headH = 0, sideW = 0, x0 = 0, x1 = 0, itemsY = 0, rowH = 0, footY = 0;
+    RECT close{}, save{}, reset{}, def{};
+    bool keys = false;
+    int first = 0, visible = 1;
+    int S(float v) const { return std::max(1, (int)std::lround(v * s)); }
+    RECT Page(int i) const { return RECT{S(14), S(98) + i * S(44), sideW - S(14), S(98) + i * S(44) + S(38)}; }
+    RECT Row(int i) const { i -= first; return RECT{x0 - S(12), itemsY + i * rowH, x1 + S(8), itemsY + (i + 1) * rowH}; }
+    bool Shown(int i) const { return i >= first && i < first + visible; }
+    RECT Button(int i) const { RECT r = Row(i); int cy = (r.top + r.bottom) / 2; return RECT{CtlX1() - S(190), cy - S(18), CtlX1(), cy + S(18)}; }
+    int CtlX0() const { return x0 + (x1 - x0) * 52 / 100; }
+    int CtlX1() const { return x1 - S(6); }
+    RECT Toggle(int i) const { RECT r = Row(i); int cy = (r.top + r.bottom) / 2; return RECT{CtlX1() - S(54), cy - S(15), CtlX1(), cy + S(15)}; }
+    RECT Track(int i) const { RECT r = Row(i); int cy = (r.top + r.bottom) / 2; return RECT{CtlX0(), cy - S(12), CtlX1() - S(86), cy + S(12)}; }
+    RECT Prev(int i) const { RECT r = Row(i); int cy = (r.top + r.bottom) / 2; return RECT{CtlX0(), cy - S(16), CtlX0() + S(34), cy + S(16)}; }
+    RECT Next(int i) const { RECT r = Row(i); int cy = (r.top + r.bottom) / 2; return RECT{CtlX1() - S(34), cy - S(16), CtlX1(), cy + S(16)}; }
+    RECT KeyCell(int i) const { RECT r = Row(i); return RECT{x0 + (x1 - x0) * 48 / 100, r.top + S(3), x0 + (x1 - x0) * 77 / 100, r.bottom - S(3)}; }
+    RECT BtnCell(int i) const { RECT r = Row(i); return RECT{x0 + (x1 - x0) * 79 / 100, r.top + S(3), x1, r.bottom - S(3)}; }
+};
+MenuLayout Layout(const MenuView& v, int screenH) {
+    MenuLayout L;
+    L.s = (float)std::clamp(screenH / 1080.0, 0.5, 4.0);
+    L.W = L.S(1120); L.H = L.S(720); L.headH = L.S(80); L.sideW = L.S(232);
+    L.x0 = L.sideW + L.S(26); L.x1 = L.W - L.S(30);
+    L.keys = !v.items.empty() && v.items[0].kind == MenuItemKind::Key;
+    L.itemsY = L.headH + L.S(46) + (L.keys ? L.S(26) : 0);
+    L.rowH = L.keys ? L.S(34) : L.S(54);
+    L.footY = L.H - L.S(72);
+    L.visible = std::max(1, (L.footY - L.S(8) - L.itemsY) / L.rowH);
+    L.first = std::clamp(v.firstRow, 0, std::max(0, (int)v.items.size() - L.visible));
+    L.close = RECT{L.W - L.S(64), L.S(20), L.W - L.S(26), L.S(58)};
+    int by0 = L.footY + L.S(16), by1 = L.footY + L.S(56);
+    L.save = RECT{L.W - L.S(30) - L.S(190), by0, L.W - L.S(30), by1};
+    L.reset = RECT{L.save.left - L.S(12) - L.S(170), by0, L.save.left - L.S(12), by1};
+    L.def = RECT{L.reset.left - L.S(12) - L.S(140), by0, L.reset.left - L.S(12), by1};
+    return L;
+}
+bool In(const RECT& r, float x, float y) { return x >= r.left && x < r.right && y >= r.top && y < r.bottom; }
+} // namespace
+
+MenuHit HitTestMenu(const MenuView& v, int screenH, float x, float y) {
+    MenuLayout L = Layout(v, screenH);
+    MenuHit h;
+    if (x < 0 || y < 0 || x >= L.W || y >= L.H) return h;
+    h.kind = MenuHit::Panel;
+    if (In(L.close, x, y)) { h.kind = MenuHit::Close; return h; }
+    if (In(L.save, x, y)) { h.kind = MenuHit::Save; return h; }
+    if (In(L.reset, x, y)) { h.kind = MenuHit::Reset; return h; }
+    if (In(L.def, x, y)) { h.kind = MenuHit::Default; return h; }
+    for (int i = 0; i < (int)v.pages.size(); ++i) if (In(L.Page(i), x, y)) { h.kind = MenuHit::Page; h.index = i; return h; }
+    for (int i = 0; i < (int)v.items.size(); ++i) {
+        if (!L.Shown(i) || !In(L.Row(i), x, y)) continue;
+        h.index = i; h.kind = MenuHit::Row;
+        const MenuItem& it = v.items[i];
+        switch (it.kind) {
+        case MenuItemKind::Toggle: if (x >= L.CtlX0()) h.kind = MenuHit::Toggle; break;
+        case MenuItemKind::Slider: {
+            RECT t = L.Track(i);
+            if (x >= t.left - L.S(10) && x <= t.right + L.S(10)) { h.kind = MenuHit::Slider; h.frac = std::clamp((x - t.left) / std::max(1.f, (float)(t.right - t.left)), 0.f, 1.f); }
+            break; }
+        case MenuItemKind::Choice:
+            if (In(L.Prev(i), x, y) || (x >= L.CtlX0() && x < (L.CtlX0() + L.CtlX1()) / 2)) h.kind = MenuHit::ChoicePrev;
+            else if (x >= (L.CtlX0() + L.CtlX1()) / 2) h.kind = MenuHit::ChoiceNext;
+            break;
+        case MenuItemKind::Button: if (In(L.Button(i), x, y)) h.kind = MenuHit::ItemButton; break;
+        case MenuItemKind::Heading: h.kind = MenuHit::Panel; h.index = -1; break;
+        case MenuItemKind::Key:
+            if (In(L.KeyCell(i), x, y)) h.kind = MenuHit::KeyCell;
+            else if (In(L.BtnCell(i), x, y)) h.kind = MenuHit::ButtonCell;
+            break;
+        }
+        return h;
+    }
+    return h;
+}
+
+int MenuVisibleRows(const MenuView& v, int screenH) { return Layout(v, screenH).visible; }
+
+float MenuSliderFrac(const MenuView& v, int screenH, int row, float x) {
+    MenuLayout L = Layout(v, screenH);
+    RECT t = L.Track(row);
+    return std::clamp((x - t.left) / std::max(1.f, (float)(t.right - t.left)), 0.f, 1.f);
+}
+
+std::shared_ptr<OverlayImage> RenderMenu(const MenuView& v, int screenH) {
+    MenuLayout L = Layout(v, screenH);
+    auto S = [&](float x) { return L.S(x); };
+    const int W = L.W, H = L.H;
+    auto img = std::make_shared<OverlayImage>();
+    img->width = W; img->height = H; img->renderedForScreenHeight = screenH;
+    img->pixels.assign((size_t)W * H, 0u);
+    auto& px = img->pixels;
+    Canvas cv{px, W, H};
+    const float AR = 1.f, AG = 0.682f, AB = 0.f;
+    const float TR = 0.96f, TG = 0.96f, TB = 0.97f, MR = 0.58f, MG = 0.61f, MB = 0.67f;
+
+    // panel + sidebar
+    const float rad = (float)S(18);
+    for (int y = 0; y < H; ++y) for (int x = 0; x < W; ++x) {
+        float cov = RoundedCoverage(x, y, W, H, rad);
+        if (cov <= 0) continue;
+        float t = (float)y / H;
+        bool side = x < L.sideW && y >= L.headH && y < L.footY;
+        float r = side ? 0.075f : 0.105f - 0.035f * t, g = side ? 0.08f : 0.115f - 0.04f * t, b = side ? 0.095f : 0.14f - 0.045f * t;
+        float a = 0.96f * cov;
+        Over(px[(size_t)y * W + x], a, r * a, g * a, b * a);
+    }
+    cv.Glow((float)S(150), (float)S(30), (float)S(380), AR, AG, AB, 0.07f);
+    for (int x = S(18); x < W - S(18); ++x) for (int y = 0; y < S(4); ++y) cv.Blend(x, y, 1.f, AR, AG, AB);
+    cv.Round(0, L.headH, W, std::max(1, S(1.5f)), 1.f, 1.f, 1.f, 1.f, 0.08f);
+    cv.Round(0, L.footY, W, std::max(1, S(1.5f)), 1.f, 1.f, 1.f, 1.f, 0.08f);
+    cv.Round(L.sideW, L.headH, std::max(1, S(1.5f)), L.footY - L.headH, 1.f, 1.f, 1.f, 1.f, 0.06f);
+
+    Gdi mask(W, H);
+    HFONT fTitle = MakeFont(S(30), FW_BOLD), fSub = MakeFont(S(15), FW_NORMAL), fPage = MakeFont(S(17), FW_SEMIBOLD),
+          fSection = MakeFont(S(14), FW_BOLD), fLabel = MakeFont(S(19), FW_NORMAL), fHint = MakeFont(S(14), FW_NORMAL),
+          fValue = MakeFont(S(18), FW_SEMIBOLD), fBtn = MakeFont(S(17), FW_SEMIBOLD), fBadge = MakeFont(S(12), FW_BOLD),
+          fStatus = MakeFont(S(15), FW_NORMAL), fIcon = MakeFont(S(24), FW_NORMAL);
+
+    // header: radio icon (speaker in a rounded square), title, subtitle, close button
+    int ix = S(26), iy = S(18), is = S(44);
+    cv.Round(ix, iy, is, is, (float)S(12), AR, AG, AB);
+    {
+        float sx = ix + is * 0.2f, sy = iy + is * 0.5f, k = is / 44.f;
+        cv.Round((int)sx, (int)(sy - 6 * k), (int)(7 * k), (int)(12 * k), 2 * k, 0.08f, 0.08f, 0.1f);
+        cv.Poly({{sx + 6 * k, sy - 6 * k}, {sx + 15 * k, sy - 13 * k}, {sx + 15 * k, sy + 13 * k}, {sx + 6 * k, sy + 6 * k}}, 0.08f, 0.08f, 0.1f);
+        for (int i = 0; i < 2; ++i) cv.Arc(sx + 16 * k, sy, (6.f + 6 * i) * k, 2.6f * k, -0.9f, 0.9f, 0.08f, 0.08f, 0.1f);
+    }
+    DrawText(mask, px, fTitle, v.title, RECT{ix + is + S(16), S(12), W - S(420), S(52)}, TR, TG, TB);
+    DrawText(mask, px, fSub, v.subtitle, RECT{ix + is + S(18), S(48), W - S(200), S(70)}, MR, MG, MB);
+    {
+        bool hov = v.hoverControl == MenuHit::Close;
+        if (hov) cv.Round(L.close.left, L.close.top, L.close.right - L.close.left, L.close.bottom - L.close.top, (float)S(10), 1.f, 1.f, 1.f, 0.10f);
+        float cx = (L.close.left + L.close.right) / 2.f, cy = (L.close.top + L.close.bottom) / 2.f, d = (float)S(8);
+        cv.Line(cx - d, cy - d, cx + d, cy + d, (float)S(2.4f), hov ? TR : MR, hov ? TG : MG, hov ? TB : MB);
+        cv.Line(cx - d, cy + d, cx + d, cy - d, (float)S(2.4f), hov ? TR : MR, hov ? TG : MG, hov ? TB : MB);
+    }
+
+    // sidebar pages
+    for (int i = 0; i < (int)v.pages.size(); ++i) {
+        RECT r = L.Page(i);
+        bool act = i == v.page, hov = v.hoverControl == 100 + i;
+        if (act) { cv.Round(r.left, r.top, r.right - r.left, r.bottom - r.top, (float)S(10), AR, AG, AB, 0.16f); cv.Round(r.left, r.top + S(8), S(4), r.bottom - r.top - S(16), (float)S(2), AR, AG, AB); }
+        else if (hov) cv.Round(r.left, r.top, r.right - r.left, r.bottom - r.top, (float)S(10), 1.f, 1.f, 1.f, 0.06f);
+        DrawText(mask, px, fPage, v.pages[i], RECT{r.left + S(18), r.top, r.right - S(8), r.bottom}, act ? AR : (hov ? TR : 0.80f), act ? AG : (hov ? TG : 0.81f), act ? AB : (hov ? TB : 0.85f));
+    }
+
+    // section title + column headers
+    DrawText(mask, px, fSection, Upper(v.section), RECT{L.x0, L.headH + S(14), L.x1, L.headH + S(40)}, AR, AG, AB);
+    if (L.keys) {
+        RECT k = L.KeyCell(0), b = L.BtnCell(0);
+        DrawText(mask, px, fSection, Upper(v.keyHeader), RECT{k.left + S(10), L.itemsY - S(26), k.right, L.itemsY}, MR, MG, MB);
+        DrawText(mask, px, fSection, Upper(v.buttonHeader), RECT{b.left + S(10), L.itemsY - S(26), b.right, L.itemsY}, MR, MG, MB);
+    }
+
+    // rows (scrollbar when they do not fit)
+    if ((int)v.items.size() > L.visible) {
+        int top = L.itemsY, h = L.visible * L.rowH, n = (int)v.items.size();
+        int th = std::max(S(30), h * L.visible / n), ty = top + (h - th) * L.first / std::max(1, n - L.visible);
+        cv.Round(L.x1 + S(14), top, S(5), h, (float)S(2.5f), 1.f, 1.f, 1.f, 0.06f);
+        cv.Round(L.x1 + S(14), ty, S(5), th, (float)S(2.5f), AR, AG, AB, 0.8f);
+    }
+    for (int i = 0; i < (int)v.items.size(); ++i) {
+        if (!L.Shown(i)) continue;
+        const MenuItem& it = v.items[i];
+        RECT r = L.Row(i);
+        if (it.kind == MenuItemKind::Heading) {   // small section title inside a page
+            DrawText(mask, px, fSection, Upper(it.label), RECT{L.x0, r.top + S(14), L.x1, r.bottom}, AR, AG, AB);
+            if (!it.hint.empty()) DrawText(mask, px, fHint, it.hint, RECT{L.x0 + S(260), r.top + S(14), L.x1, r.bottom}, MR, MG, MB, DT_RIGHT);
+            cv.Round(L.x0, r.top + S(10), L.x1 - L.x0, std::max(1, S(1.5f)), 1.f, 1.f, 1.f, 1.f, 0.07f);
+            continue;
+        }
+        bool sel = i == v.selected, hov = i == v.hover;
+        if (sel) {
+            cv.Round(r.left, r.top + S(2), r.right - r.left, r.bottom - r.top - S(4), (float)S(10), AR, AG, AB, 0.12f);
+            cv.Round(r.left, r.top + S(8), S(4), r.bottom - r.top - S(16), (float)S(2), AR, AG, AB);
+        } else if (hov) cv.Round(r.left, r.top + S(2), r.right - r.left, r.bottom - r.top - S(4), (float)S(10), 1.f, 1.f, 1.f, 0.05f);
+        int lx = L.x0 + S(6), lx1 = (it.kind == MenuItemKind::Key ? L.KeyCell(i).left : L.CtlX0()) - S(14);
+        bool twoLines = !it.hint.empty() && it.kind != MenuItemKind::Key;
+        int cy = (r.top + r.bottom) / 2;
+        int labelW = lx1 - lx;
+        if (it.restart) {   // small "restart" pill after the label
+            int lw = std::min(labelW - S(90), (int)Measure(mask.dc, fLabel, it.label).cx);
+            int px0 = lx + lw + S(10), pw = Measure(mask.dc, fBadge, v.restartText).cx + S(14), ptop = twoLines ? r.top + S(9) : cy - S(10);
+            cv.Round(px0, ptop, pw, S(20), (float)S(10), 0.30f, 0.32f, 0.38f);
+            DrawText(mask, px, fBadge, v.restartText, RECT{px0, ptop, px0 + pw, ptop + S(20)}, 0.88f, 0.89f, 0.92f, DT_CENTER);
+            labelW = lw + S(2);
+        }
+        if (twoLines) {
+            DrawText(mask, px, fLabel, it.label, RECT{lx, r.top + S(5), lx + labelW, cy + S(4)}, TR, TG, TB);
+            DrawText(mask, px, fHint, it.hint, RECT{lx, cy + S(2), lx1, r.bottom - S(5)}, MR, MG, MB);
+        } else DrawText(mask, px, fLabel, it.label, RECT{lx, r.top, lx + labelW, r.bottom}, TR, TG, TB);
+
+        switch (it.kind) {
+        case MenuItemKind::Toggle: {
+            RECT t = L.Toggle(i);
+            int tw = t.right - t.left, th = t.bottom - t.top;
+            if (it.on) cv.Round(t.left, t.top, tw, th, th / 2.f, AR, AG, AB); else cv.Round(t.left, t.top, tw, th, th / 2.f, 0.26f, 0.27f, 0.31f);
+            float kx = it.on ? t.right - th / 2.f : t.left + th / 2.f;
+            cv.Circle(kx, (t.top + t.bottom) / 2.f, th / 2.f - S(3), it.on ? 0.08f : 0.80f, it.on ? 0.08f : 0.81f, it.on ? 0.1f : 0.85f);
+            break; }
+        case MenuItemKind::Slider: {
+            RECT t = L.Track(i);
+            int ty = (t.top + t.bottom) / 2, th = S(6), tw = t.right - t.left;
+            cv.Round(t.left, ty - th / 2, tw, th, th / 2.f, 0.26f, 0.27f, 0.31f);
+            int fw = std::max(th, (int)(tw * std::clamp(it.frac, 0.f, 1.f)));
+            cv.Round(t.left, ty - th / 2, fw, th, th / 2.f, AR, AG, AB);
+            cv.Circle((float)t.left + fw, (float)ty, (float)S(9), TR, TG, TB);
+            DrawText(mask, px, fValue, it.value, RECT{t.right + S(14), r.top, L.CtlX1(), r.bottom}, AR, AG, AB, DT_RIGHT);
+            break; }
+        case MenuItemKind::Choice: {
+            RECT p = L.Prev(i), n = L.Next(i);
+            for (RECT b : {p, n}) cv.Round(b.left, b.top, b.right - b.left, b.bottom - b.top, (float)S(8), 1.f, 1.f, 1.f, 0.07f);
+            float ay = (p.top + p.bottom) / 2.f, d = (float)S(6);
+            float pxc = (p.left + p.right) / 2.f, nxc = (n.left + n.right) / 2.f;
+            cv.Line(pxc + d / 2, ay - d, pxc - d / 2, ay, (float)S(2.2f), TR, TG, TB); cv.Line(pxc - d / 2, ay, pxc + d / 2, ay + d, (float)S(2.2f), TR, TG, TB);
+            cv.Line(nxc - d / 2, ay - d, nxc + d / 2, ay, (float)S(2.2f), TR, TG, TB); cv.Line(nxc + d / 2, ay, nxc - d / 2, ay + d, (float)S(2.2f), TR, TG, TB);
+            DrawText(mask, px, fValue, it.value, RECT{p.right + S(8), r.top, n.left - S(8), r.bottom}, AR, AG, AB, DT_CENTER);
+            break; }
+        case MenuItemKind::Button: {
+            RECT b = L.Button(i);
+            bool hovB = hov && v.hoverControl == MenuHit::ItemButton;
+            cv.Round(b.left, b.top, b.right - b.left, b.bottom - b.top, (float)S(10), AR, AG, AB, hovB ? 0.95f : 0.75f);
+            DrawText(mask, px, fBtn, it.button, b, 0.07f, 0.07f, 0.09f, DT_CENTER);
+            DrawText(mask, px, fValue, it.value, RECT{L.CtlX0() - S(40), r.top, b.left - S(14), r.bottom}, 0.86f, 0.87f, 0.90f, DT_RIGHT);
+            break; }
+        case MenuItemKind::Heading: break;
+        case MenuItemKind::Key: {
+            RECT k = L.KeyCell(i), b = L.BtnCell(i);
+            bool capK = sel && v.capture == 1, capB = sel && v.capture == 2;
+            for (auto [cell, cap] : {std::pair<RECT, bool>{k, capK}, std::pair<RECT, bool>{b, capB}})
+                cv.Round(cell.left, cell.top, cell.right - cell.left, cell.bottom - cell.top, (float)S(8), cap ? AR : 1.f, cap ? AG : 1.f, cap ? AB : 1.f, cap ? 0.22f : 0.05f);
+            bool noneK = it.key == L"–", noneB = it.button == L"–";
+            DrawText(mask, px, fValue, capK ? v.captureText : it.key, RECT{k.left + S(10), k.top, k.right - S(6), k.bottom},
+                     capK ? AR : noneK ? MR : TR, capK ? AG : noneK ? MG : TG, capK ? AB : noneK ? MB : TB);
+            DrawText(mask, px, fLabel, capB ? v.captureText : it.button, RECT{b.left + S(10), b.top, b.right - S(6), b.bottom},
+                     capB ? AR : noneB ? MR : 0.86f, capB ? AG : noneB ? MG : 0.87f, capB ? AB : noneB ? MB : 0.90f);
+            break; }
+        }
+    }
+
+    // footer: status + buttons
+    int fy0 = L.footY + S(4), fy1 = L.H - S(6);
+    if (v.unsaved) cv.Circle((float)S(34), (fy0 + fy1) / 2.f - S(9), (float)S(4), AR, AG, AB);
+    DrawText(mask, px, fStatus, v.status, RECT{S(46), fy0 + S(6), L.def.left - S(16), (fy0 + fy1) / 2 + S(2)}, v.unsaved ? AR : MR, v.unsaved ? AG : MG, v.unsaved ? AB : MB);
+    DrawText(mask, px, fHint, v.footer, RECT{S(46), (fy0 + fy1) / 2, L.def.left - S(16), fy1 - S(4)}, MR, MG, MB);
+    struct Btn { RECT r; const std::wstring& t; bool primary; int id; };
+    for (const Btn& b : {Btn{L.def, v.btnDefault, false, MenuHit::Default}, Btn{L.reset, v.btnReset, false, MenuHit::Reset}, Btn{L.save, v.btnSave, true, MenuHit::Save}}) {
+        bool hov = v.hoverControl == b.id;
+        int bw = b.r.right - b.r.left, bh = b.r.bottom - b.r.top;
+        if (b.primary) cv.Round(b.r.left, b.r.top, bw, bh, (float)S(10), hov ? 1.f : AR, hov ? 0.78f : AG, hov ? 0.25f : AB);
+        else cv.Round(b.r.left, b.r.top, bw, bh, (float)S(10), 1.f, 1.f, 1.f, hov ? 0.16f : 0.08f);
+        DrawText(mask, px, fBtn, b.t, b.r, b.primary ? 0.07f : TR, b.primary ? 0.07f : TG, b.primary ? 0.09f : TB, DT_CENTER);
+    }
+    for (HFONT f : {fTitle, fSub, fPage, fSection, fLabel, fHint, fValue, fBtn, fBadge, fStatus, fIcon}) DeleteObject(f);
+    return img;
+}
+
+std::shared_ptr<OverlayImage> RenderMenuCursor(int screenH) {
+    const float s = (float)std::clamp(screenH / 1080.0, 0.5, 4.0);
+    int W = std::max(8, (int)std::lround(26 * s)), H = std::max(10, (int)std::lround(36 * s));
+    auto img = std::make_shared<OverlayImage>();
+    img->width = W; img->height = H; img->renderedForScreenHeight = screenH;
+    img->pixels.assign((size_t)W * H, 0u);
+    Canvas cv{img->pixels, W, H};
+    auto P = [&](float x, float y) { return std::pair<float, float>{x * s, y * s}; };
+    std::vector<std::pair<float, float>> outer = {P(1, 1), P(1, 27), P(7.5f, 21), P(12, 31), P(16.5f, 29), P(12, 19.5f), P(20.5f, 19.5f)};
+    std::vector<std::pair<float, float>> inner = {P(3, 5.5f), P(3, 22.5f), P(8, 17.8f), P(12.8f, 28.2f), P(14.2f, 27.6f), P(9.6f, 17.5f), P(16.4f, 17.5f)};
+    cv.Poly(outer, 0.05f, 0.05f, 0.06f);
+    cv.Poly(inner, 1.f, 1.f, 1.f);
     return img;
 }

@@ -38,3 +38,21 @@ void InputManager::Poll(const std::function<void(Action)>& fire) {
     }
     lastButtons_ = ji.dwButtons;
 }
+
+void InputManager::Resync() {
+    for (int i = 0; i < (int)Action::Count; ++i) {
+        const KeyBinding& b = cfg_.keys[i];
+        keyDown_[i] = b.vk && Down(b.vk);
+    }
+    JOYINFOEX ji{}; ji.dwSize = sizeof(ji); ji.dwFlags = JOY_RETURNBUTTONS;
+    if (joyGetPosEx(JOYSTICKID1 + cfg_.controllerIndex, &ji) == JOYERR_NOERROR) lastButtons_ = ji.dwButtons;
+}
+
+int InputManager::PollNewButton() {
+    JOYINFOEX ji{}; ji.dwSize = sizeof(ji); ji.dwFlags = JOY_RETURNBUTTONS;
+    if (joyGetPosEx(JOYSTICKID1 + cfg_.controllerIndex, &ji) != JOYERR_NOERROR) return -1;
+    DWORD fresh = ji.dwButtons & ~lastButtons_;
+    lastButtons_ = ji.dwButtons;
+    for (int b = 0; b < 32; ++b) if (fresh & (1u << b)) return b;
+    return -1;
+}
