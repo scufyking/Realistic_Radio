@@ -14,7 +14,8 @@
 using nlohmann::json;
 
 static const char* kActionNames[] = {"next", "previous", "stop", "volumeUp", "volumeDown", "makeFavourite", "goToFavourite", "mute", "showOverlay", "source", "nextDisc", "previousDisc", "screenPage", "menu",
-                                     "band", "memory1", "memory2", "memory3", "memory4", "memory5", "memory6", "memory7", "memory8", "memory9"};
+                                     "band", "memory1", "memory2", "memory3", "memory4", "memory5", "memory6", "memory7", "memory8", "memory9",
+                                     "tuneUp", "tuneDown"};
 static_assert(sizeof(kActionNames) / sizeof(kActionNames[0]) == (size_t)Action::Count, "every action needs a name");
 const char* ActionName(Action a) { return kActionNames[(int)a]; }
 
@@ -32,6 +33,8 @@ Config::Config() {
     keys[(int)Action::Menu] = ParseKeyBinding("Ctrl+0");
     keys[(int)Action::Band] = ParseKeyBinding("Shift+Home");
     for (int i = 0; i < 9; ++i) keys[(int)Action::Memory1 + i] = ParseKeyBinding("NumPad" + std::to_string(i + 1));   // station buttons
+    keys[(int)Action::TuneUp] = ParseKeyBinding("Shift+Right");   // frequency radio: 0.1 MHz steps
+    keys[(int)Action::TuneDown] = ParseKeyBinding("Shift+Left");
 }
 
 int ParseKeyName(const std::string& in) {
@@ -209,6 +212,9 @@ bool Config::Load(const std::wstring& path) {
         dabRange = std::clamp(j.value("dabRange", dabRange), 1.0, 3.0);
         switchMode = j.value("switchMode", switchMode); if (switchMode != "better") switchMode = "lost";
         memoryButtons = j.value("memoryButtons", memoryButtons);
+        tuning = j.value("tuning", tuning); if (tuning != "frequency") tuning = "list";
+        rdsAf = j.value("rdsAf", rdsAf);
+        tunedFreq = j.value("tunedFreq", tunedFreq);
         memoryHoldSeconds = std::clamp(j.value("memoryHoldSeconds", memoryHoldSeconds), 0.5, 3.0);
         if (j.contains("stationButtons") && j["stationButtons"].is_object())
             for (auto& [k, v] : j["stationButtons"].items()) if (v.is_string()) stationButtons[k] = v.get<std::string>();
@@ -334,7 +340,7 @@ bool Config::Load(const std::wstring& path) {
         std::vector<std::string> missingKeys;
         if (j.contains("keys") && j["keys"].is_object())
             for (const char* n : {"source", "nextDisc", "previousDisc", "screenPage", "menu", "band", "memory1", "memory2", "memory3", "memory4",
-                                  "memory5", "memory6", "memory7", "memory8", "memory9"}) if (!j["keys"].contains(n)) missingKeys.push_back(n);
+                                  "memory5", "memory6", "memory7", "memory8", "memory9", "tuneUp", "tuneDown"}) if (!j["keys"].contains(n)) missingKeys.push_back(n);
         bool addSource = !missingKeys.empty();
         bool addMedia = !j.contains("media");
         bool addFolderPerDisc = !addMedia && j["media"].is_object() && !j["media"].contains("folderPerDisc");
@@ -418,6 +424,7 @@ static json MenuJsonObj(const Config& c) {
     j["activePreset"] = c.activePreset; j["presetAuto"] = c.presetAuto; j["truckMemory"] = c.truckMemory;
     j["band"] = c.band; j["dabRange"] = c.dabRange; j["switchMode"] = c.switchMode;
     j["memoryButtons"] = c.memoryButtons; j["memoryHoldSeconds"] = c.memoryHoldSeconds;
+    j["tuning"] = c.tuning; j["rdsAf"] = c.rdsAf;
     j["presets"] = json::array();
     for (auto& p : c.presets) {
         json o; o["name"] = p.name; o["trucks"] = p.trucks;
@@ -465,6 +472,7 @@ void CopyMenuSettings(Config& d, const Config& s) {
     d.menuLanguage = s.menuLanguage; d.screenPage = s.screenPage;
     d.presets = s.presets; d.activePreset = s.activePreset; d.presetAuto = s.presetAuto; d.truckMemory = s.truckMemory;
     d.band = s.band; d.dabRange = s.dabRange; d.switchMode = s.switchMode; d.memoryButtons = s.memoryButtons; d.memoryHoldSeconds = s.memoryHoldSeconds;
+    d.tuning = s.tuning; d.rdsAf = s.rdsAf;
     d.screen.width = s.screen.width; d.screen.height = s.screen.height; d.screen.format = s.screen.format;
     d.screen.enabled = s.screen.enabled; d.screen.durationSeconds = s.screen.durationSeconds;
     d.screen.areaX = s.screen.areaX; d.screen.areaY = s.screen.areaY; d.screen.areaW = s.screen.areaW; d.screen.areaH = s.screen.areaH;
@@ -496,20 +504,23 @@ void ApplyPreset(ScreenConfig& s, const TruckPreset& p) {
     s.startLogoFile = p.logo; s.target = p.target; s.scale = p.scale; s.startLogoScale = p.logoScale; s.logoSize = p.logoSize;
 }
 namespace {
-TruckPreset Std(const char* name, const char* truck, double x, double y, double w, double h) {
-    TruckPreset p; p.name = name; p.trucks = {truck};
-    p.width = 1024; p.height = 1024; p.format = 29; p.flipX = false; p.flipY = true; p.design = "modern"; p.durationSeconds = 4.0;
-    p.areaX = x; p.areaY = y; p.areaW = w; p.areaH = h;
+TruckPreset Std(const char* name, std::vector<std::string> trucks, double x, double y, double w, double h, bool flipY, int target = 1) {
+    TruckPreset p; p.name = name; p.trucks = std::move(trucks);
+    p.width = 1024; p.height = 1024; p.format = 29; p.flipX = false; p.flipY = flipY; p.design = "modern"; p.durationSeconds = 4.0;
+    p.areaX = x; p.areaY = y; p.areaW = w; p.areaH = h; p.target = target;
     return p;
 }
 }
+// Set up and tested in the game by ScufyKing (1.4.1). Upside down only on drawing surface 2 (Mercedes). Scania R and S share the cab: the standard preset is the normal
+// screen, "Scania R/S Smart Dashboard" is linked to no truck - choose it (or link it) for trucks with the smart dashboard.
 const std::vector<TruckPreset>& BuiltinPresets() {
     static const std::vector<TruckPreset> list = {
-        Std("MAN TGX", "vehicle.man.tgx_2020", 0.10, 0.13, 0.78, 0.58),
-        Std("Scania S", "vehicle.scania.s_2016", 0.11, 0.12, 0.77, 0.58),
-        Std("Mercedes-Benz New Actros", "vehicle.mercedes.actros2014", 0.25, 0.12, 0.50, 0.56),
-        Std("DAF NGD", "vehicle.daf.2021", 0.10, 0.26, 0.78, 0.44),
-        Std("Iveco S-Way", "vehicle.iveco.sway", 0.02, 0.32, 0.75, 0.33),
+        Std("MAN TGX", {"vehicle.man.tgx_2020"}, 0.11, 0.24, 0.78, 0.58, false),
+        Std("Scania R/S", {"vehicle.scania.r_2016", "vehicle.scania.s_2016"}, 0.24, 0.16, 0.52, 0.59, false),
+        Std("Scania R/S Smart Dashboard", {}, 0.12, 0.25, 0.77, 0.52, false),
+        Std("Mercedes-Benz New Actros", {"vehicle.mercedes.actros2014"}, 0.25, 0.25, 0.50, 0.56, true, 2),
+        Std("DAF NGD", {"vehicle.daf.2021"}, 0.10, 0.26, 0.78, 0.44, false),
+        Std("Iveco S-Way", {"vehicle.iveco.sway"}, 0.02, 0.32, 0.75, 0.33, false),
     };
     return list;
 }
@@ -581,7 +592,7 @@ void Config::SaveVolume(const std::wstring& path) const {
     try {
         std::ifstream f{std::filesystem::path(path)};
         json j = f ? json::parse(f, nullptr, true, true) : json::object();
-        j["volume"] = volume; j["muted"] = muted; j["band"] = band;
+        j["volume"] = volume; j["muted"] = muted; j["band"] = band; j["tunedFreq"] = tunedFreq;
         j["stationButtons"] = stationButtons;
         j["source"] = source; j["mediaTrack"] = mediaTrack; j["screenPage"] = screenPage;
         json r = json::object();

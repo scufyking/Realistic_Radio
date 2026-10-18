@@ -21,6 +21,8 @@ bool RadioManager::Init(const std::wstring& dir, const std::string& game) {
     if (!db_.Load(dir + Utf8ToWide(file))) return false;
     db_.LoadCustom(dir + L"custom-stations-" + Utf8ToWide(game) + L".json");
     BuildFamilies();
+    db_.AssignFrequencies();
+    tuned_ = cfg_.tunedFreq;
     fav_.Load(dir + L"favourites-" + Utf8ToWide(game) + L".json");
     memPath_ = dir + L"trucks-" + Utf8ToWide(game) + L".json";
     LoadMemory();
@@ -363,7 +365,7 @@ void RadioManager::LoadMemory() {
             m.name = t.value("name", std::string()); m.source = t.value("source", m.source); m.mediaTrack = t.value("mediaTrack", std::string());
             m.volume = t.value("volume", -1.0); m.muted = t.value("muted", false);
             m.mediaResume = StrMap(t, "mediaResume"); m.stations = StrMap(t, "stations"); m.favourites = StrMap(t, "favourites");
-            m.buttons = StrMap(t, "buttons"); m.band = t.value("band", std::string());
+            m.buttons = StrMap(t, "buttons"); m.band = t.value("band", std::string()); m.freq = t.value("freq", 0);
             mem_[id] = m;
         }
         Log::Write("Radio memory: %d truck(s)", (int)mem_.size());
@@ -376,7 +378,7 @@ void RadioManager::SaveMemory() {
         mjson t;
         t["name"] = m.name; t["source"] = m.source; t["mediaTrack"] = m.mediaTrack; t["volume"] = m.volume; t["muted"] = m.muted;
         t["mediaResume"] = m.mediaResume; t["stations"] = m.stations; t["favourites"] = m.favourites;
-        t["buttons"] = m.buttons; t["band"] = m.band;
+        t["buttons"] = m.buttons; t["band"] = m.band; t["freq"] = m.freq;
         j["trucks"][id] = t;
     }
     std::string s = j.dump(2);
@@ -390,6 +392,7 @@ void RadioManager::StoreMemory() {
     bool fresh = m.volume < 0;
     m.volume = cfg_.volume; m.muted = cfg_.muted; m.source = cfg_.source; m.mediaTrack = cfg_.mediaTrack; m.mediaResume = cfg_.mediaResume;
     m.band = cfg_.band;
+    if (tuned_ > 0) m.freq = tuned_;
     if (fresh && m.buttons.empty()) m.buttons = cfg_.stationButtons;   // a new truck starts with the general station buttons
     if (auto* st = db_.StationsOf(currentCountry_); st && currentIndex_ >= 0 && currentIndex_ < (int)st->size())
         m.stations[currentCountry_] = (*st)[currentIndex_].name;
@@ -405,6 +408,9 @@ void RadioManager::RestoreMemory() {
     if (m.band == "fm" || m.band == "dab") { if (m.band != cfg_.band) lastRefresh_ = 0; cfg_.band = m.band; }
     if (m.source == "usb" && cfg_.media.enabled && !lib_.Discs().empty()) {
         EnterMedia(-1, false);   // the USB / CD and track this truck played last
+    } else if (FreqMode() && m.freq > 0) {   // frequency radio: the frequency this truck was tuned to
+        if (source_ == Source::Media) EnterRadio();
+        SetTuned(m.freq);
     } else {
         if (source_ == Source::Media) EnterRadio();
         auto st = m.stations.find(currentCountry_);
@@ -427,8 +433,9 @@ bool RadioManager::FavHas(const std::string& country) const { return !FavGet(cou
 
 void RadioManager::ApplySettings(const Config& e) {
     bool memWasOn = cfg_.truckMemory;
-    std::string oldBand = cfg_.band;
+    std::string oldBand = cfg_.band, oldTuning = cfg_.tuning;
     CopyMenuSettings(cfg_, e);
+    if (cfg_.tuning != oldTuning) { lastRefresh_ = 0; flipUntil_ = 0; Log::Write("Tuning: %s", cfg_.tuning.c_str()); }
     if (cfg_.band != oldBand) {   // band changed in the menu: tune again like the band key (stays in USB mode)
         Log::Write("Band: %s", Dab() ? "DAB+" : "FM");
         lastRefresh_ = 0;
@@ -457,6 +464,16 @@ OverlayInfo RadioManager::CurrentInfo(const std::wstring& sub) {
     OverlayInfo i;
     i.source = Utf8ToWide(cfg_.overlay.textRadio) + (Dab() ? L" DAB+" : L" FM");
     auto* st = db_.StationsOf(currentCountry_);
+    if (FreqMode() && tuned_ > 0 && (!st || currentIndex_ < 0 || currentIndex_ >= (int)st->size())) {   // dial on an empty frequency
+        const bool en = cfg_.menuLanguage == "en";
+        i.headline = playing_ ? Utf8ToWide(cfg_.overlay.textNowPlaying) : Utf8ToWide(cfg_.overlay.textStopped);
+        i.title = FreqText(tuned_);
+        i.subtitle = sub.empty() ? std::wstring(en ? L"No station on this frequency" : L"Kein Sender auf dieser Frequenz") : sub;
+        i.bars = playing_ ? 0 : -1;
+        if (int b = CurrentButton()) i.detail = std::wstring(en ? L"Button " : L"Taste ") + std::to_wstring(b);
+        i.lcd = FreqText(tuned_);
+        return i;
+    }
     if (!st || currentIndex_ < 0 || currentIndex_ >= (int)st->size()) {
         i.title = L"Realistic Radio"; i.subtitle = sub.empty() ? Utf8ToWide(cfg_.overlay.textConnecting) : sub; return i;
     }
@@ -471,8 +488,10 @@ OverlayInfo RadioManager::CurrentInfo(const std::wstring& sub) {
             i.detail = Utf8ToWide(cfg_.overlay.textStations) + L" " + std::to_wstring(k + 1) + L" / " + std::to_wstring(list_.size());
             break;
         }
+    if (FreqMode() && s.freq > 0) i.detail = FreqText(s.freq);   // the dial instead of "station 3 / 12"
     if (int b = CurrentButton()) i.detail += (i.detail.empty() ? L"" : L"  \u2022  ") + std::wstring(cfg_.menuLanguage == "en" ? L"Button " : L"Taste ") + std::to_wstring(b);
     i.lcd = i.title;
+    if (FreqMode() && s.freq > 0) i.lcd = i.title + L" " + FreqText(s.freq);
     if (!playing_) i.lcd = Utf8ToWide(cfg_.overlay.textStopped);
     if (!sub.empty()) { i.subtitle = sub; i.lcd = sub; }
     else {
@@ -648,6 +667,7 @@ void RadioManager::Refresh(double x, double z) {
     if (source_ == Source::Radio && (playing_ || !initialReceived_)) {   // USB mode: keep tracking reception only
         initialReceived_ = true;
         if (!playing_) return;
+        if (FreqMode()) { RefreshFreq(r); return; }
         auto cur = r.available.find(currentCountry_);
         const auto& best = r.available[r.bestCountry];
         bool better = cfg_.switchMode == "better" && cur != r.available.end() &&
@@ -677,6 +697,87 @@ void RadioManager::Refresh(double x, double z) {
             SetWhitenoise(cur->second.whitenoise);
         }
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Frequency radio: every station has an FM frequency (StationDatabase::AssignFrequencies). The radio stays on the
+// frequency: whatever is received best there plays - drive on and another station can take the frequency over, at
+// borders two stations can share it and the weaker one breaks through now and then. Without a station: static.
+std::vector<RadioManager::OnFreq> RadioManager::StationsOn(int f) const {
+    std::vector<OnFreq> v;
+    for (auto& [k, rec] : last_.available)
+        if (auto* st = db_.StationsOf(k))
+            for (size_t i = 0; i < st->size(); ++i) if ((*st)[i].freq == f && !(*st)[i].url.empty()) v.push_back({k, (int)i, rec.whitenoise});
+    std::stable_sort(v.begin(), v.end(), [](const OnFreq& a, const OnFreq& b) { return a.w < b.w; });
+    return v;
+}
+std::wstring RadioManager::FreqText(int f) const {
+    wchar_t b[32]; swprintf(b, 32, L"%d%lc%d MHz", f / 10, cfg_.menuLanguage == "en" ? L'.' : L',', f % 10);
+    return b;
+}
+void RadioManager::GoSilent() {
+    bool was = silent_ && currentIndex_ < 0;
+    currentCountry_.clear(); currentIndex_ = -1;
+    pendingUrl_.clear(); swapAt_ = 0; switchUntil_ = 0;
+    audio_.StopStream(); audio_.SetSwitchGain(0, 0.2f);
+    audio_.SetStaticGain(cfg_.whitenoise ? 0.55f : 0.f, 0.4f);
+    noiseAllowed_ = true; playing_ = true; silent_ = true;
+    if (!was) { Log::Write("Frequency %.1f MHz: no station", tuned_ / 10.0); ShowCurrent(); }
+}
+void RadioManager::SetTuned(int f) {
+    tuned_ = f; cfg_.tunedFreq = f; flipUntil_ = 0;
+    auto on = StationsOn(f);
+    if (on.empty()) { silent_ = false; GoSilent(); return; }
+    SetRadioStation(on[0].region, (size_t)on[0].index, on[0].w);
+}
+void RadioManager::SeekFreq(int dir) {
+    int f = tuned_ > 0 ? tuned_ : 875;
+    for (int n = 1; n <= 206; ++n) {
+        int g = f + dir * n;
+        while (g > 1080) g -= 206;
+        while (g < 875) g += 206;
+        if (!StationsOn(g).empty()) { SetTuned(g); return; }
+    }
+    ShowCurrent(cfg_.menuLanguage == "en" ? L"No station found" : L"Kein Sender gefunden");
+}
+void RadioManager::RefreshFreq(const ReceptionResult& r) {
+    if (tuned_ <= 0) {   // first time: the station the radio would pick anyway, then stay on its frequency
+        if (currentIndex_ >= 0) { auto* st = db_.StationsOf(currentCountry_); if (st && (*st)[currentIndex_].freq > 0) tuned_ = (*st)[currentIndex_].freq; }
+        if (tuned_ <= 0) { PickStation(r.bestCountry, r.available.count(r.bestCountry) ? r.available.at(r.bestCountry).whitenoise : 0.5); return; }
+    }
+    ULONGLONG now = GetTickCount64();
+    auto on = StationsOn(tuned_);
+    auto isCur = [&](const OnFreq& o) { return o.region == currentCountry_ && o.index == currentIndex_; };
+    const OnFreq* cur = nullptr;
+    for (auto& o : on) if (isCur(o)) cur = &o;
+    if (cfg_.rdsAf && currentIndex_ >= 0 && (!cur || !isCur(on.front()))) {   // RDS AF: follow the programme
+        std::string family = CurrentFamily(), region; int idx = -1;
+        auto it = r.available.find(currentCountry_);
+        if (!cur && it == r.available.end() && !family.empty() && FindVariant(family, region, idx)) {
+            Log::Write("RDS AF: %s continues on another frequency", family.c_str());
+            SetRadioStation(region, (size_t)idx, r.available.at(region).whitenoise, true);
+            return;
+        }
+        if (cur) { SetWhitenoise(cur->w); return; }   // AF keeps the programme even if another station is stronger here
+    }
+    if (on.empty()) { if (currentIndex_ >= 0 || !silent_) GoSilent(); return; }
+    if (flipUntil_ && now < flipUntil_ && cur) { SetWhitenoise(std::min(1.0, cur->w + 0.35)); return; }   // the weaker one, for a moment
+    flipUntil_ = 0;
+    const OnFreq& best = on.front();
+    bool shared = on.size() > 1 && on[1].w - best.w < 0.12;   // two stations of similar strength on one frequency
+    if (shared && cur && rand() % 100 < 4) {
+        const OnFreq& other = isCur(on[0]) ? on[1] : on[0];
+        flipUntil_ = now + 7000 + (ULONGLONG)(rand() % 8000);
+        Log::Write("Frequency %.1f MHz: two stations - %s breaks through", tuned_ / 10.0, other.region.c_str());
+        SetRadioStation(other.region, (size_t)other.index, std::min(1.0, other.w + 0.35));
+        return;
+    }
+    if (!isCur(best)) {   // another station takes the frequency over (or the first one after static)
+        if (currentIndex_ >= 0) Log::Write("Frequency %.1f MHz: now %s", tuned_ / 10.0, best.region.c_str());
+        SetRadioStation(best.region, (size_t)best.index, shared ? std::min(1.0, best.w + 0.35) : best.w);
+        return;
+    }
+    SetWhitenoise(shared ? std::min(1.0, best.w + 0.35) : best.w);
 }
 
 void RadioManager::PickStation(const std::string& region, double whitenoise) {
@@ -801,8 +902,11 @@ void RadioManager::ButtonSet(int n, const std::string& v) {
     else { cfg_.stationButtons[std::to_string(n)] = v; cfg_.SaveVolume(cfgPath_); }
 }
 int RadioManager::CurrentButton() const {
+    if (!cfg_.memoryButtons) return 0;
+    if (FreqMode() && tuned_ > 0)
+        for (int n = 1; n <= 9; ++n) if (ButtonGet(n) == "f:" + std::to_string(tuned_)) return n;
     std::string family = CurrentFamily();
-    if (family.empty() || !cfg_.memoryButtons) return 0;
+    if (family.empty()) return 0;
     for (int n = 1; n <= 9; ++n) {
         std::string v = ButtonGet(n); size_t bar = v.find('|');
         if (bar != std::string::npos && FamilyKey(v.substr(0, bar), v.substr(bar + 1)) == family) return n;
@@ -812,6 +916,12 @@ int RadioManager::CurrentButton() const {
 void RadioManager::StationButton(int n, bool hold) {
     const bool en = cfg_.menuLanguage == "en";
     std::wstring num = std::to_wstring(n);
+    if (hold && FreqMode() && source_ == Source::Radio && tuned_ > 0) {   // frequency radio: the button keeps the frequency
+        ButtonSet(n, "f:" + std::to_string(tuned_));
+        Log::Write("Station button %d: %.1f MHz", n, tuned_ / 10.0);
+        ShowCurrent((en ? L"Saved on button " : L"Auf Taste ") + num + (en ? L": " : L" gespeichert: ") + FreqText(tuned_));
+        return;
+    }
     if (hold) {   // save the current station
         auto* st = db_.StationsOf(currentCountry_);
         if (source_ != Source::Radio || !st || currentIndex_ < 0 || currentIndex_ >= (int)st->size()) return;
@@ -821,6 +931,20 @@ void RadioManager::StationButton(int n, bool hold) {
         return;
     }
     std::string v = ButtonGet(n);
+    if (v.rfind("f:", 0) == 0) {   // a frequency: whatever is broadcast there, here and now
+        int f = atoi(v.c_str() + 2);
+        if (f < 875 || f > 1080) return;
+        if (!FreqMode()) {   // station list: the best station on that frequency here
+            auto on = StationsOn(f);
+            if (on.empty()) { if (source_ == Source::Radio) ShowCurrent((en ? L"Button " : L"Taste ") + num + L": " + FreqText(f) + (en ? L" - nothing received" : L" \u2013 kein Empfang")); return; }
+            if (source_ == Source::Media) EnterRadio();
+            SetRadioStation(on[0].region, (size_t)on[0].index, on[0].w);
+            return;
+        }
+        if (source_ == Source::Media) EnterRadio();
+        SetTuned(f);
+        return;
+    }
     size_t bar = v.find('|');
     if (bar == std::string::npos) {
         if (source_ == Source::Radio) ShowCurrent((en ? L"Button " : L"Taste ") + num + (en ? L" is empty - hold it to save" : L" ist leer \u2013 gedr\u00fcckt halten zum Speichern"));
@@ -853,7 +977,8 @@ int RadioManager::AutoStore(bool overwrite) {
         ++n;
         std::string key = std::to_string(n);
         auto b = buttons.find(key);
-        if (overwrite || b == buttons.end() || b->second.empty()) buttons[key] = e.country + "|" + (*st)[e.index].name;
+        std::string value = FreqMode() && (*st)[e.index].freq > 0 ? "f:" + std::to_string((*st)[e.index].freq) : e.country + "|" + (*st)[e.index].name;
+        if (overwrite || b == buttons.end() || b->second.empty()) buttons[key] = value;
     }
     if (n > 0) { if (UseMemory()) SaveMemory(); else cfg_.SaveVolume(cfgPath_); }
     if (n > 0) Log::Write("Station buttons 1-%d stored (%s)", n, overwrite ? "menu" : "first start");
@@ -877,6 +1002,8 @@ void RadioManager::SetRadioStation(const std::string& country, size_t index, dou
     currentCountry_ = country; currentIndex_ = (int)index;
     const Station& s = (*st)[index];
     if (UseMemory()) mem_[truckId_].stations[country] = s.name;
+    if (s.freq > 0) { tuned_ = s.freq; cfg_.tunedFreq = s.freq; }
+    silent_ = false;
     auto it = last_.available.find(country);
     Log::Write("Station: %s [%s] reception %d/5", s.name.c_str(), country.c_str(), it == last_.available.end() ? 0 : ReceptionBars(it->second.whitenoise));
     playing_ = true;
@@ -957,6 +1084,18 @@ void RadioManager::OnAction(Action a, bool hold) {
     if (a == Action::Source) { ToggleSource(); return; }
     if (a == Action::Band) { ToggleBand(); return; }
     if (IsMemoryAction(a)) { if (cfg_.memoryButtons) StationButton((int)a - (int)Action::Memory1 + 1, hold); return; }
+    if (a == Action::TuneUp || a == Action::TuneDown) {   // FM dial, 0.1 MHz
+        if (!FreqMode()) {
+            if (!Dab()) ShowCurrent(cfg_.menuLanguage == "en" ? L"Tuning by frequency: settings menu \u2192 Radio" : L"Frequenzwahl: Einstellungsmen\u00fc \u2192 Radio \u2192 Senderwahl");
+            return;
+        }
+        if (source_ == Source::Media) EnterRadio();
+        int f = tuned_ > 0 ? tuned_ : 875;
+        f += a == Action::TuneUp ? 1 : -1;
+        if (f > 1080) f = 875; if (f < 875) f = 1080;
+        SetTuned(f);
+        return;
+    }
     if (a == Action::NextDisc || a == Action::PreviousDisc) { StepDisc(a == Action::NextDisc ? 1 : -1); return; }
     if (source_ == Source::Media) {
         switch (a) {
@@ -974,8 +1113,8 @@ void RadioManager::OnAction(Action a, bool hold) {
         }
     }
     switch (a) {
-    case Action::Next: NextStation(1); break;
-    case Action::Previous: NextStation(-1); break;
+    case Action::Next: if (FreqMode()) SeekFreq(1); else NextStation(1); break;
+    case Action::Previous: if (FreqMode()) SeekFreq(-1); else NextStation(-1); break;
     case Action::Stop:
         if (playing_) { playing_ = false; swapAt_ = 0; audio_.StopStream(); audio_.SetStaticGain(0, 0.2f); audio_.SetSwitchGain(0, 0.1f); Log::Write("Playback stopped"); ShowCurrent(); }
         else if (currentIndex_ >= 0) { auto it = last_.available.find(currentCountry_); SetRadioStation(currentCountry_, currentIndex_, it == last_.available.end() ? 0 : it->second.whitenoise); }

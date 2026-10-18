@@ -46,19 +46,29 @@ inline const VtHook* FindVt(ID3D11DeviceContext* c) {
 }
 bool g_wantScreenHook = false;
 std::atomic<bool> g_screenHooked{false};
-std::atomic<float> g_scrAlpha{0.f};
-std::atomic<int> g_scrW{0}, g_scrH{0}, g_scrFmt{0};
+// Screen layers: 0 = Realistic Radio, 1 = Trucker Chat (combined DLL). Each has its own picture, target size and area;
+// both are drawn into a matching render target in this order.
+constexpr int kLayers = 2;
+std::atomic<float> g_scrAlpha[kLayers];
+std::atomic<int> g_scrW[kLayers], g_scrH[kLayers], g_scrFmt[kLayers];
 // several textures of the screen's size can be rendered per frame (e.g. navigation and instrument display): which one
 // to draw into, in the order the game renders them each frame (0 = all of them)
-std::atomic<int> g_scrTargetIdx{1}, g_lastFrameTargets{0};
-ID3D11Resource* g_frameTargets[8] = {}; int g_nFrameTargets = 0;   // render thread only, identity only (no reference)
-std::atomic<float> g_areaX{0}, g_areaY{0}, g_areaW{1}, g_areaH{1};
-std::atomic<bool> g_flipY{false}, g_flipX{false};
+std::atomic<int> g_scrTargetIdx{1}, g_lastFrameTargets[kLayers];
+ID3D11Resource* g_frameTargets[kLayers][8] = {}; int g_nFrameTargets[kLayers] = {};   // render thread only, identity only (no reference)
+std::atomic<float> g_areaX[kLayers], g_areaY[kLayers], g_areaW[kLayers], g_areaH[kLayers];
+std::atomic<bool> g_flipY[kLayers], g_flipX[kLayers];
+// back-buffer picture of the chat (layer 1), drawn below the radio overlay / menu
+std::mutex g_img2Mtx;
+std::shared_ptr<const OverlayImage> g_img2;
+std::atomic<unsigned> g_img2Version{0};
+std::atomic<float> g_alpha2{0.f};
+std::atomic<int> g_anchor2{1};
+std::atomic<float> g_offX2{0.f}, g_offY2{0.07f};
 std::atomic<bool> g_collect{false};
 std::atomic<long long> g_rtCalls{0};
-std::mutex g_scrImgMtx;
-std::shared_ptr<const OverlayImage> g_scrImg;
-std::atomic<unsigned> g_scrImgVersion{0};
+std::mutex g_scrImgMtx[kLayers];
+std::shared_ptr<const OverlayImage> g_scrImg[kLayers];
+std::atomic<unsigned> g_scrImgVersion[kLayers];
 std::mutex g_statMtx;
 struct StatEntry { int w, h, fmt; long long binds; };
 std::map<long long, StatEntry> g_stats;
@@ -76,7 +86,7 @@ std::atomic<float> g_capRect[4];
 // render-thread only
 ID3D11RenderTargetView* g_curRtv = nullptr;
 int g_curW = 0, g_curH = 0;
-bool g_curMatch = false;
+int g_curMask = 0;   // layers that draw into g_curRtv
 
 // Render resources (only touched on the game's render thread, or after the hook is removed)
 struct Res {
@@ -85,11 +95,16 @@ struct Res {
     ID3D11SamplerState* samp = nullptr; ID3D11BlendState* blend = nullptr; ID3D11RasterizerState* rast = nullptr;
     ID3DDeviceContextState* state = nullptr;
     ID3D11Texture2D* tex = nullptr; ID3D11ShaderResourceView* srv = nullptr; unsigned texVersion = 0; int texW = 0, texH = 0, texScreenH = 1080;
-    ID3D11Texture2D* stex = nullptr; ID3D11ShaderResourceView* ssrv = nullptr; unsigned stexVersion = 0;
+    ID3D11Texture2D* stex[kLayers] = {}; ID3D11ShaderResourceView* ssrv[kLayers] = {}; unsigned stexVersion[kLayers] = {};
+    ID3D11Texture2D* tex2 = nullptr; ID3D11ShaderResourceView* srv2 = nullptr; unsigned tex2Version = 0; int tex2W = 0, tex2H = 0, tex2ScreenH = 1080;
     ID3D11Texture2D* ctex = nullptr; ID3D11ShaderResourceView* csrv = nullptr; unsigned ctexVersion = 0; int cW = 0, cH = 0;
     bool failed = false;
     template <class T> static void R(T*& p) { if (p) { p->Release(); p = nullptr; } }
-    void ReleaseAll() { R(vs); R(ps); R(cb); R(samp); R(blend); R(rast); R(state); R(tex); R(srv); R(stex); R(ssrv); R(ctex); R(csrv); dev = nullptr; texVersion = 0; stexVersion = 0; ctexVersion = 0; failed = false; }
+    void ReleaseAll() {
+        R(vs); R(ps); R(cb); R(samp); R(blend); R(rast); R(state); R(tex); R(srv); R(ctex); R(csrv); R(tex2); R(srv2);
+        for (int l = 0; l < kLayers; ++l) { R(stex[l]); R(ssrv[l]); stexVersion[l] = 0; }
+        dev = nullptr; texVersion = 0; ctexVersion = 0; tex2Version = 0; failed = false;
+    }
 } g_res;
 
 const char* kShader = R"(
@@ -243,15 +258,27 @@ bool MakeTexture(ID3D11Device* dev, const OverlayImage& img, ID3D11Texture2D*& t
     return true;
 }
 
-bool EnsureScreenTexture(ID3D11Device* dev) {
-    unsigned v = g_scrImgVersion.load();
-    if (g_res.ssrv && g_res.stexVersion == v) return true;
+bool EnsureScreenTexture(ID3D11Device* dev, int L) {
+    unsigned v = g_scrImgVersion[L].load();
+    if (g_res.ssrv[L] && g_res.stexVersion[L] == v) return true;
     std::shared_ptr<const OverlayImage> img;
-    { std::unique_lock<std::mutex> l(g_scrImgMtx, std::try_to_lock); if (!l.owns_lock()) return g_res.ssrv != nullptr; img = g_scrImg; }
-    Res::R(g_res.ssrv); Res::R(g_res.stex);
-    g_res.stexVersion = v;
+    { std::unique_lock<std::mutex> l(g_scrImgMtx[L], std::try_to_lock); if (!l.owns_lock()) return g_res.ssrv[L] != nullptr; img = g_scrImg[L]; }
+    Res::R(g_res.ssrv[L]); Res::R(g_res.stex[L]);
+    g_res.stexVersion[L] = v;
     if (!img || img->width <= 0) return false;
-    return MakeTexture(dev, *img, g_res.stex, g_res.ssrv);
+    return MakeTexture(dev, *img, g_res.stex[L], g_res.ssrv[L]);
+}
+
+bool EnsureTexture2(ID3D11Device* dev) {   // chat picture on the back buffer
+    unsigned v = g_img2Version.load();
+    if (g_res.srv2 && g_res.tex2Version == v) return true;
+    std::shared_ptr<const OverlayImage> img;
+    { std::unique_lock<std::mutex> l(g_img2Mtx, std::try_to_lock); if (!l.owns_lock()) return g_res.srv2 != nullptr; img = g_img2; }
+    Res::R(g_res.srv2); Res::R(g_res.tex2);
+    g_res.tex2Version = v;
+    if (!img || img->width <= 0) return false;
+    g_res.tex2W = img->width; g_res.tex2H = img->height; g_res.tex2ScreenH = img->renderedForScreenHeight;
+    return MakeTexture(dev, *img, g_res.tex2, g_res.srv2);
 }
 
 bool EnsureCursorTexture(ID3D11Device* dev) {
@@ -323,18 +350,18 @@ void CaptureTarget(ID3D11DeviceContext* ctx, ID3D11RenderTargetView* rtv) {
 }
 
 // Draws the screen image into the given render target (one the game has just finished rendering into)
-void DrawIntoTarget(ID3D11DeviceContext* ctx, ID3D11RenderTargetView* rtv, int w, int h) {
-    float alpha = g_scrAlpha.load();
+void DrawIntoTarget(ID3D11DeviceContext* ctx, int L, ID3D11RenderTargetView* rtv, int w, int h) {
+    float alpha = g_scrAlpha[L].load();
     if (alpha <= 0.003f || !rtv) return;
     ID3D11Device* dev = nullptr; ctx->GetDevice(&dev);
     if (!dev) return;
-    if (EnsureResources(dev) && EnsureScreenTexture(dev) && g_res.ssrv) {
-        float ax = g_areaX, ay = g_areaY, aw = g_areaW, ah = g_areaH;
+    if (EnsureResources(dev) && EnsureScreenTexture(dev, L) && g_res.ssrv[L]) {
+        float ax = g_areaX[L], ay = g_areaY[L], aw = g_areaW[L], ah = g_areaH[L];
         float x0 = ax * 2 - 1, x1 = (ax + aw) * 2 - 1, yTop = 1 - ay * 2, yBot = 1 - (ay + ah) * 2;
-        if (g_flipY) std::swap(yTop, yBot);
-        if (g_flipX) std::swap(x0, x1);
+        if (g_flipY[L]) std::swap(yTop, yBot);
+        if (g_flipX[L]) std::swap(x0, x1);
         float cbdata[8] = {x0, yTop, x1, yBot, alpha, 0, 0, 0};
-        DrawQuad(ctx, rtv, (float)w, (float)h, g_res.ssrv, cbdata);
+        DrawQuad(ctx, rtv, (float)w, (float)h, g_res.ssrv[L], cbdata);
     }
     dev->Release();
 }
@@ -342,16 +369,19 @@ void DrawIntoTarget(ID3D11DeviceContext* ctx, ID3D11RenderTargetView* rtv, int w
 // Called for every render-target change of the immediate context (hot path: keep cheap when inactive)
 void OnRenderTargetChange(ID3D11DeviceContext* ctx, UINT num, ID3D11RenderTargetView* const* views) {
     ++g_rtCalls;
-    bool drawing = g_scrAlpha.load() > 0.003f && g_scrW.load() > 0;
+    bool drawL[kLayers];
+    bool drawing = false;
+    for (int l = 0; l < kLayers; ++l) { drawL[l] = g_scrAlpha[l].load() > 0.003f && g_scrW[l].load() > 0; drawing = drawing || drawL[l]; }
     bool collect = g_collect.load();
-    bool capture = g_capState.load() == 1 && g_scrW.load() > 0;
+    bool capture = g_capState.load() == 1 && g_scrW[0].load() > 0;
     if (!drawing && !collect && !capture && !g_curRtv) return;
     ID3D11RenderTargetView* next = (num > 0 && views) ? views[0] : nullptr;
     if (next == g_curRtv) return;
     if (g_curRtv) {
-        if (g_curMatch && capture) CaptureTarget(ctx, g_curRtv);                    // the game's own picture, before ours
-        if (g_curMatch && drawing) DrawIntoTarget(ctx, g_curRtv, g_curW, g_curH);   // the game is done with it
-        g_curRtv->Release(); g_curRtv = nullptr; g_curMatch = false;
+        if ((g_curMask & 1) && capture) CaptureTarget(ctx, g_curRtv);   // the game's own picture, before ours
+        for (int l = 0; l < kLayers; ++l)
+            if ((g_curMask & (1 << l)) && drawL[l]) DrawIntoTarget(ctx, l, g_curRtv, g_curW, g_curH);   // the game is done with it
+        g_curRtv->Release(); g_curRtv = nullptr; g_curMask = 0;
     }
     if (!next || (!drawing && !collect && !capture)) return;
     ID3D11Resource* res = nullptr; next->GetResource(&res);
@@ -369,14 +399,17 @@ void OnRenderTargetChange(ID3D11DeviceContext* ctx, UINT num, ID3D11RenderTarget
                 std::lock_guard<std::mutex> l(g_statMtx);
                 auto& e = g_stats[key]; e.w = d.Width; e.h = d.Height; e.fmt = d.Format; ++e.binds;
             }
-            int fmt = g_scrFmt.load();
-            if ((drawing || capture) && (int)d.Width == g_scrW.load() && (int)d.Height == g_scrH.load() && (fmt == 0 || fmt == (int)d.Format)) {
+            int mask = 0;
+            for (int l = 0; l < kLayers; ++l) {
+                int fmt = g_scrFmt[l].load();
+                if (!(drawL[l] || (l == 0 && capture)) || (int)d.Width != g_scrW[l].load() || (int)d.Height != g_scrH[l].load() || (fmt != 0 && fmt != (int)d.Format)) continue;
                 int pos = 0;
-                while (pos < g_nFrameTargets && g_frameTargets[pos] != res) ++pos;
-                if (pos == g_nFrameTargets && g_nFrameTargets < 8) g_frameTargets[g_nFrameTargets++] = res;
+                while (pos < g_nFrameTargets[l] && g_frameTargets[l][pos] != res) ++pos;
+                if (pos == g_nFrameTargets[l] && g_nFrameTargets[l] < 8) g_frameTargets[l][g_nFrameTargets[l]++] = res;
                 int want = g_scrTargetIdx.load();
-                if (want <= 0 || pos + 1 == want) { g_curRtv = next; g_curRtv->AddRef(); g_curW = d.Width; g_curH = d.Height; g_curMatch = true; }
+                if (want <= 0 || pos + 1 == want) mask |= 1 << l;
             }
+            if (mask) { g_curRtv = next; g_curRtv->AddRef(); g_curW = d.Width; g_curH = d.Height; g_curMask = mask; }
         }
         tex->Release();
     }
@@ -431,15 +464,20 @@ void HookGameContext(IDXGISwapChain* sc) {
 
 void Draw(IDXGISwapChain* sc) {
     HookGameContext(sc);
-    if (g_nFrameTargets > 0) { g_lastFrameTargets = g_nFrameTargets; g_nFrameTargets = 0; }   // end of frame
+    for (int l = 0; l < kLayers; ++l)   // end of frame
+        if (g_nFrameTargets[l] > 0) { g_lastFrameTargets[l] = g_nFrameTargets[l]; g_nFrameTargets[l] = 0; }
     if (g_curRtv) {   // a matching screen target was still bound at the end of the frame
         ID3D11Device* d = nullptr;
         if (SUCCEEDED(sc->GetDevice(__uuidof(ID3D11Device), (void**)&d)) && d) {
             ID3D11DeviceContext* c = nullptr; d->GetImmediateContext(&c);
-            if (c) { if (g_curMatch) { CaptureTarget(c, g_curRtv); if (g_scrAlpha.load() > 0.003f) DrawIntoTarget(c, g_curRtv, g_curW, g_curH); } c->Release(); }
+            if (c) {
+                if (g_curMask & 1) CaptureTarget(c, g_curRtv);
+                for (int l = 0; l < kLayers; ++l) if ((g_curMask & (1 << l)) && g_scrAlpha[l].load() > 0.003f) DrawIntoTarget(c, l, g_curRtv, g_curW, g_curH);
+                c->Release();
+            }
             d->Release();
         }
-        g_curRtv->Release(); g_curRtv = nullptr; g_curMatch = false;
+        g_curRtv->Release(); g_curRtv = nullptr; g_curMask = 0;
     }
     if (!g_enabled) return;
     ID3D11Device* dev = nullptr;
@@ -449,6 +487,26 @@ void Draw(IDXGISwapChain* sc) {
     if (FAILED(sc->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&bb)) || !bb) { dev->Release(); return; }
     D3D11_TEXTURE2D_DESC bd; bb->GetDesc(&bd);
     if (bd.Height >= 200) { g_screenH = (int)bd.Height; g_bbW = (int)bd.Width; }
+    float alpha2 = g_alpha2.load();   // chat (combined DLL), below the radio overlay and the menu
+    if (alpha2 > 0.003f && bd.Width >= 320 && bd.Height >= 200 && EnsureResources(dev) && EnsureTexture2(dev) && g_res.srv2) {
+        D3D11_RENDER_TARGET_VIEW_DESC rvd{}; rvd.Format = RtvFormat(bd.Format);
+        rvd.ViewDimension = bd.SampleDesc.Count > 1 ? D3D11_RTV_DIMENSION_TEXTURE2DMS : D3D11_RTV_DIMENSION_TEXTURE2D;
+        ID3D11RenderTargetView* rtv = nullptr;
+        ID3D11DeviceContext* ctx = nullptr; dev->GetImmediateContext(&ctx);
+        if (ctx && SUCCEEDED(dev->CreateRenderTargetView(bb, &rvd, &rtv))) {
+            float k = (float)bd.Height / (float)std::max(1, g_res.tex2ScreenH);
+            float w = g_res.tex2W * k, h = g_res.tex2H * k;
+            float sw = (float)bd.Width, sh = (float)bd.Height, ox = g_offX2 * sh, oy = g_offY2 * sh;
+            int a = g_anchor2; float x, y;
+            x = (a % 3 == 0) ? ox : (a % 3 == 1) ? (sw - w) / 2 + ox : sw - w - ox;
+            y = (a < 3) ? oy : sh - h - oy;
+            x = std::floor(x); y = std::floor(y);
+            float cbdata[8] = {x / sw * 2 - 1, 1 - y / sh * 2, (x + w) / sw * 2 - 1, 1 - (y + h) / sh * 2, alpha2, 0, 0, 0};
+            DrawQuad(ctx, rtv, sw, sh, g_res.srv2, cbdata);
+        }
+        if (rtv) rtv->Release();
+        if (ctx) ctx->Release();
+    }
     float alpha = g_alpha.load();
     if (alpha > 0.003f && bd.Width >= 320 && bd.Height >= 200 && EnsureResources(dev) && EnsureTexture(dev) && g_res.srv) {
         D3D11_RENDER_TARGET_VIEW_DESC rvd{}; rvd.Format = RtvFormat(bd.Format);
@@ -500,6 +558,8 @@ bool PatchSlot(void** vt, int idx, void* fn, void** orig) {
 
 namespace D3D11Overlay {
 bool Install() {
+    static std::mutex installMtx;   // radio and chat thread (combined DLL) may call this at the same time
+    std::lock_guard<std::mutex> lock(installMtx);
     if (g_vtable) { g_enabled = true; return true; }
     if (!CompileShaders()) return false;
     WNDCLASSEXW wc{sizeof(wc)}; wc.lpfnWndProc = DefWindowProcW; wc.hInstance = GetModuleHandleW(nullptr); wc.lpszClassName = L"RealisticRadioDummyD3D";
@@ -543,13 +603,22 @@ void Uninstall() {
     g_enabled = false;   // module is pinned: the hook stays in place but draws nothing
     g_alpha = 0;
 }
-void EnableScreenHook(bool on) { g_wantScreenHook = on; }
-void SetScreenImage(std::shared_ptr<const OverlayImage> img) { std::lock_guard<std::mutex> l(g_scrImgMtx); g_scrImg = std::move(img); ++g_scrImgVersion; }
-void SetScreenTarget(int w, int h, int format) { g_scrW = w; g_scrH = h; g_scrFmt = format; }
-void SetScreenAlpha(float a) { g_scrAlpha = a; }
+void EnableScreenHook(bool on) { if (on) g_wantScreenHook = true; }   // only switched on (the chat of the combined DLL may need it too)
+void SetLayerScreenImage(int L, std::shared_ptr<const OverlayImage> img) { std::lock_guard<std::mutex> l(g_scrImgMtx[L]); g_scrImg[L] = std::move(img); ++g_scrImgVersion[L]; }
+void SetLayerScreenTarget(int L, int w, int h, int format) { g_scrW[L] = w; g_scrH[L] = h; g_scrFmt[L] = format; }
+void SetLayerScreenAlpha(int L, float a) { g_scrAlpha[L] = a; }
+void SetLayerScreenArea(int L, float x, float y, float w, float h, bool flipY, bool flipX) {
+    g_areaX[L] = x; g_areaY[L] = y; g_areaW[L] = w; g_areaH[L] = h; g_flipY[L] = flipY; g_flipX[L] = flipX;
+}
+void SetScreenImage(std::shared_ptr<const OverlayImage> img) { SetLayerScreenImage(0, std::move(img)); }
+void SetScreenTarget(int w, int h, int format) { SetLayerScreenTarget(0, w, h, format); }
+void SetScreenAlpha(float a) { SetLayerScreenAlpha(0, a); }
 void SetScreenTargetIndex(int i) { g_scrTargetIdx = i; }
-int ScreenTargetsSeen() { return g_lastFrameTargets; }
-void SetScreenArea(float x, float y, float w, float h, bool flipY, bool flipX) { g_areaX = x; g_areaY = y; g_areaW = w; g_areaH = h; g_flipY = flipY; g_flipX = flipX; }
+int ScreenTargetsSeen() { return g_lastFrameTargets[0]; }
+void SetScreenArea(float x, float y, float w, float h, bool flipY, bool flipX) { SetLayerScreenArea(0, x, y, w, h, flipY, flipX); }
+void SetChatImage(std::shared_ptr<const OverlayImage> img) { std::lock_guard<std::mutex> l(g_img2Mtx); g_img2 = std::move(img); ++g_img2Version; }
+void SetChatAlpha(float a) { g_alpha2 = a; }
+void SetChatPlacement(int anchor, float offsetX, float offsetY) { g_anchor2 = anchor; g_offX2 = offsetX; g_offY2 = offsetY; }
 void SetCollectTargets(bool on) { g_collect = on; }
 std::vector<RenderTargetStat> TakeTargetStats() {
     std::lock_guard<std::mutex> l(g_statMtx);

@@ -4,6 +4,8 @@
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 // Station selection, reception and favourite logic derived from MPL-2.0 licensed code (see NOTICE.md).
 #include "StationDatabase.h"
+#include <set>
+#include <cmath>
 #include "Logger.h"
 #include "json.hpp"
 #include <fstream>
@@ -29,7 +31,8 @@ bool StationDatabase::Load(const std::wstring& file) {
         }
         for (auto& [k, arr] : j["stations"].items())
             for (auto& s : arr)
-                stations[k].push_back(Station{s.value("name", ""), s.value("url", ""), s.value("logo", ""), s.value("relative_radius", -1.0)});
+                stations[k].push_back(Station{s.value("name", ""), s.value("url", ""), s.value("logo", ""), s.value("relative_radius", -1.0),
+                                              (int)std::lround(s.value("frequency", 0.0) * 10)});
         Log::Write("Loaded %zu cities, %zu countries, %zu station lists", cities.size(), countries.size(), stations.size());
         return !cities.empty();
     } catch (const std::exception& e) {
@@ -48,7 +51,8 @@ void StationDatabase::LoadCustom(const std::wstring& file) {
             if (!arr.is_array()) continue;
             auto& list = stations[k];
             for (auto& s : arr) {
-                Station st{s.value("name", ""), s.value("url", ""), s.value("logo", ""), s.value("relative_radius", -1.0)};
+                Station st{s.value("name", ""), s.value("url", ""), s.value("logo", ""), s.value("relative_radius", -1.0),
+                           (int)std::lround(s.value("frequency", 0.0) * 10)};   // optional: the real frequency, e.g. 94.7
                 if (st.name.empty() || st.url.empty()) continue;
                 bool dup = false;
                 for (auto& e : list) if (e.name == st.name) { e = st; dup = true; break; }   // same name replaces the original entry
@@ -60,6 +64,54 @@ void StationDatabase::LoadCustom(const std::wstring& file) {
     } catch (const std::exception& e) {
         Log::Write("custom-stations.json parse error: %s", e.what());
     }
+}
+
+void StationDatabase::AssignFrequencies() {
+    constexpr int kLo = 876, kHi = 1079, kN = kHi - kLo + 1;   // 87.6 - 107.9 MHz
+    // neighbouring regions: cities closer than about two broadcast ranges
+    std::map<std::string, std::vector<const City*>> byRegion;
+    for (const City& c : cities) byRegion[c.country].push_back(&c);
+    std::map<std::string, std::set<std::string>> nbr;
+    const double d2 = 18000.0 * 18000.0;
+    for (size_t i = 0; i < cities.size(); ++i)
+        for (size_t k = i + 1; k < cities.size(); ++k) {
+            const City &a = cities[i], &b = cities[k];
+            if (a.country == b.country) continue;
+            double dx = a.x - b.x, dz = a.z - b.z;
+            if (dx * dx + dz * dz < d2) { nbr[a.country].insert(b.country); nbr[b.country].insert(a.country); }
+        }
+    std::map<std::string, std::vector<bool>> used;   // channels used per region
+    auto U = [&](const std::string& r) -> std::vector<bool>& { auto& v = used[r]; if (v.empty()) v.assign(kN, false); return v; };
+    for (auto& [region, list] : stations)   // fixed frequencies first
+        for (auto& s : list) if (s.freq >= kLo && s.freq <= kHi) U(region)[s.freq - kLo] = true;
+    int planned = 0, shared = 0;
+    for (auto& kv : stations) {
+        const std::string& region = kv.first;
+        auto& list = kv.second;
+        auto& mine = U(region);
+        for (auto& s : list) {
+            if (s.freq >= kLo && s.freq <= kHi) continue;
+            uint32_t h = 2166136261u;   // FNV-1a: the same station always starts at the same channel
+            for (char ch : region + "|" + s.name) { h ^= (uint8_t)ch; h *= 16777619u; }
+            int start = (int)(h % kN), pick = -1;
+            for (int pass = 0; pass < 4 && pick < 0; ++pass)
+                for (int n = 0; n < kN && pick < 0; ++n) {
+                    int c = (start + n * 7) % kN;   // step 0.7 MHz: spreads a region's stations over the band
+                    if (mine[c]) continue;
+                    if (pass <= 1 && ((c > 0 && mine[c - 1]) || (c + 1 < kN && mine[c + 1]))) continue;   // keep 0.2 MHz apart
+                    bool neighbour = false;
+                    if (pass == 0) for (auto& o : nbr[region]) if (U(o)[c]) { neighbour = true; break; }
+                    if (neighbour) continue;
+                    pick = c;
+                }
+            if (pick < 0) continue;   // band full (more than 204 stations in one region)
+            for (auto& o : nbr[region]) if (U(o)[pick]) { ++shared; break; }
+            mine[pick] = true;
+            s.freq = kLo + pick;
+            ++planned;
+        }
+    }
+    Log::Write("FM frequencies: %d planned, %d shared with a neighbouring region", planned, shared);
 }
 
 void Favourites::Load(const std::wstring& file) {

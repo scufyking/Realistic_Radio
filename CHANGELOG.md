@@ -2,6 +2,19 @@
 
 **English** · [Deutsch](#changelog-deutsch)
 
+## 1.4.1 – Frequency radio and updated truck presets
+
+### New
+- **Frequency radio like in the old days.** Settings menu → Radio → **Tuning (FM): Frequency**: every station gets an FM frequency and the radio stays on the frequency you tuned in. **Next / Previous** seek the next frequency with a station, **Shift + → / ←** tune in 0.1 MHz steps, and the screen shows the frequency (e.g. "94,7 MHz"). Driving on, the station fades into static or another station takes the frequency over; at borders two stations can share a frequency and the weaker one breaks through for a few seconds now and then. **Station buttons store the frequency** – in another area a button plays whatever is broadcast there. **RDS AF** (off by default) follows the programme to its other frequency like a modern radio. The frequencies are planned by the plugin (always the same; never twice in one region, neighbouring regions mostly avoid each other's); own ones can be set with `"frequency": 94.7` in the custom stations file. DAB+ keeps the station list. Settings: `"tuning"`, `"rdsAf"`, `"tunedFreq"`, keys `tuneUp` / `tuneDown`.
+
+### Changed
+- **Standard presets newly set up in the game:** MAN TGX, Scania and Mercedes-Benz New Actros sit better on the navigation screen (the Mercedes draws into drawing surface 2).
+- **Upside down only on drawing surface 2.** All standard presets on surface 1 (MAN, Scania, DAF, Iveco) are no longer flipped; the Mercedes (surface 2) is. Choosing the drawing surface in the settings menu now sets *Flip (up/down)* to match (surface 2 = flipped, surface 1 = not); it can still be changed by hand. Without a preset the display is no longer flipped by default.
+- **Scania R and S share one preset** ("Scania R/S", the normal screen), because both have the same cab. For a Scania with the **smart dashboard** there is the new preset **Scania R/S Smart Dashboard**: choose it on the Trucks page (Active preset or Load) or link it to the truck.
+
+### Upgrade notes
+- Replace `realistic-radio.dll` only. The new keys (`tuneUp`, `tuneDown`) are added to the settings file automatically. Own presets are kept; a changed copy of the old standard preset "Scania S" stays an own preset and can be deleted on the Trucks page to use the new standard.
+
 ## 1.4.0 – Station buttons, FM / DAB+, start screen and staying on your station
 
 ### New
@@ -149,6 +162,19 @@
 
 <a id="changelog-deutsch"></a>
 # Changelog (Deutsch)
+
+## 1.4.1 – Frequenz-Radio und neue LKW-Presets
+
+### Neu
+- **Frequenz-Radio wie früher.** Einstellungsmenü → Radio → **Senderwahl (FM): Frequenz**: Jeder Sender bekommt eine UKW-Frequenz, und das Radio bleibt auf der eingestellten Frequenz. **Weiter / Zurück** suchen die nächste Frequenz mit Sender, **Umschalt + → / ←** stellen in 0,1-MHz-Schritten ein, und das Navi zeigt die Frequenz (z. B. „94,7 MHz“). Beim Weiterfahren verschwindet der Sender im Rauschen oder ein anderer Sender übernimmt die Frequenz; an Grenzen können sich zwei Sender eine Frequenz teilen, und der schwächere kommt ab und zu ein paar Sekunden durch. **Stationstasten speichern die Frequenz** – in einer anderen Gegend spielt eine Taste, was dort gesendet wird. **RDS-AF** (standardmäßig aus) folgt dem Programm auf seine andere Frequenz wie ein modernes Radio. Die Frequenzen plant das Plugin selbst (immer gleich; nie doppelt in einer Region, benachbarte Regionen meiden sich meistens); eigene lassen sich mit `"frequency": 94.7` in der Datei für eigene Sender eintragen. DAB+ behält die Senderliste. Einstellungen: `"tuning"`, `"rdsAf"`, `"tunedFreq"`, Tasten `tuneUp` / `tuneDown`.
+
+### Geändert
+- **Standard-Presets im Spiel neu eingestellt:** MAN TGX, Scania und Mercedes-Benz New Actros sitzen besser auf dem Navi (der Mercedes zeichnet in Zeichenfläche 2).
+- **Umdrehen nur bei Zeichenfläche 2.** Alle Standard-Presets auf Fläche 1 (MAN, Scania, DAF, Iveco) werden nicht mehr umgedreht, der Mercedes (Fläche 2) schon. Wählt man im Einstellungsmenü die Zeichenfläche, wird *Umdrehen (oben/unten)* jetzt passend gesetzt (Fläche 2 = umgedreht, Fläche 1 = nicht); von Hand ändern geht weiterhin. Ohne Preset wird die Anzeige standardmäßig nicht mehr umgedreht.
+- **Scania R und S teilen sich ein Preset** („Scania R/S“, der normale Bildschirm), weil beide dasselbe Cockpit haben. Für einen Scania mit **Smart Dashboard** gibt es das neue Preset **Scania R/S Smart Dashboard**: auf der Seite LKW auswählen (Aktives Preset oder Laden) oder mit dem LKW verknüpfen.
+
+### Hinweise zum Update
+- Nur `realistic-radio.dll` ersetzen. Die neuen Tasten (`tuneUp`, `tuneDown`) werden automatisch in die Einstellungsdatei eingetragen. Eigene Presets bleiben erhalten; eine geänderte Kopie des alten Standard-Presets „Scania S“ bleibt ein eigenes Preset und lässt sich auf der Seite LKW löschen, um den neuen Standard zu nutzen.
 
 ## 1.4.0 – Stationstasten, FM / DAB+, Startbildschirm und das Radio bleibt auf deinem Sender
 

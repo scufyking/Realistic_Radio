@@ -87,6 +87,11 @@ const std::vector<Page>& Pages() {
             Choice("Band", "Band", "DAB+: weiter, ohne Rauschen, bricht bei schwachem Signal ab", "DAB+: further, no static, drops out on a weak signal",
                    [](Config& c) -> std::string& { return c.band; }, {"fm", "dab"}, {{"FM (UKW)", "FM"}, {"DAB+", "DAB+"}}),
             KeyRow("Taste: Band wechseln", "Key: change band", "", "", Action::Band),
+            Choice("Senderwahl (FM)", "Tuning (FM)", "Frequenz: Weiter/Zur\u00fcck sucht den n\u00e4chsten Sender, Umschalt+Pfeile 0,1 MHz",
+                   "Frequency: Next/Previous seeks, Shift+arrows 0.1 MHz", [](Config& c) -> std::string& { return c.tuning; },
+                   {"list", "frequency"}, {{"Senderliste", "Station list"}, {"Frequenz (wie fr\u00fcher)", "Frequency (old style)"}}),
+            Toggle("RDS-AF: Programm folgen", "RDS AF: follow the programme", "Aus = wie fr\u00fcher: die Frequenz bleibt, auch wenn der Sender weg ist",
+                   "Off = old style: the frequency stays even when the station is gone", [](Config& c) -> bool& { return c.rdsAf; }),
             Heading("Stationstasten", "Station buttons"),
             Toggle("Stationstasten 1\u20139", "Station buttons 1\u20139", "Nummernblock: kurz dr\u00fccken = w\u00e4hlen, gedr\u00fcckt halten = speichern",
                    "Numpad: tap = select, hold = save", [](Config& c) -> bool& { return c.memoryButtons; }),
@@ -139,7 +144,11 @@ const std::vector<Page>& Pages() {
                 D d = Choice("Zeichenfl\u00e4che", "Drawing surface", "", "", [](Config& c) -> std::string& { static std::string s; return s; },
                              {"0", "1", "2", "3", "4"}, {{"Alle", "All"}, {"1", "1"}, {"2", "2"}, {"3", "3"}, {"4", "4"}});
                 d.get = [](const Config& c) { return (double)std::clamp(c.screen.target, 0, 4); };
-                d.set = [](Config& c, double v) { c.screen.target = std::clamp((int)std::lround(v), 0, 4); };
+                d.set = [](Config& c, double v) {
+                    int t = std::clamp((int)std::lround(v), 0, 4);
+                    if (t != c.screen.target) c.screen.flipY = t >= 2;   // surface 2 is drawn upside down, surface 1 not (can be changed below)
+                    c.screen.target = t;
+                };
                 d.hintFn = [](bool en) {
                     int n = D3D11Overlay::ScreenTargetsSeen();
                     std::wstring s = n > 0 ? (en ? L"Found: " : L"Gefunden: ") + std::to_wstring(n) + (en ? L" with this size" : L" mit dieser Gr\u00f6\u00dfe")
@@ -210,7 +219,7 @@ const Action kRows[] = {Action::Next, Action::Previous, Action::VolumeUp, Action
                         Action::Source, Action::NextDisc, Action::PreviousDisc, Action::ScreenPage, Action::MakeFavourite,
                         Action::GoToFavourite, Action::ShowOverlay, Action::Menu, Action::Band,
                         Action::Memory1, Action::Memory2, Action::Memory3, Action::Memory4, Action::Memory5,
-                        Action::Memory6, Action::Memory7, Action::Memory8, Action::Memory9};
+                        Action::Memory6, Action::Memory7, Action::Memory8, Action::Memory9, Action::TuneUp, Action::TuneDown};
 constexpr int kRowCount = (int)(sizeof(kRows) / sizeof(kRows[0]));
 static_assert(kRowCount == (int)Action::Count, "every action needs a row in the key menu");
 
@@ -234,6 +243,7 @@ const char* LabelDe(Action a) {
     case Action::Memory1: return "Stationstaste 1"; case Action::Memory2: return "Stationstaste 2"; case Action::Memory3: return "Stationstaste 3";
     case Action::Memory4: return "Stationstaste 4"; case Action::Memory5: return "Stationstaste 5"; case Action::Memory6: return "Stationstaste 6";
     case Action::Memory7: return "Stationstaste 7"; case Action::Memory8: return "Stationstaste 8"; case Action::Memory9: return "Stationstaste 9";
+    case Action::TuneUp: return "Frequenz + 0,1 MHz"; case Action::TuneDown: return "Frequenz \u2212 0,1 MHz";
     default: return "?";
     }
 }
@@ -257,6 +267,7 @@ const char* LabelEn(Action a) {
     case Action::Memory1: return "Station button 1"; case Action::Memory2: return "Station button 2"; case Action::Memory3: return "Station button 3";
     case Action::Memory4: return "Station button 4"; case Action::Memory5: return "Station button 5"; case Action::Memory6: return "Station button 6";
     case Action::Memory7: return "Station button 7"; case Action::Memory8: return "Station button 8"; case Action::Memory9: return "Station button 9";
+    case Action::TuneUp: return "Frequency + 0.1 MHz"; case Action::TuneDown: return "Frequency \u2212 0.1 MHz";
     default: return "?";
     }
 }

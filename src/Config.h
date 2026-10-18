@@ -7,7 +7,7 @@
 #include "DisplayWindow.h"
 
 enum class Action { Next, Previous, Stop, VolumeUp, VolumeDown, MakeFavourite, GoToFavourite, Mute, ShowOverlay, Source, NextDisc, PreviousDisc, ScreenPage, Menu,
-                    Band, Memory1, Memory2, Memory3, Memory4, Memory5, Memory6, Memory7, Memory8, Memory9, Count };
+                    Band, Memory1, Memory2, Memory3, Memory4, Memory5, Memory6, Memory7, Memory8, Memory9, TuneUp, TuneDown, Count };
 inline bool IsMemoryAction(Action a) { return a >= Action::Memory1 && a <= Action::Memory9; }
 
 struct KeyBinding { int vk = 0; bool ctrl = false, shift = false, alt = false; };
@@ -30,7 +30,7 @@ struct ScreenConfig {
     double probeSeconds = 5.0;
     double durationSeconds = 4.0;
     double areaX = 0.1, areaY = 0.3, areaW = 0.8, areaH = 0.4;   // part of the render target to draw into (0..1)
-    bool flipY = true;
+    bool flipY = false;                 // upside down: only needed on drawing surface 2 (target 2)
     bool flipX = false;                 // flipX + flipY = rotated by 180 degrees
     bool grid = false;                  // test mode: coordinate grid + the card's area on the target (to find areaX/Y/W/H)
     std::string design = "modern";      // look of the card: modern | ocean | sport | light | retro
@@ -64,7 +64,7 @@ struct TruckPreset {
     std::vector<std::string> trucks;    // truck ids from the game (e.g. vehicle.man.tgx_2020) this preset is used for
     int width = 1024, height = 1024, format = 29;
     double areaX = 0.1, areaY = 0.3, areaW = 0.8, areaH = 0.4, durationSeconds = 4.0;
-    bool flipX = false, flipY = true;
+    bool flipX = false, flipY = false;
     std::string design = "modern";
     std::string logo;                   // start logo (ScreenConfig::startLogoFile)
     int target = 1;
@@ -116,7 +116,10 @@ struct Config {
     std::string switchMode = "lost";   // lost: change region only when the station is out of range | better: when another region is received better
     bool memoryButtons = true;         // station buttons 1-9 (numpad): tap = select, hold = save
     double memoryHoldSeconds = 1.5;
-    std::map<std::string, std::string> stationButtons;   // "1".."9" -> "<region>|<station name>" (remembered)
+    std::map<std::string, std::string> stationButtons;   // "1".."9" -> "<region>|<station name>" or "f:<0.1 MHz>" (remembered)
+    std::string tuning = "list";       // list: stations in range one after another | frequency: FM dial like an old radio
+    bool rdsAf = false;                // frequency radio: follow the programme to another frequency (RDS AF); off = like in the old days
+    int tunedFreq = 0;                 // last FM frequency in 0.1 MHz (remembered)
     // Reception (original web/config.js)
     double radius = 7500.0;
     double threshold = 0.15;

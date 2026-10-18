@@ -77,6 +77,7 @@ private:
         std::string name, source = "radio", mediaTrack;
         double volume = -1; bool muted = false;
         std::string band;
+        int freq = 0;
         std::map<std::string, std::string> mediaResume, stations, favourites;   // stations / favourites: country -> station name
         std::map<std::string, std::string> buttons;                             // station buttons "1".. -> "<region>|<name>"
     };
@@ -108,6 +109,18 @@ private:
     void ButtonSet(int n, const std::string& value);
     int CurrentButton() const;   // station button of the current station, 0 = none
     void ToggleBand();
+    // frequency radio (FM): the dial like an old car radio
+    bool FreqMode() const { return cfg_.tuning == "frequency" && !Dab(); }
+    struct OnFreq { std::string region; int index; double w; };
+    std::vector<OnFreq> StationsOn(int freq) const;     // receivable stations on this frequency, best first
+    void RefreshFreq(const ReceptionResult& r);
+    void SetTuned(int freq);                            // tune to a frequency (station or only static)
+    void GoSilent();                                    // nothing on the frequency: static only
+    void SeekFreq(int dir);                             // Next / Previous: next frequency with a station
+    std::wstring FreqText(int freq) const;              // "94,7 MHz"
+    int tuned_ = 0;                                     // 0.1 MHz
+    ULONGLONG flipUntil_ = 0;                           // two stations on one frequency: the weaker one for a moment
+    bool silent_ = false;
     int AutoStore(bool overwrite);   // station buttons from the best received stations here; returns how many were set
     bool autoStoreChecked_ = false;  // empty station buttons are filled once after the first reception
     ULONGLONG switchHoldMs_ = 2200;

@@ -14,7 +14,7 @@ Von **ScufyKing**. Das ganze Radio läuft im Spiel:
 
 Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels kopieren, ETS2 starten, das Radio läuft. Senderdaten und Sounds stecken in der DLL.
 
-> **Version 1.4.0** · [Änderungen](CHANGELOG.md#changelog-deutsch)
+> **Version 1.4.1** · [Änderungen](CHANGELOG.md#changelog-deutsch)
 >
 > **Stand:** Getestet in ETS2 1.61 (Windows x64) mit mehreren MAN- und Scania-Modellen sowie Mod-LKW: Das Plugin wird geladen, liest die LKW-Position, wechselt Sender nach Region, spielt Ton ab und zeigt Sender und Lautstärke auf dem Navi-Bildschirm. Daten für American Truck Simulator sind enthalten, ATS ist aber ungetestet.
 
@@ -121,6 +121,7 @@ plugins\
 | Einstellungsmenü öffnen | Strg + 0 | `keys.menu` |
 | Band: FM ↔ DAB+ | Umschalt + Pos1 | `keys.band` |
 | Stationstasten 1–9: kurz = wählen, halten = speichern | Num 1–9 | `keys.memory1` … `keys.memory9` |
+| Frequenz-Radio: 0,1 MHz höher / tiefer | Umschalt + → / Umschalt + ← | `keys.tuneUp`, `keys.tuneDown` |
 
 „Nächster“ und „Vorheriger“ schalten durch alle Sender aller Regionen, die du gerade empfängst; dasselbe Programm aus mehreren Regionen kommt nur einmal vor. Im USB/CD-Modus haben die Tasten eine andere Bedeutung, siehe [USB / CD](#usb--cd-eigene-musik).
 
@@ -129,6 +130,19 @@ Tasten reagieren nur, wenn ETS2 das aktive Fenster ist. So stören sie keine and
 Sind die Pfeiltasten in ETS2 auch zum Fahren oder für Menüs belegt, passiert beides gleichzeitig. Dann andere Tasten oder eine Kombination wie `"Ctrl+Right"` verwenden.
 
 **Tasten ändern im Spiel:** **Strg + 0** öffnet das [Einstellungsmenü](#einstellungsmenü-strg--0). Auf der Seite **Tasten** das Feld einer Funktion anklicken und die neue Taste, Tastenkombination oder den Controller-Knopf drücken.
+
+### Frequenz-Radio (wie früher)
+
+Einstellungsmenü → Radio → **Senderwahl (FM): Frequenz**. Jeder Sender hat eine UKW-Frequenz, und das Radio bleibt auf der eingestellten Frequenz – wie ein Autoradio vor RDS:
+
+- **Weiter / Zurück** suchen die nächste Frequenz mit Sender, **Umschalt + → / ←** stellen in 0,1-MHz-Schritten ein (auf einer leeren Frequenz rauscht es nur).
+- Das Navi zeigt die Frequenz, z. B. „94,7 MHz“.
+- Fährt man weiter, kann der Sender auf der Frequenz im Rauschen verschwinden oder **ein anderer Sender übernimmt die Frequenz**.
+- An Grenzen können zwei Sender auf derselben Frequenz liegen: Der schwächere **kommt ab und zu ein paar Sekunden durch**, mit zusätzlichem Rauschen.
+- **Stationstasten speichern die Frequenz**, nicht den Sender: In einer anderen Gegend spielt die Taste, was dort auf dieser Frequenz gesendet wird.
+- **RDS-AF** (standardmäßig aus) lässt das Radio dem Programm auf seine Frequenz in der nächsten Gegend folgen, wie ein modernes Radio.
+
+Die Frequenzen plant das Plugin selbst (jedes Mal gleich; Sender einer Region teilen sich nie eine Frequenz, benachbarte Regionen meiden sich meistens). Eigene oder korrigierte Frequenzen lassen sich in der Datei für eigene Sender mit `"frequency": 94.7` eintragen. DAB+ hat keine Frequenzen: Bei DAB+ gilt die Senderliste.
 
 ### Stationstasten (Nummernblock)
 
@@ -146,7 +160,7 @@ Die wichtigsten Einstellungen lassen sich direkt im Spiel ändern. **Strg + 0** 
 
 | Seite | Inhalt |
 |---|---|
-| Radio | Lautstärke, Stumm, Radio an bei (Zündung / Motor läuft / immer), automatisch starten, Sprache des Menüs, **Band FM / DAB+** und seine Taste, **Stationstasten** an/aus und Haltezeit |
+| Radio | Lautstärke, Stumm, Radio an bei (Zündung / Motor läuft / immer), automatisch starten, Sprache des Menüs, **Band FM / DAB+** und seine Taste, **Stationstasten** an/aus und Haltezeit, **Senderwahl: Senderliste oder Frequenz**, **RDS-AF** |
 | Empfang | Sendereichweite, Wechselschwelle, **Region wechseln** (erst wenn der Sender weg ist / bei besserem Empfang), **DAB+-Reichweite**, Auto-Lautstärke, Rauschen, Umschaltgeräusch |
 | Navi-Bildschirm | Anzeige an/aus, Anzeigedauer, **Design**, **Start-Logo** an/aus, Dauer und Größe, **Größe von Schrift und Bildern**, **Größe des Senderlogos**, **Zeichenfläche** (falls die Anzeige doppelt erscheint), Radio-Seite dauerhaft, Taste für Navi ↔ Radio-Seite, **Testmodus**, **automatische Erkennung (Beta)** und Position der Anzeige (Bereich X / Y / Breite / Höhe, umdrehen, spiegeln) |
 | LKW | Aktueller LKW (aus der Telemetrie), **Radio-Speicher je LKW**, **Start-Logo** (Auswahl, Vorschau, Logo-Ordner), neues Preset, aktives Preset, automatisch je LKW wechseln, verknüpfen / lösen, löschen, gespeichertes Preset laden |
@@ -192,6 +206,9 @@ Alle Einstellungen stehen in `realistic-radio\realistic-radio.json`. Die Datei w
 | `memoryButtons` | `true` | Stationstasten 1–9 (Nummernblock) |
 | `memoryHoldSeconds` | `1.5` | Wie lange eine Stationstaste zum Speichern gehalten wird |
 | `stationButtons` | – | Die gespeicherten Stationstasten (wird automatisch gespeichert; beim ersten Start mit den Sendern in Reichweite belegt) |
+| `tuning` | `"list"` | FM: `"list"` = Weiter / Zurück schaltet durch die Sender in Reichweite; `"frequency"` = Frequenz-Radio wie früher (siehe unten) |
+| `rdsAf` | `false` | Frequenz-Radio: dem Programm auf seine andere Frequenz folgen, wenn es weg ist (RDS-AF). `false` = wie früher: die Frequenz bleibt stehen |
+| `tunedFreq` | – | Zuletzt eingestellte Frequenz in 0,1 MHz, z. B. `947` (wird automatisch gespeichert) |
 | `screenPage` | `"navi"` | `"radio"` = Radio-Seite dauerhaft auf dem Navi-Bildschirm (wird mit der Taste `screenPage` umgeschaltet und gespeichert) |
 
 ### Overlay (`"overlay": { … }`)
@@ -246,7 +263,7 @@ Weil jeder LKW und jede Mod andere Zeichenflächen nutzt, muss die richtige einm
 | `probeSeconds` | `5` | Zeit pro Kandidat im Suchmodus |
 | `durationSeconds` | `4` | Wie lange die Anzeige bleibt, bevor die Navigation zurückkommt |
 | `areaX`, `areaY`, `areaW`, `areaH` | `0.1, 0.3, 0.8, 0.4` | Bereich der Zeichenfläche, der überdeckt wird |
-| `flipY` | `true` | Anzeige umdrehen |
+| `flipY` | `false` | Anzeige umdrehen – nötig bei Zeichenfläche 2 (`target` 2), nicht bei Fläche 1. Wählt man die Zeichenfläche im Einstellungsmenü, wird es passend gesetzt |
 | `flipX` | `false` | Waagerecht spiegeln (`flipX` + `flipY` = um 180° gedreht) |
 | `grid` | `false` | Testmodus (am einfachsten im Einstellungsmenü): ein 10×10-Koordinatengitter über der ganzen Zeichenfläche und ein orangefarbener Rahmen, der zeigt, wohin die Anzeige gezeichnet wird, mit den Werten in den Ecken. Den Rahmen mit den Bereichs-Reglern verschieben, bis er ganz im sichtbaren Teil des Bildschirms liegt. Wird nie als „an“ gespeichert |
 | `design` | `"modern"` | Aussehen der Anzeige: `"modern"` (dunkel, Amber), `"ocean"` (Ozean: Marineblau, Hellblau), `"sport"` (Schwarz, Rot), `"light"` (Hell: Weiß, Blau), `"retro"` (grüne LCD-Optik) |
@@ -258,7 +275,7 @@ Weil jeder LKW und jede Mod andere Zeichenflächen nutzt, muss die richtige einm
 | `logoSize` | `1.0` | Größe der Kachel mit Senderlogo / Cover (0,5–1,3) |
 | `startLogoSeconds` | `3.5` | Wie lange der Startbildschirm zu sehen ist (1,5–10 s) |
 
-Beispiel (MAN TGX, ETS2 1.61, Navi-Bildschirm): `"width": 1024, "height": 1024, "format": 29, "flipY": true, "areaX": 0.1, "areaY": 0.3, "areaW": 0.8, "areaH": 0.4`. Andere LKW nutzen andere Zeichenflächen.
+Beispiel (MAN TGX, ETS2 1.61, Navi-Bildschirm): `"width": 1024, "height": 1024, "format": 29, "flipY": false, "target": 1, "areaX": 0.11, "areaY": 0.24, "areaW": 0.78, "areaH": 0.58`. Andere LKW nutzen andere Zeichenflächen.
 
 Unabhängig vom Popup-Overlay, das standardmäßig aus ist (`"overlay": { "mode": "auto" }` schaltet es zusätzlich ein). Dieser Modus hängt sich in die Direct3D-11-Ausgabe des Spiels; im Suchmodus kann das Testbild kurz auch auf anderen Flächen auftauchen. Unverträglichkeiten mit anderen Grafik-Mods sind möglich.
 
@@ -266,7 +283,7 @@ Unabhängig vom Popup-Overlay, das standardmäßig aus ist (`"overlay": { "mode"
 
 Jeder LKW hat einen anderen Bildschirm – der Bereich, der im MAN passt, kann im Scania abgeschnitten sein. Presets speichern die Navi-Einstellungen pro LKW.
 
-**Standard-Presets** sind für MAN TGX, Scania S, Mercedes-Benz New Actros, DAF NGD und Iveco S-Way dabei – diese LKW brauchen keine Einrichtung. Ändert man ein Standard-Preset, wird daraus ein eigenes Preset mit demselben Namen (markiert als *angepasst*); löscht man es, gelten wieder die Standardwerte. Standard-Presets werden nicht in die Datei geschrieben.
+**Standard-Presets** sind für MAN TGX, Scania R und S, Mercedes-Benz New Actros, DAF NGD und Iveco S-Way dabei – diese LKW brauchen keine Einrichtung. Scania R und S haben dasselbe Cockpit: Standard ist der normale Bildschirm; für einen Scania mit **Smart Dashboard** das Preset **Scania R/S Smart Dashboard** wählen (Seite LKW → Laden oder mit dem LKW verknüpfen). Ändert man ein Standard-Preset, wird daraus ein eigenes Preset mit demselben Namen (markiert als *angepasst*); löscht man es, gelten wieder die Standardwerte. Standard-Presets werden nicht in die Datei geschrieben.
 
 Für weitere LKW legt man einmal ein Preset im Einstellungsmenü an, Seite **LKW**:
 
@@ -382,6 +399,7 @@ Kopiere `realistic-radio\custom-stations-ets2.example.json` im selben Ordner nac
 - Ein Sender mit **neuem Namen** wird ans Ende der Liste dieser Region angehängt.
 - `logo` ist optional: eine vollständige `https://`-Adresse eines Bildes (PNG oder JPG) oder ein Dateiname. Ein Dateiname wird zuerst in `realistic-radio\logos\` gesucht und sonst von `urlPrefix` geladen.
 - `url` kann auch eine lokale Audiodatei sein. Ein relativer Pfad wird im Ordner `realistic-radio` gesucht.
+- `frequency` ist optional: die UKW-Frequenz für das Frequenz-Radio, z. B. `"frequency": 94.7` (auch zum Korrigieren der Frequenz eines vorhandenen Senders: gleicher Name, gleiche Region).
 
 Die Regionsnamen findest du in `ets2.json` unter `"stations"`. Regionen mit Bindestrich sind Teilgebiete, z. B. `germany-swr` oder `germany-muenchen`. In Grenznähe empfängst du oft mehrere Regionen gleichzeitig.
 

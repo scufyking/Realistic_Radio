@@ -14,7 +14,7 @@ By **ScufyKing**. The whole radio runs inside the game:
 
 Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ETS2, and the radio plays. Station data and sounds are built into the DLL.
 
-> **Version 1.4.0** · [Changes](CHANGELOG.md)
+> **Version 1.4.1** · [Changes](CHANGELOG.md)
 >
 > **Status:** Tested in ETS2 1.61 (Windows x64) with several MAN and Scania models and mod trucks: the plugin loads, reads the truck position, switches stations by region, plays audio and shows station and volume on the navigation screen. American Truck Simulator data is included but ATS is untested.
 
@@ -121,6 +121,7 @@ plugins\
 | Open the settings menu | Ctrl + 0 | `keys.menu` |
 | Band: FM ↔ DAB+ | Shift + Home | `keys.band` |
 | Station buttons 1–9: tap = select, hold = save | NumPad 1–9 | `keys.memory1` … `keys.memory9` |
+| Frequency radio: tune 0.1 MHz up / down | Shift + → / Shift + ← | `keys.tuneUp`, `keys.tuneDown` |
 
 "Next" and "Previous" step through every station of every region you currently receive; the same programme from several regions appears only once. In USB/CD mode the keys work differently, see [USB / CD](#usb--cd-your-own-music).
 
@@ -129,6 +130,19 @@ Keys only react while ETS2 is the active window, so they do not interfere with o
 If the arrow keys are also bound to driving or menus in ETS2, both happen at the same time. In that case use other keys or a combination such as `"Ctrl+Right"`.
 
 **Changing keys in the game:** **Ctrl + 0** opens the [settings menu](#settings-menu-ctrl--0). On the **Keys** page click the field of a function and press the new key, key combination or controller button.
+
+### Frequency radio (like in the old days)
+
+Settings menu → Radio → **Tuning (FM): Frequency**. Every station has an FM frequency, and the radio stays on the frequency you tuned in – like a car radio before RDS:
+
+- **Next / Previous** seek to the next frequency with a station, **Shift + → / ←** tune in 0.1 MHz steps (on an empty frequency there is only static).
+- The screen shows the frequency, e.g. "94,7 MHz".
+- Drive on and the station on your frequency can fade into static, or **another station takes the frequency over**.
+- At borders two stations can be on the same frequency: the weaker one **breaks through for a few seconds** now and then, with extra noise.
+- **Station buttons store the frequency**, not the station: in another area the button plays whatever is broadcast on that frequency there.
+- **RDS AF** (off by default) makes the radio follow the programme to its frequency in the next area, like a modern radio.
+
+The frequencies are planned by the plugin (the same every time; stations of one region never share a frequency, neighbouring regions mostly avoid each other's). Own or corrected frequencies can be set in the custom stations file with `"frequency": 94.7`. DAB+ has no frequencies: in DAB+ the station list is used.
 
 ### Station buttons (numpad)
 
@@ -146,7 +160,7 @@ The most important settings can be changed right in the game. **Ctrl + 0** opens
 
 | Page | Contents |
 |---|---|
-| Radio | Volume, mute, radio on with (ignition / engine running / always), start automatically, menu language, **band FM / DAB+** and its key, **station buttons** on/off and hold time |
+| Radio | Volume, mute, radio on with (ignition / engine running / always), start automatically, menu language, **band FM / DAB+** and its key, **station buttons** on/off and hold time, **tuning: station list or frequency**, **RDS AF** |
 | Reception | Broadcast range, switch threshold, **change region** (only when the station is lost / on better reception), **DAB+ range**, auto volume, static, tuning sound |
 | Navigation screen | Display on/off, display time, **design**, **start logo** on/off, time and size, **size of text and pictures**, **size of the station logo**, **drawing surface** (if the display appears twice), keep the radio page on, key for navigation ↔ radio page, **test mode**, **automatic detection (beta)** and the position of the display (area X / Y / width / height, flip, mirror) |
 | Trucks | Current truck (from the telemetry), **radio memory per truck**, **start logo** (choice, preview, logo folder), new preset, active preset, change automatically per truck, link / unlink, delete, load a saved preset |
@@ -192,6 +206,9 @@ All settings are in `realistic-radio\realistic-radio.json`. The file is created 
 | `memoryButtons` | `true` | Station buttons 1–9 (numpad) |
 | `memoryHoldSeconds` | `1.5` | How long to hold a station button to save |
 | `stationButtons` | – | The saved station buttons (saved automatically; filled with the stations in range on the first start) |
+| `tuning` | `"list"` | FM: `"list"` = Next / Previous step through the stations in range; `"frequency"` = frequency radio like in the old days (see below) |
+| `rdsAf` | `false` | Frequency radio: follow the programme to its other frequency when it is lost (RDS AF). `false` = old style: the dial stays where it is |
+| `tunedFreq` | – | Last frequency in 0.1 MHz, e.g. `947` (saved automatically) |
 | `screenPage` | `"navi"` | `"radio"` = radio page permanently on the navigation screen (switched with the `screenPage` key and saved) |
 
 ### Overlay (`"overlay": { … }`)
@@ -246,7 +263,7 @@ Because every truck and mod uses different render targets, the right one must be
 | `probeSeconds` | `5` | Time per candidate in search mode |
 | `durationSeconds` | `4` | How long the card stays on the screen before the navigation returns |
 | `areaX`, `areaY`, `areaW`, `areaH` | `0.1, 0.3, 0.8, 0.4` | Part of the render target to cover |
-| `flipY` | `true` | Turn the card upside down |
+| `flipY` | `false` | Turn the card upside down – needed on drawing surface 2 (`target` 2), not on surface 1. Choosing the drawing surface in the settings menu sets it accordingly |
 | `flipX` | `false` | Mirror horizontally (`flipX` + `flipY` = rotated by 180°) |
 | `grid` | `false` | Test mode (easiest in the settings menu): a 10×10 coordinate grid over the whole render target and an orange frame showing where the display is drawn, with its values in the corners. Move the frame with the area sliders until it lies fully on the visible part of the screen. Not saved as on |
 | `design` | `"modern"` | Look of the display: `"modern"` (dark, amber), `"ocean"` (navy, light blue), `"sport"` (black, red), `"light"` (white, blue), `"retro"` (green LCD look) |
@@ -258,7 +275,7 @@ Because every truck and mod uses different render targets, the right one must be
 | `logoSize` | `1.0` | Size of the station logo / cover tile (0.5–1.3) |
 | `startLogoSeconds` | `3.5` | How long the start screen stays (1.5–10 s) |
 
-Example (MAN TGX, ETS2 1.61, navigation screen): `"width": 1024, "height": 1024, "format": 29, "flipY": true, "areaX": 0.1, "areaY": 0.3, "areaW": 0.8, "areaH": 0.4`. Other trucks use other render targets.
+Example (MAN TGX, ETS2 1.61, navigation screen): `"width": 1024, "height": 1024, "format": 29, "flipY": false, "target": 1, "areaX": 0.11, "areaY": 0.24, "areaW": 0.78, "areaH": 0.58`. Other trucks use other render targets.
 
 Independent of the pop-up overlay, which is off by default (`"overlay": { "mode": "auto" }` turns it on in addition). This mode hooks into the game's Direct3D 11 rendering; in probe mode the test pattern can briefly appear on other surfaces too. Untested combinations with other graphics mods are possible.
 
@@ -266,7 +283,7 @@ Independent of the pop-up overlay, which is off by default (`"overlay": { "mode"
 
 Different trucks have different screens – the area that fits a MAN may be cut off in a Scania. Presets store the screen settings per truck.
 
-**Standard presets** are included for the MAN TGX, Scania S, Mercedes-Benz New Actros, DAF NGD and Iveco S-Way – these trucks need no setting up. If you change a standard preset, it becomes your own preset with the same name (marked *customised*); deleting it brings back the standard values. Standard presets are not written to the file.
+**Standard presets** are included for the MAN TGX, Scania R and S, Mercedes-Benz New Actros, DAF NGD and Iveco S-Way – these trucks need no setting up. Scania R and S share the cab: the standard is the normal screen; for a Scania with the **smart dashboard** choose the preset **Scania R/S Smart Dashboard** (page Trucks → Load, or link it to the truck). If you change a standard preset, it becomes your own preset with the same name (marked *customised*); deleting it brings back the standard values. Standard presets are not written to the file.
 
 For other trucks, set up a preset once in the settings menu, page **Trucks**:
 
@@ -382,6 +399,7 @@ Copy `realistic-radio\custom-stations-ets2.example.json` to `custom-stations-ets
 - A station with a **new name** is added to the end of that region's list.
 - `logo` is optional: a full `https://` address of an image (PNG or JPG), or a file name. A file name is looked up in `realistic-radio\logos\` first and otherwise downloaded from `urlPrefix`.
 - `url` can also be a local audio file. A relative path is looked up in the `realistic-radio` folder.
+- `frequency` is optional: the FM frequency for the frequency radio, e.g. `"frequency": 94.7` (also to correct the frequency of an existing station: same name, same region).
 
 To find the region names, open `ets2.json` and look under `"stations"`. Regions with a hyphen are subregions, e.g. `germany-swr` or `germany-muenchen`. Near the border you often receive several regions at once.
 

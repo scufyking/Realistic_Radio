@@ -21,6 +21,16 @@
 #include <common/scssdk_telemetry_common_configs.h>
 #include <scssdk_telemetry_event.h>
 
+#ifdef RR_WITH_TRUCKER_CHAT
+// Truckers-RealisticRadio.dll: Realistic Radio + Trucker Chat in one plugin (two separate plugins would both hook
+// Direct3D). Trucker Chat lives in namespace tc (addons/trucker-chat) and draws through the radio's D3D hook.
+namespace tc {
+SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_init_params_t* const params);
+SCSAPI_VOID scs_telemetry_shutdown(void);
+void SetPowerState(bool electric, bool engine);
+}
+#endif
+
 namespace {
 std::atomic<double> g_x{0}, g_z{0};
 std::atomic<bool> g_havePos{false};
@@ -60,6 +70,9 @@ SCSAPI_VOID OnSpeed(const scs_string_t, const scs_u32_t, const scs_value_t* cons
 SCSAPI_VOID OnBool(const scs_string_t, const scs_u32_t, const scs_value_t* const value, const scs_context_t ctx) {
     bool v = value && value->type == SCS_VALUE_TYPE_bool && value->value_bool.value != 0;
     (ctx ? g_engine : g_electric) = v;
+#ifdef RR_WITH_TRUCKER_CHAT
+    tc::SetPowerState(g_electric, g_engine);
+#endif
 }
 std::atomic<bool> g_quit{false};
 HANDLE g_thread = nullptr;
@@ -135,6 +148,9 @@ static void MigrateFromLocalRadio(const std::wstring& dir) {
 SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_init_params_t* const params) {
     if (version != SCS_TELEMETRY_VERSION_1_00 && version != SCS_TELEMETRY_VERSION_1_01) return SCS_RESULT_unsupported;
     const auto* p = static_cast<const scs_telemetry_init_params_v100_t*>(params);
+#ifdef RR_WITH_TRUCKER_CHAT
+    tc::scs_telemetry_init(version, params);   // the chat part: own thread, own files in the trucker-chat folder
+#endif
     // Only one copy may run per game process: a second DLL (e.g. "realistic-radio (1).dll") would play a second
     // radio with its own volume. The copy that comes second stays inactive and does not touch the shared log file.
     wchar_t mtxName[80]; swprintf(mtxName, 80, L"Local\\ETS2LocalRadioNative-%lu", GetCurrentProcessId());   // name kept from the previous release, so old and new DLL exclude each other
@@ -142,6 +158,11 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
     if (g_instance && GetLastError() == ERROR_ALREADY_EXISTS) {
         CloseHandle(g_instance); g_instance = nullptr;
         p->common.log(SCS_LOG_TYPE_warning, "[realistic-radio] another copy of the Realistic Radio plugin is already loaded - this copy stays inactive. Remove duplicate DLLs from the plugins folder.");
+#ifdef RR_WITH_TRUCKER_CHAT
+        // the chat still needs ignition / engine state
+        p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_electric_enabled, SCS_U32_NIL, SCS_VALUE_TYPE_bool, SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnBool, nullptr);
+        p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_engine_enabled, SCS_U32_NIL, SCS_VALUE_TYPE_bool, SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnBool, (scs_context_t)1);
+#endif
         return SCS_RESULT_ok;
     }
     std::wstring dir = PluginDataDir();
@@ -191,6 +212,9 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
 }
 
 SCSAPI_VOID scs_telemetry_shutdown(void) {
+#ifdef RR_WITH_TRUCKER_CHAT
+    tc::scs_telemetry_shutdown();
+#endif
     if (!g_instance) return;   // inactive duplicate copy
     g_quit = true;
     if (g_thread) { WaitForSingleObject(g_thread, 10000); CloseHandle(g_thread); g_thread = nullptr; }
