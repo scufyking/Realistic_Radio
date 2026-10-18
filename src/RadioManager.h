@@ -11,6 +11,8 @@
 #include "Overlay.h"
 #include "MediaLibrary.h"
 #include "SettingsMenu.h"
+#include <set>
+#include <unordered_map>
 
 // Replaces main.js (refresh, setRadioStation, setWhitenoise, nextStation, favourites) + the server's command handling.
 class RadioManager {
@@ -18,15 +20,17 @@ public:
     bool Init(const std::wstring& dataDir, const std::string& game);
     void Shutdown();
     void Tick(double x, double z, bool positionValid, bool electric, bool engine, float speed = 0.f);   // speed in m/s   // called ~4x per second from the radio thread
-    void OnAction(Action a);
+    void OnAction(Action a, bool hold = false);   // hold: station button held long enough (= save)
     // key menu (Ctrl+0)
     bool MenuOpen() const { return menu_.IsOpen(); }
     bool MenuTick(InputManager& input);   // true = menu closed and new bindings applied (re-init the input)
     const Config& Settings() const { return cfg_; }
-    void SetTruck(const std::string& id, const std::string& name);   // truck changed: load its preset (presetAuto)
+    void SetTruck(const std::string& id, const std::string& name, const std::string& brandId = "", const std::string& brand = "",
+                  const std::string& model = "");   // truck changed: load its preset (presetAuto)
 private:
     void Refresh(double x, double z);
-    void SetRadioStation(const std::string& country, size_t index, double whitenoise);
+    // variant: the same programme in a neighbouring region (e.g. SWR1 BW -> SWR1 RP): changes without tuning noise
+    void SetRadioStation(const std::string& country, size_t index, double whitenoise, bool variant = false);
     void SetWhitenoise(double whitenoise);
     void NextStation(int amount);
     std::string ResolveUrl(const std::string& url) const;
@@ -65,12 +69,16 @@ private:
     ULONGLONG lastSpeedAt_ = 0;
     void UpdateSpeedVolume(float speed, ULONGLONG now);
     void ApplySettings(const Config& e);
-    std::string truckId_, truckName_;
+    std::string truckId_, truckName_, brandId_, brand_, model_;
+    bool lastElectric_ = false;
+    ULONGLONG startLogoAt_ = 0;   // ignition on: start logo as soon as the truck is known
     // radio memory per truck (truckMemory): realistic-radio\trucks-<game>.json
     struct TruckMemory {
         std::string name, source = "radio", mediaTrack;
         double volume = -1; bool muted = false;
+        std::string band;
         std::map<std::string, std::string> mediaResume, stations, favourites;   // stations / favourites: country -> station name
+        std::map<std::string, std::string> buttons;                             // station buttons "1".. -> "<region>|<name>"
     };
     std::map<std::string, TruckMemory> mem_;
     std::wstring memPath_;
@@ -83,6 +91,26 @@ private:
     bool UseMemory() const { return cfg_.truckMemory && !truckId_.empty(); }
     std::string FavGet(const std::string& country) const;   // favourite of the truck (truckMemory), else the general one
     bool FavHas(const std::string& country) const;
+    // 1.4.0: FM / DAB+, same programme in several regions, station buttons
+    bool Dab() const { return cfg_.band == "dab"; }
+    std::string FamilyKey(const std::string& region, const std::string& name) const;   // "germany|swr1" for SWR1 BW and SWR1 RP
+    std::string RawFamilyKey(const std::string& region, const std::string& name) const;
+    void BuildFamilies();                                     // place names + keys that are not unique within a region
+    std::set<std::string> places_;
+    std::map<std::string, std::set<std::string>> famAmbiguous_;
+    mutable std::unordered_map<std::string, std::string> famCache_;
+    ULONGLONG lostSince_ = 0;                                 // current station out of range since (switch after a few seconds)
+    std::string CurrentFamily() const;
+    bool FindVariant(const std::string& family, std::string& region, int& index) const;   // best received region with it
+    void PickStation(const std::string& region, double whitenoise);   // truck memory, favourite or the first station
+    void StationButton(int n, bool hold);
+    std::string ButtonGet(int n) const;
+    void ButtonSet(int n, const std::string& value);
+    int CurrentButton() const;   // station button of the current station, 0 = none
+    void ToggleBand();
+    int AutoStore(bool overwrite);   // station buttons from the best received stations here; returns how many were set
+    bool autoStoreChecked_ = false;  // empty station buttons are filled once after the first reception
+    ULONGLONG switchHoldMs_ = 2200;
     MediaLibrary lib_;
     std::vector<int> order_;    // play order (shuffled or folder order), indices into lib_.Tracks()
     int orderPos_ = -1, track_ = -1, disc_ = -1;

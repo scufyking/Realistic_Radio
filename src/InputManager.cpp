@@ -15,34 +15,45 @@ bool InputManager::GameFocused() const {
 
 static bool Down(int vk) { return vk && (GetAsyncKeyState(vk) & 0x8000) != 0; }
 
-void InputManager::Poll(const std::function<void(Action)>& fire) {
-    if (cfg_.onlyWhenGameFocused && !GameFocused()) { for (auto& k : keyDown_) k = false; return; }
+void InputManager::Poll(const std::function<void(Action, bool)>& fire) {
+    if (cfg_.onlyWhenGameFocused && !GameFocused()) { for (auto& k : keyDown_) k = false; for (auto& h : holdDone_) h = true; return; }
+    bool pressed[(int)Action::Count] = {};
     for (int i = 0; i < (int)Action::Count; ++i) {
         const KeyBinding& b = cfg_.keys[i];
-        bool d = b.vk && Down(b.vk) && Down(VK_CONTROL) == b.ctrl && Down(VK_SHIFT) == b.shift && Down(VK_MENU) == b.alt;
-        if (d && !keyDown_[i]) fire((Action)i);
-        keyDown_[i] = d;
+        pressed[i] = b.vk && Down(b.vk) && Down(VK_CONTROL) == b.ctrl && Down(VK_SHIFT) == b.shift && Down(VK_MENU) == b.alt;
     }
     bool anyButton = false;
     for (int b : cfg_.buttons) if (b >= 0) anyButton = true;
-    if (!anyButton) return;
     ULONGLONG now = GetTickCount64();
-    if (!joyOk_ && now < nextJoyRetry_) return;
-    JOYINFOEX ji{}; ji.dwSize = sizeof(ji); ji.dwFlags = JOY_RETURNBUTTONS;
-    if (joyGetPosEx(JOYSTICKID1 + cfg_.controllerIndex, &ji) != JOYERR_NOERROR) { joyOk_ = false; nextJoyRetry_ = now + 3000; return; }
-    joyOk_ = true;
-    for (int i = 0; i < (int)Action::Count; ++i) {
-        int b = cfg_.buttons[i]; if (b < 0 || b > 31) continue;
-        DWORD m = 1u << b;
-        if ((ji.dwButtons & m) && !(lastButtons_ & m)) fire((Action)i);
+    if (anyButton && (joyOk_ || now >= nextJoyRetry_)) {
+        JOYINFOEX ji{}; ji.dwSize = sizeof(ji); ji.dwFlags = JOY_RETURNBUTTONS;
+        if (joyGetPosEx(JOYSTICKID1 + cfg_.controllerIndex, &ji) != JOYERR_NOERROR) { joyOk_ = false; nextJoyRetry_ = now + 3000; }
+        else {
+            joyOk_ = true;
+            for (int i = 0; i < (int)Action::Count; ++i) {
+                int b = cfg_.buttons[i];
+                if (b >= 0 && b <= 31 && (ji.dwButtons & (1u << b))) pressed[i] = true;
+            }
+            lastButtons_ = ji.dwButtons;
+        }
     }
-    lastButtons_ = ji.dwButtons;
+    const ULONGLONG holdMs = (ULONGLONG)(cfg_.memoryHoldSeconds * 1000);
+    for (int i = 0; i < (int)Action::Count; ++i) {
+        bool d = pressed[i], was = keyDown_[i];
+        keyDown_[i] = d;
+        if (!IsMemoryAction((Action)i)) { if (d && !was) fire((Action)i, false); continue; }
+        // station button like on a car radio: tap = select, hold = save
+        if (d && !was) { pressAt_[i] = now; holdDone_[i] = false; }
+        else if (d && !holdDone_[i] && now - pressAt_[i] >= holdMs) { holdDone_[i] = true; fire((Action)i, true); }
+        else if (!d && was && !holdDone_[i]) { holdDone_[i] = true; fire((Action)i, false); }
+    }
 }
 
 void InputManager::Resync() {
     for (int i = 0; i < (int)Action::Count; ++i) {
         const KeyBinding& b = cfg_.keys[i];
         keyDown_[i] = b.vk && Down(b.vk);
+        holdDone_[i] = true;   // a key still held from the menu does nothing when released
     }
     JOYINFOEX ji{}; ji.dwSize = sizeof(ji); ji.dwFlags = JOY_RETURNBUTTONS;
     if (joyGetPosEx(JOYSTICKID1 + cfg_.controllerIndex, &ji) == JOYERR_NOERROR) lastButtons_ = ji.dwButtons;

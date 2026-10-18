@@ -13,7 +13,9 @@
 
 using nlohmann::json;
 
-static const char* kActionNames[] = {"next", "previous", "stop", "volumeUp", "volumeDown", "makeFavourite", "goToFavourite", "mute", "showOverlay", "source", "nextDisc", "previousDisc", "screenPage", "menu"};
+static const char* kActionNames[] = {"next", "previous", "stop", "volumeUp", "volumeDown", "makeFavourite", "goToFavourite", "mute", "showOverlay", "source", "nextDisc", "previousDisc", "screenPage", "menu",
+                                     "band", "memory1", "memory2", "memory3", "memory4", "memory5", "memory6", "memory7", "memory8", "memory9"};
+static_assert(sizeof(kActionNames) / sizeof(kActionNames[0]) == (size_t)Action::Count, "every action needs a name");
 const char* ActionName(Action a) { return kActionNames[(int)a]; }
 
 Config::Config() {
@@ -28,6 +30,8 @@ Config::Config() {
     keys[(int)Action::Source] = ParseKeyBinding("Home");
     keys[(int)Action::ScreenPage] = ParseKeyBinding("Insert");
     keys[(int)Action::Menu] = ParseKeyBinding("Ctrl+0");
+    keys[(int)Action::Band] = ParseKeyBinding("Shift+Home");
+    for (int i = 0; i < 9; ++i) keys[(int)Action::Memory1 + i] = ParseKeyBinding("NumPad" + std::to_string(i + 1));   // station buttons
 }
 
 int ParseKeyName(const std::string& in) {
@@ -201,6 +205,13 @@ bool Config::Load(const std::wstring& path) {
         source = j.value("source", source);
         mediaTrack = j.value("mediaTrack", mediaTrack);
         screenPage = j.value("screenPage", screenPage);
+        band = j.value("band", band); if (band != "dab") band = "fm";
+        dabRange = std::clamp(j.value("dabRange", dabRange), 1.0, 3.0);
+        switchMode = j.value("switchMode", switchMode); if (switchMode != "better") switchMode = "lost";
+        memoryButtons = j.value("memoryButtons", memoryButtons);
+        memoryHoldSeconds = std::clamp(j.value("memoryHoldSeconds", memoryHoldSeconds), 0.5, 3.0);
+        if (j.contains("stationButtons") && j["stationButtons"].is_object())
+            for (auto& [k, v] : j["stationButtons"].items()) if (v.is_string()) stationButtons[k] = v.get<std::string>();
         menuLanguage = j.value("menuLanguage", menuLanguage);
         activePreset = j.value("activePreset", activePreset);
         presetAuto = j.value("presetAuto", presetAuto);
@@ -215,7 +226,10 @@ bool Config::Load(const std::wstring& path) {
                     auto& s = p["screen"];
                     t.width = s.value("width", t.width); t.height = s.value("height", t.height); t.format = s.value("format", t.format);
                     t.areaX = s.value("areaX", t.areaX); t.areaY = s.value("areaY", t.areaY); t.areaW = s.value("areaW", t.areaW); t.areaH = s.value("areaH", t.areaH);
-                    t.flipX = s.value("flipX", t.flipX); t.flipY = s.value("flipY", t.flipY); t.design = s.value("design", t.design);
+                    t.flipX = s.value("flipX", t.flipX); t.flipY = s.value("flipY", t.flipY); t.design = s.value("design", t.design); t.logo = s.value("logo", t.logo);
+                    t.target = std::clamp(s.value("target", t.target), 0, 8); t.scale = std::clamp(s.value("scale", t.scale), 0.6, 1.6);
+                    t.logoScale = std::clamp(s.value("logoScale", t.logoScale), 0.2, 1.0);
+                    t.logoSize = std::clamp(s.value("logoSize", t.logoSize), 0.5, 1.3);
                     t.durationSeconds = s.value("durationSeconds", t.durationSeconds);
                 }
                 // an unchanged copy of a standard preset is dropped, so it keeps following the standard values of new versions
@@ -224,7 +238,7 @@ bool Config::Load(const std::wstring& path) {
                 for (auto& b : BuiltinPresets())
                     if (b.name == t.name && b.trucks == t.trucks && b.width == t.width && b.height == t.height && b.format == t.format &&
                         approx(b.areaX, t.areaX) && approx(b.areaY, t.areaY) && approx(b.areaW, t.areaW) && approx(b.areaH, t.areaH) &&
-                        b.flipX == t.flipX && b.flipY == t.flipY && b.design == t.design && approx(b.durationSeconds, t.durationSeconds))
+                        b.flipX == t.flipX && b.flipY == t.flipY && b.design == t.design && b.logo == t.logo && b.target == t.target && approx(b.scale, t.scale) && approx(b.logoScale, t.logoScale) && approx(b.logoSize, t.logoSize) && approx(b.durationSeconds, t.durationSeconds))
                         standardCopy = true;
                 if (!standardCopy) presets.push_back(t);
             }
@@ -250,6 +264,13 @@ bool Config::Load(const std::wstring& path) {
             c.areaW = sc.value("areaW", c.areaW); c.areaH = sc.value("areaH", c.areaH);
             c.flipY = sc.value("flipY", c.flipY); c.flipX = sc.value("flipX", c.flipX); c.grid = sc.value("grid", c.grid);
             c.design = sc.value("design", c.design);
+            c.startLogo = sc.value("startLogo", c.startLogo);
+            c.startLogoSeconds = std::clamp(sc.value("startLogoSeconds", c.startLogoSeconds), 1.5, 10.0);
+            c.startLogoFile = sc.value("startLogoFile", c.startLogoFile);
+            c.startLogoScale = std::clamp(sc.value("startLogoScale", c.startLogoScale), 0.2, 1.0);
+            c.target = std::clamp(sc.value("target", c.target), 0, 8);
+            c.scale = std::clamp(sc.value("scale", c.scale), 0.6, 1.6);
+            c.logoSize = std::clamp(sc.value("logoSize", c.logoSize), 0.5, 1.3);
         }
         if (j.contains("display")) {
             auto& d = j["display"];
@@ -312,7 +333,8 @@ bool Config::Load(const std::wstring& path) {
         // 1.2.0: keys nextDisc / previousDisc and media.folderPerDisc
         std::vector<std::string> missingKeys;
         if (j.contains("keys") && j["keys"].is_object())
-            for (const char* n : {"source", "nextDisc", "previousDisc", "screenPage", "menu"}) if (!j["keys"].contains(n)) missingKeys.push_back(n);
+            for (const char* n : {"source", "nextDisc", "previousDisc", "screenPage", "menu", "band", "memory1", "memory2", "memory3", "memory4",
+                                  "memory5", "memory6", "memory7", "memory8", "memory9"}) if (!j["keys"].contains(n)) missingKeys.push_back(n);
         bool addSource = !missingKeys.empty();
         bool addMedia = !j.contains("media");
         bool addFolderPerDisc = !addMedia && j["media"].is_object() && !j["media"].contains("folderPerDisc");
@@ -327,7 +349,9 @@ bool Config::Load(const std::wstring& path) {
                     Log::Write("Keys updated to the new defaults: Left/Right = station, Up/Down = volume");
                 }
                 for (auto& n : missingKeys) {
-                    k["keys"][n] = n == "source" ? "Home" : n == "screenPage" ? "Insert" : n == "menu" ? "Ctrl+0" : "";
+                    std::string def;
+                    for (int a = 0; a < (int)Action::Count; ++a) if (n == kActionNames[a]) def = KeyBindingName(Config().keys[a]);
+                    k["keys"][n] = def;
                     if (k.contains("buttons") && k["buttons"].is_object() && !k["buttons"].contains(n)) k["buttons"][n] = -1;
                     Log::Write("Added key '%s' to the settings", n.c_str());
                 }
@@ -392,16 +416,22 @@ static json MenuJsonObj(const Config& c) {
     j["volume"] = c.volume; j["muted"] = c.muted; j["autoVolume"] = c.autoVolume; j["autoPlay"] = c.autoPlay; j["powerSource"] = c.powerSource;
     j["menuLanguage"] = c.menuLanguage; j["screenPage"] = c.screenPage;
     j["activePreset"] = c.activePreset; j["presetAuto"] = c.presetAuto; j["truckMemory"] = c.truckMemory;
+    j["band"] = c.band; j["dabRange"] = c.dabRange; j["switchMode"] = c.switchMode;
+    j["memoryButtons"] = c.memoryButtons; j["memoryHoldSeconds"] = c.memoryHoldSeconds;
     j["presets"] = json::array();
     for (auto& p : c.presets) {
         json o; o["name"] = p.name; o["trucks"] = p.trucks;
         o["screen"] = {{"width", p.width}, {"height", p.height}, {"format", p.format}, {"areaX", R6(p.areaX)}, {"areaY", R6(p.areaY)}, {"areaW", R6(p.areaW)},
-                       {"areaH", R6(p.areaH)}, {"flipX", p.flipX}, {"flipY", p.flipY}, {"design", p.design}, {"durationSeconds", p.durationSeconds}};
+                       {"areaH", R6(p.areaH)}, {"flipX", p.flipX}, {"flipY", p.flipY}, {"design", p.design}, {"durationSeconds", p.durationSeconds},
+                       {"logo", p.logo}, {"target", p.target}, {"scale", R6(p.scale)}, {"logoScale", R6(p.logoScale)}, {"logoSize", R6(p.logoSize)}};
         j["presets"].push_back(o);
     }
     j["screen"]["enabled"] = c.screen.enabled; j["screen"]["durationSeconds"] = c.screen.durationSeconds;
     j["screen"]["areaX"] = R6(c.screen.areaX); j["screen"]["areaY"] = R6(c.screen.areaY); j["screen"]["areaW"] = R6(c.screen.areaW); j["screen"]["areaH"] = R6(c.screen.areaH);
     j["screen"]["flipX"] = c.screen.flipX; j["screen"]["flipY"] = c.screen.flipY; j["screen"]["design"] = c.screen.design;
+    j["screen"]["startLogo"] = c.screen.startLogo; j["screen"]["startLogoSeconds"] = c.screen.startLogoSeconds;
+    j["screen"]["startLogoFile"] = c.screen.startLogoFile; j["screen"]["startLogoScale"] = R6(c.screen.startLogoScale);
+    j["screen"]["target"] = c.screen.target; j["screen"]["scale"] = R6(c.screen.scale); j["screen"]["logoSize"] = R6(c.screen.logoSize);
     j["screen"]["grid"] = false;   // test mode is never saved as on
     j["screen"]["width"] = c.screen.width; j["screen"]["height"] = c.screen.height; j["screen"]["format"] = c.screen.format;
     auto& o = j["overlay"];
@@ -434,10 +464,14 @@ void CopyMenuSettings(Config& d, const Config& s) {
     d.volume = s.volume; d.muted = s.muted; d.autoVolume = s.autoVolume; d.autoPlay = s.autoPlay; d.powerSource = s.powerSource;
     d.menuLanguage = s.menuLanguage; d.screenPage = s.screenPage;
     d.presets = s.presets; d.activePreset = s.activePreset; d.presetAuto = s.presetAuto; d.truckMemory = s.truckMemory;
+    d.band = s.band; d.dabRange = s.dabRange; d.switchMode = s.switchMode; d.memoryButtons = s.memoryButtons; d.memoryHoldSeconds = s.memoryHoldSeconds;
     d.screen.width = s.screen.width; d.screen.height = s.screen.height; d.screen.format = s.screen.format;
     d.screen.enabled = s.screen.enabled; d.screen.durationSeconds = s.screen.durationSeconds;
     d.screen.areaX = s.screen.areaX; d.screen.areaY = s.screen.areaY; d.screen.areaW = s.screen.areaW; d.screen.areaH = s.screen.areaH;
     d.screen.flipX = s.screen.flipX; d.screen.flipY = s.screen.flipY; d.screen.design = s.screen.design;
+    d.screen.startLogo = s.screen.startLogo; d.screen.startLogoSeconds = s.screen.startLogoSeconds;
+    d.screen.startLogoFile = s.screen.startLogoFile; d.screen.startLogoScale = s.screen.startLogoScale;
+    d.screen.target = s.screen.target; d.screen.scale = s.screen.scale; d.screen.logoSize = s.screen.logoSize;
     d.screen.grid = s.screen.grid;   // test mode: applied live, not part of MenuJson (not saved)
     d.overlay.mode = s.overlay.mode; d.overlay.style = s.overlay.style; d.overlay.position = s.overlay.position; d.overlay.scale = s.overlay.scale;
     d.overlay.durationSeconds = s.overlay.durationSeconds; d.overlay.showLogos = s.overlay.showLogos; d.overlay.logoCacheMB = s.overlay.logoCacheMB;
@@ -452,12 +486,14 @@ TruckPreset PresetFromScreen(const std::string& name, const ScreenConfig& s) {
     p.width = s.width; p.height = s.height; p.format = s.format;
     p.areaX = s.areaX; p.areaY = s.areaY; p.areaW = s.areaW; p.areaH = s.areaH;
     p.flipX = s.flipX; p.flipY = s.flipY; p.design = s.design; p.durationSeconds = s.durationSeconds;
+    p.logo = s.startLogoFile; p.target = s.target; p.scale = s.scale; p.logoScale = s.startLogoScale; p.logoSize = s.logoSize;
     return p;
 }
 void ApplyPreset(ScreenConfig& s, const TruckPreset& p) {
     s.width = p.width; s.height = p.height; s.format = p.format;
     s.areaX = p.areaX; s.areaY = p.areaY; s.areaW = p.areaW; s.areaH = p.areaH;
     s.flipX = p.flipX; s.flipY = p.flipY; s.design = p.design; s.durationSeconds = p.durationSeconds;
+    s.startLogoFile = p.logo; s.target = p.target; s.scale = p.scale; s.startLogoScale = p.logoScale; s.logoSize = p.logoSize;
 }
 namespace {
 TruckPreset Std(const char* name, const char* truck, double x, double y, double w, double h) {
@@ -515,7 +551,7 @@ TruckPreset* OwnPreset(Config& c, const std::string& name) {
 namespace {
 bool SameScreen(const TruckPreset& a, const TruckPreset& b) {
     return a.width == b.width && a.height == b.height && a.format == b.format && a.areaX == b.areaX && a.areaY == b.areaY &&
-           a.areaW == b.areaW && a.areaH == b.areaH && a.flipX == b.flipX && a.flipY == b.flipY && a.design == b.design &&
+           a.areaW == b.areaW && a.areaH == b.areaH && a.flipX == b.flipX && a.flipY == b.flipY && a.design == b.design && a.logo == b.logo && a.target == b.target && a.scale == b.scale && a.logoScale == b.logoScale && a.logoSize == b.logoSize &&
            a.durationSeconds == b.durationSeconds;
 }
 }
@@ -545,7 +581,8 @@ void Config::SaveVolume(const std::wstring& path) const {
     try {
         std::ifstream f{std::filesystem::path(path)};
         json j = f ? json::parse(f, nullptr, true, true) : json::object();
-        j["volume"] = volume; j["muted"] = muted;
+        j["volume"] = volume; j["muted"] = muted; j["band"] = band;
+        j["stationButtons"] = stationButtons;
         j["source"] = source; j["mediaTrack"] = mediaTrack; j["screenPage"] = screenPage;
         json r = json::object();
         for (auto& [k, v] : mediaResume) r[k] = v;

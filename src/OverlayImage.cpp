@@ -535,7 +535,8 @@ const CardTheme& ThemeFor(const std::string& d) {
 }
 } // namespace
 
-std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const OverlayImage* logo, int W, int H, const std::string& design) {
+static std::shared_ptr<OverlayImage> RenderScreenCardImpl(const OverlayInfo& info, const OverlayImage* logo, int W, int H, const std::string& design,
+                                                          float uLayout, float logoSize) {
     const CardTheme& th = ThemeFor(design);
     FontScope fontScope(th.font);
     auto img = std::make_shared<OverlayImage>();
@@ -543,7 +544,7 @@ std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const Ov
     img->pixels.assign((size_t)W * H, 0u);
     auto& px = img->pixels;
     Canvas cv{px, W, H};
-    const float u = std::min(W / 16.f, H / 9.f) / 40.f;   // layout unit (1.0 at 640x360)
+    const float u = uLayout;   // layout unit: 1.0 at 640x360 (the card is 360 units high)
     auto U = [&](float v) { return std::max(1, (int)std::lround(v * u)); };
     const float AR = th.accent[0], AG = th.accent[1], AB = th.accent[2];   // accent (chip, bars, progress)
     const float TR = th.text[0], TG = th.text[1], TB = th.text[2];         // main text
@@ -644,7 +645,7 @@ std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const Ov
     // ---- station / track ----
     const bool progress = info.media && info.posSec >= 0;
     const int top = U(78), bottom = progress ? U(286) : U(338);
-    const int T = std::min(bottom - top, U(200));
+    const int T = std::clamp(U(200 * logoSize), U(60), bottom - top);   // logo / cover tile (size setting)
     const int tileX = padX, tileY = top + (bottom - top - T) / 2;
     if (logo && !info.media) {   // station logo on a light tile (dark logos stay visible)
         cv.Round(tileX, tileY, T, T, (float)U(18), 0.95f, 0.95f, 0.96f);
@@ -740,6 +741,27 @@ std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const Ov
             cv.Circle(bx + fw - bh / 2.f, (float)cy, (float)U(8), TR, TG, TB);
         }
         DeleteObject(fTime);
+    }
+    return img;
+}
+
+// Size setting: the layout is 360 units high; "scale" makes the units larger or smaller, but never taller than the area.
+// If the content is lower than the area it is centred vertically and the background is extended.
+std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const OverlayImage* logo, int W, int H, const std::string& design, float scale,
+                                               float logoSize) {
+    float base = std::min(W / 16.f, H / 9.f) / 40.f;
+    float u = std::min(base * std::clamp(scale, 0.4f, 2.f), H / 360.f);
+    logoSize = std::clamp(logoSize, 0.4f, 1.5f);
+    int h2 = (int)std::ceil(360.f * u);
+    if (h2 >= H - 2) return RenderScreenCardImpl(info, logo, W, H, design, u, logoSize);
+    auto inner = RenderScreenCardImpl(info, logo, W, h2, design, u, logoSize);
+    auto img = std::make_shared<OverlayImage>();
+    img->width = W; img->height = H; img->renderedForScreenHeight = H;
+    img->pixels.resize((size_t)W * H);
+    int off = (H - h2) / 2;
+    for (int y = 0; y < H; ++y) {
+        int sy = std::clamp(y - off, 0, h2 - 1);   // above / below: the first / last row of the background
+        std::copy(inner->pixels.begin() + (size_t)sy * W, inner->pixels.begin() + (size_t)(sy + 1) * W, img->pixels.begin() + (size_t)y * W);
     }
     return img;
 }
@@ -1093,5 +1115,82 @@ std::shared_ptr<OverlayImage> RenderScreenTest(int W, int H, bool flipX, bool fl
     DrawText(mask, px, f, br, RECT{std::max(X0 + t * 2, X1 - t * 2 - lw), Y1 - t * 2 - lh, X1 - t * 3, Y1 - t * 2}, 1.f, 0.75f, 0.2f, DT_RIGHT);
     DrawText(mask, px, fb, L"TEST", RECT{X0, (Y0 + Y1) / 2 - lh, X1, (Y0 + Y1) / 2 + lh}, 1.f, 1.f, 1.f, DT_CENTER);
     DeleteObject(f); DeleteObject(fb);
+    return img;
+}
+
+// Start screen when the ignition is switched on (like modern infotainment systems): black background with the
+// manufacturer's logo from realistic-radio\brands\ if the player put one there, otherwise the brand name as text.
+std::shared_ptr<OverlayImage> RenderScreenSplash(const OverlayImage* logo, const std::wstring& brand, const std::wstring& model, int W, int H,
+                                                 float logoScale, float scale) {
+    auto img = std::make_shared<OverlayImage>();
+    img->width = W; img->height = H; img->renderedForScreenHeight = H;
+    img->pixels.assign((size_t)W * H, Pack(1.f, 0.f, 0.f, 0.f));
+    auto& px = img->pixels;
+    const float u = std::min(W / 16.f, H / 9.f) / 40.f * std::clamp(scale, 0.4f, 2.f);
+    auto U = [&](float v) { return std::max(1, (int)std::lround(v * u)); };
+    if (logo && logo->width > 0) {   // logoScale: height of the logo box as part of the area
+        float k = std::clamp(logoScale, 0.1f, 1.f);
+        int bh = (int)(H * k), bw = std::min(W, (int)(W * k * 1.1f));
+        BlitLogo(px, W, logo, (W - bw) / 2, (H - bh) / 2 - U(model.empty() ? 0 : 14), bw, bh);
+        if (!model.empty()) {
+            Gdi mask(W, H);
+            HFONT f = MakeFont(U(20), FW_NORMAL);
+            DrawText(mask, px, f, model, RECT{0, H - U(64), W, H - U(30)}, 0.55f, 0.56f, 0.6f, DT_CENTER);
+            DeleteObject(f);
+        }
+        return img;
+    }
+    if (brand.empty()) return img;
+    // brand name, wide letter spacing, thin line, model below
+    std::wstring spaced;
+    for (wchar_t c : Upper(brand)) { if (!spaced.empty()) spaced += L"  "; spaced += c; }
+    Gdi mask(W, H);
+    HFONT fBrand = MakeFont(U(64), FW_LIGHT), fModel = MakeFont(U(20), FW_NORMAL);
+    int cy = H / 2;
+    DrawText(mask, px, fBrand, spaced, RECT{0, cy - U(62), W, cy + U(14)}, 0.94f, 0.94f, 0.96f, DT_CENTER);
+    Canvas cv{px, W, H};
+    int lw = std::min(W / 3, U(220));
+    cv.Round((W - lw) / 2, cy + U(26), lw, std::max(1, U(1.5f)), 1.f, 0.94f, 0.94f, 0.96f, 0.35f);
+    if (!model.empty()) DrawText(mask, px, fModel, model, RECT{0, cy + U(42), W, cy + U(74)}, 0.55f, 0.56f, 0.6f, DT_CENTER);
+    DeleteObject(fBrand); DeleteObject(fModel);
+    return img;
+}
+
+// Truck logo pictures are often phone wallpapers or photos: a dark background with the logo somewhere in it. An opaque
+// picture gets its dark parts made transparent (glows stay soft), then it is cut to the logo with a soft edge, so it
+// sits cleanly on the black start screen at a useful size. Pictures with transparency are only cut.
+std::shared_ptr<OverlayImage> PrepareLogoImage(const OverlayImage& src) {
+    const int W = src.width, H = src.height;
+    if (W <= 0 || H <= 0) return nullptr;
+    std::vector<float> al((size_t)W * H), r((size_t)W * H), g((size_t)W * H), b((size_t)W * H);
+    bool opaque = true;
+    for (size_t i = 0; i < al.size(); ++i) {
+        uint32_t p = src.pixels[i];
+        al[i] = ((p >> 24) & 255) / 255.f; r[i] = ((p >> 16) & 255) / 255.f; g[i] = ((p >> 8) & 255) / 255.f; b[i] = (p & 255) / 255.f;
+        if (al[i] < 0.99f) opaque = false;
+    }
+    if (opaque)
+        for (size_t i = 0; i < al.size(); ++i) {
+            float m = std::max({r[i], g[i], b[i]});
+            float a = std::clamp((m - 0.08f) / 0.25f, 0.f, 1.f);
+            al[i] = a; r[i] *= a; g[i] *= a; b[i] *= a;   // premultiplied
+        }
+    int x0 = W, y0 = H, x1 = -1, y1 = -1;
+    for (int y = 0; y < H; ++y) for (int x = 0; x < W; ++x)
+        if (al[(size_t)y * W + x] > 0.5f) { x0 = std::min(x0, x); x1 = std::max(x1, x); y0 = std::min(y0, y); y1 = std::max(y1, y); }
+    if (x1 < 0) return nullptr;
+    int mg = (int)(std::max(x1 - x0, y1 - y0) * 0.12f) + 2;
+    x0 = std::max(0, x0 - mg); y0 = std::max(0, y0 - mg); x1 = std::min(W - 1, x1 + mg); y1 = std::min(H - 1, y1 + mg);
+    auto img = std::make_shared<OverlayImage>();
+    img->width = x1 - x0 + 1; img->height = y1 - y0 + 1; img->renderedForScreenHeight = img->height;
+    img->pixels.resize((size_t)img->width * img->height);
+    float fadeLen = std::max(1.f, mg * 0.8f);
+    for (int y = 0; y < img->height; ++y) for (int x = 0; x < img->width; ++x) {
+        size_t s = (size_t)(y + y0) * W + (x + x0);
+        float d = (float)std::min(std::min(y, img->height - 1 - y), std::min(x, img->width - 1 - x));
+        float f = opaque ? std::clamp(d / fadeLen, 0.f, 1.f) : 1.f;   // soft edge: no visible frame from the cut
+        auto c8 = [&](float v) { return (uint32_t)std::lround(std::clamp(v * f, 0.f, 1.f) * 255.f); };
+        img->pixels[(size_t)y * img->width + x] = (c8(al[s]) << 24) | (c8(r[s]) << 16) | (c8(g[s]) << 8) | c8(b[s]);
+    }
     return img;
 }

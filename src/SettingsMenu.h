@@ -25,7 +25,8 @@ struct MenuDef {
     const char *btnDe = "", *btnEn = "";
     std::wstring wlabel, whint;                                 // generated rows: text instead of de/en
     std::vector<std::wstring> names;                            // generated choice: one text per value (both languages)
-    int index = -1;                                             // generated button: preset index
+    int index = -1;
+    std::function<std::wstring(bool)> hintFn;                   // hint computed when shown (e.g. what the game reports)                                             // generated button: preset index
 };
 
 // In-game settings menu (default Ctrl+0) with mouse and keyboard: pages for radio, reception, navigation screen,
@@ -34,7 +35,7 @@ struct MenuDef {
 class SettingsMenu {
 public:
     enum class Result { Open, Closed };
-    enum Command { None = 0, OpenMusicFolder, ClearLogos, OpenLogoFolder, DetectScreen,
+    enum Command { None = 0, OpenMusicFolder, ClearLogos, OpenLogoFolder, DetectScreen, AutoStoreButtons, OpenTruckLogoFolder, PreviewStartLogo,
                    PresetNew, PresetLink, PresetUnlink, PresetDelete, PresetLoad };   // preset commands are handled by the menu itself
     struct Folder { std::wstring name; int tracks; };   // music folder = one USB / CD (name empty = main folder)
     void Open(const Config& cfg);
@@ -51,7 +52,8 @@ public:
     void SetStatus(const std::wstring& s) { status_ = s; dirty_ = true; }
     void SetStatus(const char* de, const char* en) { SetStatus(T(de, en)); }
     void SetScreenArea(const float r[4]);
-    void SetTruck(const std::string& id, const std::string& name);   // current truck (telemetry) for the presets page     // result of the auto-detection: area sliders + test mode on
+    void SetTruck(const std::string& id, const std::string& name);   // current truck (telemetry) for the presets page
+    void SetLogos(const std::vector<std::wstring>& files);             // start logo pictures of the current truck     // result of the auto-detection: area sliders + test mode on
     std::shared_ptr<OverlayImage> TakeImage();   // new picture when something on the menu changed, else nullptr
     int RenderHeight() const { return renderH_; }
     bool TakeMoved(float& x, float& y) { if (!moved_) return false; moved_ = false; x = posX_; y = posY_; return true; }   // dragged by the title
@@ -90,6 +92,7 @@ private:
     void PresetCommand(int cmd, int index);
     bool PresetsPage() const;
     std::string truckId_, truckName_;
+    std::vector<std::string> logos_;
     bool confirmDelete_ = false;
     void EnsureVisible();
     int VisibleRows() const;

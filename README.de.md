@@ -14,7 +14,7 @@ Von **ScufyKing**. Das ganze Radio läuft im Spiel:
 
 Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels kopieren, ETS2 starten, das Radio läuft. Senderdaten und Sounds stecken in der DLL.
 
-> **Version 1.3.0** · [Änderungen](CHANGELOG.md#changelog-deutsch)
+> **Version 1.4.0** · [Änderungen](CHANGELOG.md#changelog-deutsch)
 >
 > **Stand:** Getestet in ETS2 1.61 (Windows x64) mit mehreren MAN- und Scania-Modellen sowie Mod-LKW: Das Plugin wird geladen, liest die LKW-Position, wechselt Sender nach Region, spielt Ton ab und zeigt Sender und Lautstärke auf dem Navi-Bildschirm. Daten für American Truck Simulator sind enthalten, ATS ist aber ungetestet.
 
@@ -42,13 +42,16 @@ Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels ko
 
 - **Sender nach Standort.** Rund 2.100 Internet-Radiosender, zugeordnet zu 2.064 Städten auf der Grundkarte, den DLC-Karten und vielen Karten-Mods (ProMods, RusMap und weitere).
 - **Auto-Lautstärke:** wird wie ein echtes Autoradio bei höherem Tempo automatisch lauter (einstellbar, standardmäßig aus).
-- **Realistische Reichweite und Umschaltung.** Jede Stadt hat eine Sendereichweite; an Grenzen überlappen Regionen, und das Radio wechselt nur automatisch, wenn eine andere Region deutlich besser empfangen wird.
+- **Realistische Reichweite und Umschaltung.** Jede Stadt hat eine Sendereichweite; an Grenzen überlappen Regionen. Das Radio bleibt auf dem gehörten Sender, solange er empfangen wird, und wechselt erst dann in eine andere Region (oder auf Wunsch, sobald eine andere Region deutlich besser empfangen wird). Dasselbe Programm aus mehreren Regionen (z. B. SWR1 BW / SWR1 Rheinland-Pfalz, ENERGY Stuttgart / ENERGY München) gilt als ein Sender: Das Radio bleibt einfach drauf.
+- **FM und DAB+.** Band wechseln wie im echten Radio: FM mit Rauschen bei schwachem Empfang, DAB+ mit größerer Reichweite, ohne Rauschen und mit den typischen Aussetzern am Rand des Empfangsgebiets.
+- **Stationstasten 1–9** auf dem Nummernblock wie im Autoradio: gedrückt halten speichert, kurz drücken wählt – vorbelegt mit den Sendern, die du beim Start empfängst.
 - **Empfang und Rauschen.** Je weiter du von einer Region entfernt bist, desto mehr rauscht es, und bei schwachem Signal setzt der Ton ab und zu aus.
 - **Sanfte Übergänge** mit Umschaltgeräusch.
 - **Radio-Seite auf dem Navi-Bildschirm.** Mit **Einfg** zwischen Navigation und einer dauerhaften Radio-Seite umschalten, die Sender bzw. Titel live anzeigt.
 - **Anzeige auf dem Navi-Bildschirm im LKW.** Bei jedem Senderwechsel erscheinen Logo, Sendername, Land, Empfang und „Sender 3 / 12“ für ein paar Sekunden auf dem Navi-Bildschirm im Cockpit, bei Lautstärkeänderungen ein Lautsprechersymbol, eine große Prozentzahl und ein Balken aus 20 Segmenten; danach ist die Navigation wieder da. Funktioniert in LKW mit modernem Infotainment-/Navi-Bildschirm (getestet: mehrere MAN- und Scania-Modelle sowie Mod-LKW; siehe „Anzeige auf dem Cockpit-Bildschirm“).
 - **Radio-Speicher je LKW** (optional): Jeder LKW merkt sich eigene Sender, Favoriten, Lautstärke, Quelle und USB-Titel.
 - **LKW-Presets:** Position und Design der Navi-Anzeige lassen sich pro LKW speichern; das passende Preset lädt automatisch über die LKW-ID aus der Telemetrie.
+- **Startbildschirm** beim Einschalten der Zündung: Der Hersteller des LKWs wird auf Schwarz eingeblendet, wie bei modernen Infotainment-Systemen (eigene Logo-Bilder möglich).
 - **Optionales Popup-Overlay** (standardmäßig aus): ein Panel oben im Bild oder ein Display im Autoradio-Stil. Funktioniert auch im Vollbild.
 - **Radio nur bei eingeschalteter Zündung** (oder nur bei laufendem Motor, oder immer; einstellbar).
 - **Steuerung per Tastatur und Controller**, frei belegbar.
@@ -89,6 +92,7 @@ plugins\
     ├── trucks-ets2.json             Radio-Speicher je LKW (wenn eingeschaltet)
     ├── usb\                         deine eigene Musik für den USB/CD-Modus (legst du hinein)
     ├── logos\                       heruntergeladene Senderlogos und Cover (Zwischenspeicher)
+    ├── truck-logos\                 Bilder für den Startbildschirm: ein Ordner pro Hersteller (man\, scania\, …) oder Mod-LKW
     └── realistic-radio.log          Logdatei
 ```
 
@@ -115,14 +119,22 @@ plugins\
 | Nächster / vorheriger USB bzw. CD | – | `keys.nextDisc`, `keys.previousDisc` |
 | Navi-Bildschirm: Navigation ↔ Radio-Seite | Einfg (Insert) | `keys.screenPage` |
 | Einstellungsmenü öffnen | Strg + 0 | `keys.menu` |
+| Band: FM ↔ DAB+ | Umschalt + Pos1 | `keys.band` |
+| Stationstasten 1–9: kurz = wählen, halten = speichern | Num 1–9 | `keys.memory1` … `keys.memory9` |
 
-„Nächster“ und „Vorheriger“ schalten durch alle Sender aller Regionen, die du gerade empfängst. Im USB/CD-Modus haben die Tasten eine andere Bedeutung, siehe [USB / CD](#usb--cd-eigene-musik).
+„Nächster“ und „Vorheriger“ schalten durch alle Sender aller Regionen, die du gerade empfängst; dasselbe Programm aus mehreren Regionen kommt nur einmal vor. Im USB/CD-Modus haben die Tasten eine andere Bedeutung, siehe [USB / CD](#usb--cd-eigene-musik).
 
 Tasten reagieren nur, wenn ETS2 das aktive Fenster ist. So stören sie keine anderen Programme.
 
 Sind die Pfeiltasten in ETS2 auch zum Fahren oder für Menüs belegt, passiert beides gleichzeitig. Dann andere Tasten oder eine Kombination wie `"Ctrl+Right"` verwenden.
 
 **Tasten ändern im Spiel:** **Strg + 0** öffnet das [Einstellungsmenü](#einstellungsmenü-strg--0). Auf der Seite **Tasten** das Feld einer Funktion anklicken und die neue Taste, Tastenkombination oder den Controller-Knopf drücken.
+
+### Stationstasten (Nummernblock)
+
+Wie die Stationstasten im Autoradio: Eine Taste auf dem Nummernblock (1–9) **1,5 Sekunden gedrückt halten**, und der aktuelle Sender ist darauf gespeichert; **kurz drücken** stellt ihn ein. Neben einem gespeicherten Sender zeigt das Navi „Taste 3“. Ist der gespeicherte Sender dort, wo du gerade fährst, nicht zu empfangen, nimmt das Radio dasselbe Programm aus einer anderen Region (SWR1 BW → SWR1 Rheinland-Pfalz) oder meldet „nicht in Reichweite“. Einstellungsmenü → Radio: Stationstasten abschalten oder die Haltezeit ändern; die Tasten selbst lassen sich auf der Seite Tasten ändern. Num-Lock muss an sein (ohne Num-Lock meldet Windows die Nummernblock-Tasten als Ende, Pfeiltasten usw.). Mit **Radio-Speicher je LKW** hat jeder LKW eigene Stationstasten.
+
+Die Tasten sind **vorbelegt**: Beim ersten Start bekommen sie die neun am besten empfangenen Sender dort, wo du gerade bist (je Programm einer). Einstellungsmenü → Radio → **Stationstasten neu belegen** belegt sie neu mit den Sendern in Reichweite – praktisch in einem neuen Land.
 
 Alternativ lassen sich die Tasten weiterhin in der Datei eintragen. **Tastennamen** sind die .NET-Tastennamen: Buchstaben `A`–`Z`, Ziffern `0`–`9`, `F1`–`F24`, `NumPad0`–`NumPad9`, `PageUp`, `Next` (= Bild ↓), `Home`, `End`, `Insert`, `Delete`, `Up`, `Down`, `Left`, `Right`, `Pause`, `Space`, `Oemplus`, `OemMinus`, `Add`, `Subtract`, `MediaNextTrack`, `MediaPlayPause` und weitere. Kombinationen gehen auch, z. B. `"Ctrl+Shift+R"`. Ein leerer Wert `""` schaltet eine Taste ab.
 
@@ -134,10 +146,10 @@ Die wichtigsten Einstellungen lassen sich direkt im Spiel ändern. **Strg + 0** 
 
 | Seite | Inhalt |
 |---|---|
-| Radio | Lautstärke, Stumm, Radio an bei (Zündung / Motor läuft / immer), automatisch starten, Sprache des Menüs |
-| Empfang | Sendereichweite, Wechselschwelle, Auto-Lautstärke, Rauschen, Umschaltgeräusch |
-| Navi-Bildschirm | Anzeige an/aus, Anzeigedauer, **Design**, Radio-Seite dauerhaft, Taste für Navi ↔ Radio-Seite, **Testmodus**, **automatische Erkennung (Beta)** und Position der Anzeige (Bereich X / Y / Breite / Höhe, umdrehen, spiegeln) |
-| LKW | Aktueller LKW (aus der Telemetrie), **Radio-Speicher je LKW**, neues Preset, aktives Preset, automatisch je LKW wechseln, verknüpfen / lösen, löschen, gespeichertes Preset laden |
+| Radio | Lautstärke, Stumm, Radio an bei (Zündung / Motor läuft / immer), automatisch starten, Sprache des Menüs, **Band FM / DAB+** und seine Taste, **Stationstasten** an/aus und Haltezeit |
+| Empfang | Sendereichweite, Wechselschwelle, **Region wechseln** (erst wenn der Sender weg ist / bei besserem Empfang), **DAB+-Reichweite**, Auto-Lautstärke, Rauschen, Umschaltgeräusch |
+| Navi-Bildschirm | Anzeige an/aus, Anzeigedauer, **Design**, **Start-Logo** an/aus, Dauer und Größe, **Größe von Schrift und Bildern**, **Größe des Senderlogos**, **Zeichenfläche** (falls die Anzeige doppelt erscheint), Radio-Seite dauerhaft, Taste für Navi ↔ Radio-Seite, **Testmodus**, **automatische Erkennung (Beta)** und Position der Anzeige (Bereich X / Y / Breite / Höhe, umdrehen, spiegeln) |
+| LKW | Aktueller LKW (aus der Telemetrie), **Radio-Speicher je LKW**, **Start-Logo** (Auswahl, Vorschau, Logo-Ordner), neues Preset, aktives Preset, automatisch je LKW wechseln, verknüpfen / lösen, löschen, gespeichertes Preset laden |
 | Popup-Overlay | Modus, Stil, Position, Größe, Anzeigedauer, Senderlogos |
 | USB / CD | Modus an/aus, jeder Ordner ein eigener USB, Standard-Typ, Zufall, Wiederholen, Musikordner öffnen, Typ jedes Musikordners (USB, CD, SD-Karte, Kassette, Bluetooth, AUX) |
 | Speicher | Höchstgröße des Logo-Speichers, Senderlogos laden, belegter Platz und Leeren, Logo-Ordner öffnen |
@@ -174,6 +186,12 @@ Alle Einstellungen stehen in `realistic-radio\realistic-radio.json`. Die Datei w
 | `mediaTrack` | – | Zuletzt gespielter USB-Titel (wird automatisch gespeichert) |
 | `mediaResume` | – | Letzter Titel je USB / CD (wird automatisch gespeichert) |
 | `menuLanguage` | `"de"` | Sprache des Einstellungsmenüs: `"de"` oder `"en"` |
+| `band` | `"fm"` | Band: `"fm"` (Rauschen bei schwachem Empfang) oder `"dab"` (DAB+: größere Reichweite, kein Rauschen, Aussetzer am Rand des Empfangsgebiets). Wird automatisch gespeichert |
+| `dabRange` | `1.5` | Um wie viel weiter DAB+ reicht als FM (1,0–3,0) |
+| `switchMode` | `"lost"` | `"lost"` = erst in eine andere Region wechseln, wenn der gehörte Sender nicht mehr empfangen wird; `"better"` = sobald eine andere Region um `threshold` besser empfangen wird (Verhalten bis 1.3) |
+| `memoryButtons` | `true` | Stationstasten 1–9 (Nummernblock) |
+| `memoryHoldSeconds` | `1.5` | Wie lange eine Stationstaste zum Speichern gehalten wird |
+| `stationButtons` | – | Die gespeicherten Stationstasten (wird automatisch gespeichert; beim ersten Start mit den Sendern in Reichweite belegt) |
 | `screenPage` | `"navi"` | `"radio"` = Radio-Seite dauerhaft auf dem Navi-Bildschirm (wird mit der Taste `screenPage` umgeschaltet und gespeichert) |
 
 ### Overlay (`"overlay": { … }`)
@@ -232,6 +250,13 @@ Weil jeder LKW und jede Mod andere Zeichenflächen nutzt, muss die richtige einm
 | `flipX` | `false` | Waagerecht spiegeln (`flipX` + `flipY` = um 180° gedreht) |
 | `grid` | `false` | Testmodus (am einfachsten im Einstellungsmenü): ein 10×10-Koordinatengitter über der ganzen Zeichenfläche und ein orangefarbener Rahmen, der zeigt, wohin die Anzeige gezeichnet wird, mit den Werten in den Ecken. Den Rahmen mit den Bereichs-Reglern verschieben, bis er ganz im sichtbaren Teil des Bildschirms liegt. Wird nie als „an“ gespeichert |
 | `design` | `"modern"` | Aussehen der Anzeige: `"modern"` (dunkel, Amber), `"ocean"` (Ozean: Marineblau, Hellblau), `"sport"` (Schwarz, Rot), `"light"` (Hell: Weiß, Blau), `"retro"` (grüne LCD-Optik) |
+| `startLogo` | `true` | Startbildschirm beim Einschalten der Zündung (auch bei ausgeschaltetem Radio): Das Logo des Herstellers wird auf Schwarz eingeblendet, wie bei modernen Infotainment-Systemen. Die Bilder kommen aus `realistic-radio\truck-logos\` (siehe [Truck-Logos](#truck-logos-startbildschirm)); ohne Bild werden Herstellername und Modell gezeigt |
+| `startLogoFile` | `""` | Gezeigtes Bild, relativ zu `truck-logos\` (z. B. `"mercedes\\gold.png"`); `""` = das erste Bild für den LKW, `"text"` = nur der Name. Wird im LKW-Preset gespeichert (`"logo"`) – am einfachsten im Einstellungsmenü, Seite LKW |
+| `startLogoScale` | `0.55` | Höhe des Start-Logos als Anteil des Anzeigebereichs (0,2–1) |
+| `target` | `1` | Manche LKW zeichnen pro Bild mehrere Flächen in der Größe des Bildschirms (z. B. Navi und Kombiinstrument), dann konnte die Anzeige doppelt erscheinen. `1` = nur in die erste zeichnen, `2` = in die zweite, … `0` = in alle (Verhalten bis 1.3). Am einfachsten im Einstellungsmenü bei eingeschaltetem Testmodus; wird je LKW im Preset gespeichert |
+| `scale` | `1.0` | Größe von Schrift und Bildern der Anzeige (0,6–1,6). Der Inhalt wird nie höher als der Bereich; ist er niedriger, wird er mittig gesetzt |
+| `logoSize` | `1.0` | Größe der Kachel mit Senderlogo / Cover (0,5–1,3) |
+| `startLogoSeconds` | `3.5` | Wie lange der Startbildschirm zu sehen ist (1,5–10 s) |
 
 Beispiel (MAN TGX, ETS2 1.61, Navi-Bildschirm): `"width": 1024, "height": 1024, "format": 29, "flipY": true, "areaX": 0.1, "areaY": 0.3, "areaW": 0.8, "areaH": 0.4`. Andere LKW nutzen andere Zeichenflächen.
 
@@ -256,6 +281,16 @@ Für weitere LKW legt man einmal ein Preset im Einstellungsmenü an, Seite **LKW
 | `presets` | `[]` | Liste der Presets: `{ "name": "Scania S", "trucks": ["vehicle.scania.s_2016"], "screen": { "width", "height", "format", "areaX", "areaY", "areaW", "areaH", "flipX", "flipY", "design", "durationSeconds" } }` |
 | `activePreset` | `""` | Name des aktiven Presets (`""` = keins) |
 | `presetAuto` | `true` | Beim Einsteigen automatisch das Preset des LKWs laden |
+
+### Truck-Logos (Startbildschirm)
+
+Beim Einschalten der Zündung zeigt das Navi ein paar Sekunden das Logo des Herstellers. Logo-Bilder liegen dem Plugin nicht bei; eigene Bilder kommen in `realistic-radio\truck-logos\`. Den Ordner legt das Plugin selbst an, mit einem Unterordner für jeden Hersteller im Spiel und – sobald du einen fährst – für jede Mod-Marke; du musst die Bilder also nur hineinlegen. Einstellungsmenü → LKW → **Logo-Ordner** öffnet den Ordner des LKWs, in dem du sitzt:
+
+- ein Ordner pro Hersteller-ID: `man\`, `scania\`, `volvo\`, `daf\`, `mercedes\`, `iveco\`, `renault\` – mit beliebig vielen Bildern (PNG, JPG, BMP), z. B. `mercedes\gold.png`, `mercedes\silber.png`
+- oder Dateien direkt in `truck-logos\`: `scania.png`, `scania-neon.png`
+- **Mod-LKW:** ein Ordner mit der Hersteller-ID des Mods oder mit seiner LKW-ID (gilt dann nur für dieses Modell). Beide stehen im `realistic-radio.log` in der Zeile `Start logo: …`.
+
+Handy-Hintergrundbilder und Fotos gehen direkt: Ein dunkler Hintergrund wird automatisch durchsichtig und das Bild auf das Logo zugeschnitten. Gibt es mehrere Bilder, wählst du im Einstellungsmenü → **LKW** → **Start-Logo** eins aus (automatisch / nur Name / eins der Bilder); die Wahl wird im aktiven LKW-Preset gespeichert, so kann jeder LKW sein eigenes haben. **Vorschau auf dem Navi** zeigt es sofort.
 
 ### Radio-Speicher je LKW (`"truckMemory"`)
 

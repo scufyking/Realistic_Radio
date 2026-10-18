@@ -48,6 +48,10 @@ bool g_wantScreenHook = false;
 std::atomic<bool> g_screenHooked{false};
 std::atomic<float> g_scrAlpha{0.f};
 std::atomic<int> g_scrW{0}, g_scrH{0}, g_scrFmt{0};
+// several textures of the screen's size can be rendered per frame (e.g. navigation and instrument display): which one
+// to draw into, in the order the game renders them each frame (0 = all of them)
+std::atomic<int> g_scrTargetIdx{1}, g_lastFrameTargets{0};
+ID3D11Resource* g_frameTargets[8] = {}; int g_nFrameTargets = 0;   // render thread only, identity only (no reference)
 std::atomic<float> g_areaX{0}, g_areaY{0}, g_areaW{1}, g_areaH{1};
 std::atomic<bool> g_flipY{false}, g_flipX{false};
 std::atomic<bool> g_collect{false};
@@ -367,7 +371,11 @@ void OnRenderTargetChange(ID3D11DeviceContext* ctx, UINT num, ID3D11RenderTarget
             }
             int fmt = g_scrFmt.load();
             if ((drawing || capture) && (int)d.Width == g_scrW.load() && (int)d.Height == g_scrH.load() && (fmt == 0 || fmt == (int)d.Format)) {
-                g_curRtv = next; g_curRtv->AddRef(); g_curW = d.Width; g_curH = d.Height; g_curMatch = true;
+                int pos = 0;
+                while (pos < g_nFrameTargets && g_frameTargets[pos] != res) ++pos;
+                if (pos == g_nFrameTargets && g_nFrameTargets < 8) g_frameTargets[g_nFrameTargets++] = res;
+                int want = g_scrTargetIdx.load();
+                if (want <= 0 || pos + 1 == want) { g_curRtv = next; g_curRtv->AddRef(); g_curW = d.Width; g_curH = d.Height; g_curMatch = true; }
             }
         }
         tex->Release();
@@ -423,6 +431,7 @@ void HookGameContext(IDXGISwapChain* sc) {
 
 void Draw(IDXGISwapChain* sc) {
     HookGameContext(sc);
+    if (g_nFrameTargets > 0) { g_lastFrameTargets = g_nFrameTargets; g_nFrameTargets = 0; }   // end of frame
     if (g_curRtv) {   // a matching screen target was still bound at the end of the frame
         ID3D11Device* d = nullptr;
         if (SUCCEEDED(sc->GetDevice(__uuidof(ID3D11Device), (void**)&d)) && d) {
@@ -538,6 +547,8 @@ void EnableScreenHook(bool on) { g_wantScreenHook = on; }
 void SetScreenImage(std::shared_ptr<const OverlayImage> img) { std::lock_guard<std::mutex> l(g_scrImgMtx); g_scrImg = std::move(img); ++g_scrImgVersion; }
 void SetScreenTarget(int w, int h, int format) { g_scrW = w; g_scrH = h; g_scrFmt = format; }
 void SetScreenAlpha(float a) { g_scrAlpha = a; }
+void SetScreenTargetIndex(int i) { g_scrTargetIdx = i; }
+int ScreenTargetsSeen() { return g_lastFrameTargets; }
 void SetScreenArea(float x, float y, float w, float h, bool flipY, bool flipX) { g_areaX = x; g_areaY = y; g_areaW = w; g_areaH = h; g_flipY = flipY; g_flipX = flipX; }
 void SetCollectTargets(bool on) { g_collect = on; }
 std::vector<RenderTargetStat> TakeTargetStats() {

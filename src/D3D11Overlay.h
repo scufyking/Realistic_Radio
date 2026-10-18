@@ -38,6 +38,8 @@ void EnableScreenHook(bool on);   // call before Install()
 void SetScreenImage(std::shared_ptr<const OverlayImage> img);
 void SetScreenTarget(int w, int h, int format);   // 0,0 = none; format 0 = any
 void SetScreenAlpha(float a);
+void SetScreenTargetIndex(int index);   // which of several textures of that size per frame: 1 = first, 2 = second, 0 = all
+int ScreenTargetsSeen();                // textures of that size in the last frame the screen was drawn
 void SetScreenArea(float x, float y, float w, float h, bool flipY, bool flipX = false);   // part of the render target, 0..1
 void SetCollectTargets(bool on);
 struct RenderTargetStat { int w, h, format; long long binds; };

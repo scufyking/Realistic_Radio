@@ -14,7 +14,7 @@ By **ScufyKing**. The whole radio runs inside the game:
 
 Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ETS2, and the radio plays. Station data and sounds are built into the DLL.
 
-> **Version 1.3.0** · [Changes](CHANGELOG.md)
+> **Version 1.4.0** · [Changes](CHANGELOG.md)
 >
 > **Status:** Tested in ETS2 1.61 (Windows x64) with several MAN and Scania models and mod trucks: the plugin loads, reads the truck position, switches stations by region, plays audio and shows station and volume on the navigation screen. American Truck Simulator data is included but ATS is untested.
 
@@ -42,13 +42,16 @@ Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ET
 
 - **Stations by location.** About 2,100 internet radio stations, assigned to 2,064 cities on the base map, the DLC maps and many map mods (ProMods, RusMap and others).
 - **Auto volume:** gets louder at higher speed like a real car radio (adjustable, off by default).
-- **Realistic range and switching.** Every city has a broadcast range; regions overlap at borders, and the radio only switches automatically when another region is clearly better received.
+- **Realistic range and switching.** Every city has a broadcast range; regions overlap at borders. The radio keeps the station you are listening to as long as it is in range and only then changes to another region (or, if you prefer, as soon as another region is clearly better received). The same programme from several regions (e.g. SWR1 BW / SWR1 Rheinland-Pfalz, ENERGY Stuttgart / ENERGY München) counts as one station: the radio simply stays on it.
+- **FM and DAB+.** Switch the band like on a real radio: FM with static on weak reception, DAB+ with a longer range, no static and the typical drop-outs at the edge of coverage.
+- **Station buttons 1–9** on the numpad like on a car radio: hold to save, tap to select – pre-stored with the stations received where you start.
 - **Reception and static.** The further you are from a region, the more static you hear, and weak signals drop out now and then.
 - **Smooth transitions** with a tuning sound.
 - **Radio page on the navigation screen.** Press **Insert** to switch between the navigation and a permanent radio page that shows the station or track live.
 - **Display on the truck's navigation screen.** On every station change the logo, station name, country, signal and "station 3 / 12" appear on the in-cab navigation screen for a few seconds, on volume changes a speaker symbol, a large percentage and a 20-segment bar; then the navigation is back. Works in trucks with a modern infotainment/navigation screen (tested: several MAN and Scania models and mod trucks; see "In-cab screen").
 - **Radio memory per truck** (optional): every truck keeps its own stations, favourites, volume, source and USB track.
 - **Truck presets:** the position and design of the screen display can be saved per truck; the right preset is loaded automatically by the truck id from the telemetry.
+- **Start screen** when the ignition is switched on: the truck's manufacturer fades in on black, like on modern infotainment systems (your own logo pictures can be added).
 - **Optional pop-up overlay** (off by default): a panel at the top of the screen or a car-radio style dot-matrix display. Works in fullscreen.
 - **Radio only with the ignition on** (or only with the engine running, or always; your choice).
 - **Keyboard and controller controls**, freely configurable.
@@ -89,6 +92,7 @@ plugins\
     ├── trucks-ets2.json             radio memory per truck (if switched on)
     ├── usb\                         your own music for the USB/CD mode (you put it there)
     ├── logos\                       downloaded station logos and covers (cache)
+    ├── truck-logos\                 pictures for the start screen: a folder per brand (man\, scania\, …) or mod truck
     └── realistic-radio.log          log file
 ```
 
@@ -115,14 +119,22 @@ plugins\
 | Next / previous USB or CD | – | `keys.nextDisc`, `keys.previousDisc` |
 | Navigation screen: navigation ↔ radio page | Insert | `keys.screenPage` |
 | Open the settings menu | Ctrl + 0 | `keys.menu` |
+| Band: FM ↔ DAB+ | Shift + Home | `keys.band` |
+| Station buttons 1–9: tap = select, hold = save | NumPad 1–9 | `keys.memory1` … `keys.memory9` |
 
-"Next" and "Previous" step through every station of every region you currently receive. In USB/CD mode the keys work differently, see [USB / CD](#usb--cd-your-own-music).
+"Next" and "Previous" step through every station of every region you currently receive; the same programme from several regions appears only once. In USB/CD mode the keys work differently, see [USB / CD](#usb--cd-your-own-music).
 
 Keys only react while ETS2 is the active window, so they do not interfere with other programs.
 
 If the arrow keys are also bound to driving or menus in ETS2, both happen at the same time. In that case use other keys or a combination such as `"Ctrl+Right"`.
 
 **Changing keys in the game:** **Ctrl + 0** opens the [settings menu](#settings-menu-ctrl--0). On the **Keys** page click the field of a function and press the new key, key combination or controller button.
+
+### Station buttons (numpad)
+
+Like the preset buttons of a car radio: **hold** a numpad key (1–9) for 1.5 seconds and the current station is saved on it; **tap** it to tune in. The screen shows "Button 3" next to a saved station. If the saved station is not in range where you are, the radio uses the same programme from another region (SWR1 BW → SWR1 Rheinland-Pfalz) or tells you it is out of range. Settings menu → Radio: switch the station buttons off or change the hold time; the keys can be changed on the Keys page. NumLock must be on (with NumLock off Windows reports the numpad keys as End, arrows and so on). With **Radio memory per truck** every truck has its own station buttons.
+
+The buttons come **pre-stored**: on the first start they are filled with the nine best received stations where you are (one per programme). Settings menu → Radio → **Store station buttons again** fills them anew with the stations in range – handy in a new country.
 
 You can still enter keys in the file as well. **Key names** use the .NET key names: letters `A`–`Z`, digits `0`–`9`, `F1`–`F24`, `NumPad0`–`NumPad9`, `PageUp`, `Next` (= Page Down), `Home`, `End`, `Insert`, `Delete`, `Up`, `Down`, `Left`, `Right`, `Pause`, `Space`, `Oemplus`, `OemMinus`, `Add`, `Subtract`, `MediaNextTrack`, `MediaPlayPause` and more. Combinations work too, e.g. `"Ctrl+Shift+R"`. An empty value `""` disables a key.
 
@@ -134,10 +146,10 @@ The most important settings can be changed right in the game. **Ctrl + 0** opens
 
 | Page | Contents |
 |---|---|
-| Radio | Volume, mute, radio on with (ignition / engine running / always), start automatically, menu language |
-| Reception | Broadcast range, switch threshold, auto volume, static, tuning sound |
-| Navigation screen | Display on/off, display time, **design**, keep the radio page on, key for navigation ↔ radio page, **test mode**, **automatic detection (beta)** and the position of the display (area X / Y / width / height, flip, mirror) |
-| Trucks | Current truck (from the telemetry), **radio memory per truck**, new preset, active preset, change automatically per truck, link / unlink, delete, load a saved preset |
+| Radio | Volume, mute, radio on with (ignition / engine running / always), start automatically, menu language, **band FM / DAB+** and its key, **station buttons** on/off and hold time |
+| Reception | Broadcast range, switch threshold, **change region** (only when the station is lost / on better reception), **DAB+ range**, auto volume, static, tuning sound |
+| Navigation screen | Display on/off, display time, **design**, **start logo** on/off, time and size, **size of text and pictures**, **size of the station logo**, **drawing surface** (if the display appears twice), keep the radio page on, key for navigation ↔ radio page, **test mode**, **automatic detection (beta)** and the position of the display (area X / Y / width / height, flip, mirror) |
+| Trucks | Current truck (from the telemetry), **radio memory per truck**, **start logo** (choice, preview, logo folder), new preset, active preset, change automatically per truck, link / unlink, delete, load a saved preset |
 | Pop-up overlay | Mode, style, position, size, display time, station logos |
 | USB / CD | Mode on/off, every folder its own USB, default type, shuffle, repeat, open the music folder, type of every music folder (USB, CD, SD card, cassette, Bluetooth, AUX) |
 | Storage | Maximum size of the logo storage, load station logos, used space and clear, open the logo folder |
@@ -174,6 +186,12 @@ All settings are in `realistic-radio\realistic-radio.json`. The file is created 
 | `mediaTrack` | – | Last USB track played (saved automatically) |
 | `mediaResume` | – | Last track per USB / CD (saved automatically) |
 | `menuLanguage` | `"de"` | Language of the settings menu: `"de"` or `"en"` |
+| `band` | `"fm"` | Band: `"fm"` (static on weak reception) or `"dab"` (DAB+: longer range, no static, drop-outs at the edge of coverage). Saved automatically |
+| `dabRange` | `1.5` | How much further DAB+ reaches than FM (1.0–3.0) |
+| `switchMode` | `"lost"` | `"lost"` = change to another region only when the current station is out of range; `"better"` = as soon as another region is received better by `threshold` (behaviour up to 1.3) |
+| `memoryButtons` | `true` | Station buttons 1–9 (numpad) |
+| `memoryHoldSeconds` | `1.5` | How long to hold a station button to save |
+| `stationButtons` | – | The saved station buttons (saved automatically; filled with the stations in range on the first start) |
 | `screenPage` | `"navi"` | `"radio"` = radio page permanently on the navigation screen (switched with the `screenPage` key and saved) |
 
 ### Overlay (`"overlay": { … }`)
@@ -232,6 +250,13 @@ Because every truck and mod uses different render targets, the right one must be
 | `flipX` | `false` | Mirror horizontally (`flipX` + `flipY` = rotated by 180°) |
 | `grid` | `false` | Test mode (easiest in the settings menu): a 10×10 coordinate grid over the whole render target and an orange frame showing where the display is drawn, with its values in the corners. Move the frame with the area sliders until it lies fully on the visible part of the screen. Not saved as on |
 | `design` | `"modern"` | Look of the display: `"modern"` (dark, amber), `"ocean"` (navy, light blue), `"sport"` (black, red), `"light"` (white, blue), `"retro"` (green LCD look) |
+| `startLogo` | `true` | Start screen when the ignition is switched on (also with the radio off): the manufacturer's logo fades in on black, like on modern infotainment systems. Pictures come from `realistic-radio\truck-logos\` (see [Truck logos](#truck-logos-start-screen)); without one the brand name and model are shown |
+| `startLogoFile` | `""` | Picture to show, relative to `truck-logos\` (e.g. `"mercedes\\gold.png"`); `""` = the first picture for the truck, `"text"` = the name only. Stored in the truck preset (`"logo"`) – easiest in the settings menu, page Trucks |
+| `startLogoScale` | `0.55` | Height of the start logo as part of the display area (0.2–1) |
+| `target` | `1` | Some trucks render several textures of the screen's size per frame (e.g. navigation and instrument display), so the display could appear twice. `1` = draw into the first one only, `2` = the second, … `0` = into all (behaviour up to 1.3). Easiest in the settings menu with test mode switched on; stored per truck in the preset |
+| `scale` | `1.0` | Size of text and pictures on the display (0.6–1.6). The content never gets taller than the area; if it is lower, it is centred |
+| `logoSize` | `1.0` | Size of the station logo / cover tile (0.5–1.3) |
+| `startLogoSeconds` | `3.5` | How long the start screen stays (1.5–10 s) |
 
 Example (MAN TGX, ETS2 1.61, navigation screen): `"width": 1024, "height": 1024, "format": 29, "flipY": true, "areaX": 0.1, "areaY": 0.3, "areaW": 0.8, "areaH": 0.4`. Other trucks use other render targets.
 
@@ -256,6 +281,16 @@ Changes on the **Navigation screen** page are stored in the active preset right 
 | `presets` | `[]` | List of presets: `{ "name": "Scania S", "trucks": ["vehicle.scania.s_2016"], "screen": { "width", "height", "format", "areaX", "areaY", "areaW", "areaH", "flipX", "flipY", "design", "durationSeconds" } }` |
 | `activePreset` | `""` | Name of the active preset (`""` = none) |
 | `presetAuto` | `true` | Load the preset of the truck automatically when you get in |
+
+### Truck logos (start screen)
+
+When the ignition is switched on, the navigation screen shows the manufacturer's logo for a few seconds. The plugin comes without logo pictures; put your own into `realistic-radio\truck-logos\`. The plugin creates the folder itself, with a sub folder for every manufacturer of the game and – as soon as you drive one – for every mod brand, so you only have to drop the pictures in. Settings menu → Trucks → **Logo folder** opens the folder of the truck you are in:
+
+- one folder per brand id: `man\`, `scania\`, `volvo\`, `daf\`, `mercedes\`, `iveco\`, `renault\` – with any number of pictures (PNG, JPG, BMP), e.g. `mercedes\gold.png`, `mercedes\silver.png`
+- or files directly in `truck-logos\`: `scania.png`, `scania-neon.png`
+- **mod trucks:** a folder named after the mod's brand id, or after its truck id for that model only. Both appear in `realistic-radio.log` in the line `Start logo: …`.
+
+Phone wallpapers and photos work as they are: a dark background is made transparent and the picture is cut to the logo automatically. If there are several pictures, choose one in the settings menu → **Trucks** → **Start logo** (automatic / name only / one of the pictures); the choice is stored in the active truck preset, so every truck can have its own. **Preview on the screen** shows it right away.
 
 ### Radio memory per truck (`"truckMemory"`)
 

@@ -37,7 +37,9 @@ void Overlay::Reconfigure(const OverlayConfig& cfg, const ScreenConfig& screen) 
     scfg_.durationSeconds = screen.durationSeconds;
     bool areaChanged = scfg_.areaX != screen.areaX || scfg_.areaY != screen.areaY || scfg_.areaW != screen.areaW || scfg_.areaH != screen.areaH ||
                        scfg_.flipX != screen.flipX || scfg_.flipY != screen.flipY;
-    bool designChanged = scfg_.design != screen.design, testChanged = scfg_.grid != screen.grid;
+    bool designChanged = scfg_.design != screen.design || scfg_.scale != screen.scale || scfg_.logoSize != screen.logoSize, testChanged = scfg_.grid != screen.grid;
+    if (scfg_.target != screen.target) { D3D11Overlay::SetScreenTargetIndex(screen.target); Log::Write("Screen: drawing into target %d (0 = all)", screen.target); }
+    scfg_.target = screen.target; scfg_.scale = screen.scale; scfg_.startLogoScale = screen.startLogoScale; scfg_.logoSize = screen.logoSize;
     // truck preset with another screen target (render target size / format of the cab screen)
     if (screen.width > 0 && screen.height > 0 &&
         (scfg_.width != screen.width || scfg_.height != screen.height || scfg_.format != screen.format)) {
@@ -48,6 +50,7 @@ void Overlay::Reconfigure(const OverlayConfig& cfg, const ScreenConfig& screen) 
     }
     scfg_.areaX = screen.areaX; scfg_.areaY = screen.areaY; scfg_.areaW = screen.areaW; scfg_.areaH = screen.areaH;
     scfg_.flipX = screen.flipX; scfg_.flipY = screen.flipY; scfg_.design = screen.design; scfg_.grid = screen.grid;
+    scfg_.startLogo = screen.startLogo; scfg_.startLogoSeconds = screen.startLogoSeconds; scfg_.startLogoFile = screen.startLogoFile;
     if (screenOn_ && (areaChanged || designChanged || testChanged)) {
         if (scfg_.grid) probeIdx_ = -1;   // test mode: draw the grid again with the new area
         else {
@@ -87,6 +90,7 @@ void Overlay::ApplyStyle() {
 void Overlay::Init(const OverlayConfig& cfg, const ScreenConfig& screen, const std::wstring& dataDir) {
     cfg_ = cfg; scfg_ = screen; start_ = GetTickCount64();
     logoDir_ = dataDir + L"logos\\";
+    dataDir_ = dataDir;
     CreateDirectoryW(logoDir_.c_str(), nullptr);
     ApplyStyle();
     PruneLogoCache(true);
@@ -95,6 +99,7 @@ void Overlay::Init(const OverlayConfig& cfg, const ScreenConfig& screen, const s
     if (scfg_.enabled) {
         D3D11Overlay::EnableScreenHook(true);
         D3D11Overlay::SetScreenArea((float)scfg_.areaX, (float)scfg_.areaY, (float)scfg_.areaW, (float)scfg_.areaH, scfg_.flipY, scfg_.flipX);
+        D3D11Overlay::SetScreenTargetIndex(scfg_.target);
         collecting_ = scfg_.probe || scfg_.width <= 0 || scfg_.height <= 0;
         D3D11Overlay::SetCollectTargets(collecting_);
         nextStatAt_ = start_ + 15000; nextProbeAt_ = start_ + 20000;
@@ -395,11 +400,12 @@ std::wstring Overlay::LcdText() const {
 // ---------------------------------------------------------------------------------------------
 // In-cab screen (experimental)
 void Overlay::RenderScreen() {
+    if (Splashing(GetTickCount64())) return;   // the start logo is on the screen: the card follows afterwards
     std::shared_ptr<OverlayImage> logo = (cfg_.showLogos && scrInfo_.volume < 0) ? logo_ : nullptr;
     // render at the pixel size of the visible area, so the card is not stretched
     int w = std::max(64, (int)std::lround(scfg_.width * std::clamp(scfg_.areaW, 0.01, 1.0)));
     int h = std::max(64, (int)std::lround(scfg_.height * std::clamp(scfg_.areaH, 0.01, 1.0)));
-    D3D11Overlay::SetScreenImage(RenderScreenCard(scrInfo_, logo.get(), w, h, scfg_.design));
+    D3D11Overlay::SetScreenImage(RenderScreenCard(scrInfo_, logo.get(), w, h, scfg_.design, (float)scfg_.scale, (float)scfg_.logoSize));
     D3D11Overlay::SetScreenTarget(scfg_.width, scfg_.height, scfg_.format);
 }
 
@@ -476,6 +482,20 @@ void Overlay::TickScreen(ULONGLONG now) {
         return;
     }
     float a = 0.f;
+    if (splash_) {   // start logo: fade in, hold, fade out - then the card (if one is due) or the navigation
+        if (now < splashUntil_) {
+            float fade = 700.f;
+            D3D11Overlay::SetScreenAlpha(std::min({1.f, (now - splashAt_) / fade, (splashUntil_ - now) / fade}));
+            return;
+        }
+        splash_.reset();
+        if (pinned_ || now < scrUntil_) {
+            scrShownAt_ = now; pinShownAt_ = now;
+            scrUntil_ = std::max(scrUntil_, now + (ULONGLONG)(scfg_.durationSeconds * 1000));
+            if (pinned_ && scrInfo_.volume >= 0) scrInfo_ = pageInfo_;
+            RenderScreen();
+        }
+    }
     if (pinned_ && ScreenUsable()) {
         if (now >= scrUntil_ && scrInfo_.volume >= 0) { scrInfo_ = pageInfo_; RenderScreen(); }   // volume card over: back to the page
         a = std::min(1.f, (now - pinShownAt_) / 250.f);
@@ -512,6 +532,66 @@ void Overlay::HideMenu() {
     D3D11Overlay::SetPlacement(anchor_, offX_, offY_);
     if (!off_ && info_.title.size()) Rerender(); else { image_.reset(); D3D11Overlay::SetImage(nullptr); }
     if (window_) { lastImg_ = nullptr; UpdateWindow(0.f); }
+}
+
+std::vector<std::wstring> Overlay::StartLogoFiles(const std::string& truckId, const std::string& brandId) const {
+    std::vector<std::wstring> out;
+    auto isImage = [](const std::wstring& n) {
+        size_t d = n.rfind(L'.'); if (d == std::wstring::npos) return false;
+        std::wstring e = n.substr(d); for (auto& ch : e) ch = towlower(ch);
+        return e == L".png" || e == L".jpg" || e == L".jpeg" || e == L".bmp";
+    };
+    auto lower = [](std::wstring s) { for (auto& ch : s) ch = towlower(ch); return s; };
+    auto list = [&](const std::wstring& dir, const std::wstring& prefix, const std::wstring& stem) {
+        std::vector<std::wstring> found;
+        WIN32_FIND_DATAW fd; HANDLE h = FindFirstFileW((TruckLogoDir() + dir + L"*").c_str(), &fd);
+        if (h == INVALID_HANDLE_VALUE) return;
+        do {
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+            std::wstring n = fd.cFileName;
+            if (!isImage(n)) continue;
+            if (!stem.empty()) {   // top level: <stem>.png or <stem>-something.png
+                std::wstring l = lower(n.substr(0, n.rfind(L'.')));
+                if (l != stem && l.rfind(stem + L"-", 0) != 0) continue;
+            }
+            found.push_back(prefix + n);
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+        std::sort(found.begin(), found.end(), [&](const std::wstring& a, const std::wstring& b) { return lower(a) < lower(b); });
+        for (auto& f : found) if (std::find(out.begin(), out.end(), f) == out.end()) out.push_back(f);
+    };
+    for (const std::string& key : {truckId, brandId}) {   // a mod truck can have its own folder (truck id) before its brand
+        if (key.empty()) continue;
+        std::wstring k = Utf8ToWide(key);
+        list(k + L"\\", k + L"\\", L"");
+        list(L"", L"", lower(k));
+    }
+    return out;
+}
+
+void Overlay::ShowStartLogo(const std::string& truckId, const std::string& brandId, const std::wstring& brand, const std::wstring& model) {
+    if (!ScreenUsable() || !scfg_.startLogo || detectPhase_) return;
+    std::shared_ptr<OverlayImage> logo;
+    std::wstring file;
+    if (scfg_.startLogoFile != "text") {
+        auto files = StartLogoFiles(truckId, brandId);
+        std::wstring want = Utf8ToWide(scfg_.startLogoFile);
+        for (auto& f : files) if (_wcsicmp(f.c_str(), want.c_str()) == 0) file = f;
+        if (file.empty() && !files.empty()) file = files.front();   // automatic: the first picture for this truck
+        if (!file.empty()) if (auto raw = LoadImageFile(TruckLogoDir() + file)) logo = PrepareLogoImage(*raw);
+    }
+    if (!logo && brand.empty()) return;
+    int w = std::max(64, (int)std::lround(scfg_.width * std::clamp(scfg_.areaW, 0.01, 1.0)));
+    int h = std::max(64, (int)std::lround(scfg_.height * std::clamp(scfg_.areaH, 0.01, 1.0)));
+    splash_ = RenderScreenSplash(logo.get(), brand, logo ? L"" : model, w, h, (float)scfg_.startLogoScale, (float)scfg_.scale);
+    ULONGLONG now = GetTickCount64();
+    splashAt_ = now; splashUntil_ = now + (ULONGLONG)(scfg_.startLogoSeconds * 1000);
+    D3D11Overlay::SetScreenArea((float)scfg_.areaX, (float)scfg_.areaY, (float)scfg_.areaW, (float)scfg_.areaH, scfg_.flipY, scfg_.flipX);
+    D3D11Overlay::SetScreenImage(splash_);
+    D3D11Overlay::SetScreenTarget(scfg_.width, scfg_.height, scfg_.format);
+    D3D11Overlay::SetScreenAlpha(0.f);
+    Log::Write("Start logo: %s, truck '%s', brand id '%s' (%s)", WideToUtf8(brand).c_str(), truckId.c_str(), brandId.c_str(),
+               logo ? ("truck-logos\\" + WideToUtf8(file)).c_str() : "name");
 }
 
 void Overlay::SetScreenPinned(bool p) {

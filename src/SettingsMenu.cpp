@@ -83,6 +83,17 @@ const std::vector<Page>& Pages() {
             Toggle("Automatisch starten", "Start automatically", "Beim Spielstart sofort spielen", "Play as soon as the game starts", [](Config& c) -> bool& { return c.autoPlay; }),
             Choice("Sprache des Menüs", "Menu language", "", "", [](Config& c) -> std::string& { return c.menuLanguage; },
                    {"de", "en"}, {{"Deutsch", "Deutsch"}, {"English", "English"}}),
+            Heading("Band", "Band"),
+            Choice("Band", "Band", "DAB+: weiter, ohne Rauschen, bricht bei schwachem Signal ab", "DAB+: further, no static, drops out on a weak signal",
+                   [](Config& c) -> std::string& { return c.band; }, {"fm", "dab"}, {{"FM (UKW)", "FM"}, {"DAB+", "DAB+"}}),
+            KeyRow("Taste: Band wechseln", "Key: change band", "", "", Action::Band),
+            Heading("Stationstasten", "Station buttons"),
+            Toggle("Stationstasten 1\u20139", "Station buttons 1\u20139", "Nummernblock: kurz dr\u00fccken = w\u00e4hlen, gedr\u00fcckt halten = speichern",
+                   "Numpad: tap = select, hold = save", [](Config& c) -> bool& { return c.memoryButtons; }),
+            Slider("Halten zum Speichern", "Hold to save", "Tasten \u00e4ndern: Seite Tasten", "Change the keys: page Keys",
+                   [](Config& c) -> double& { return c.memoryHoldSeconds; }, 0.5, 3, 0.5, secs),
+            Button("Stationstasten neu belegen", "Store station buttons again", "Mit den 9 am besten empfangenen Sendern hier (Travelstore)",
+                   "With the 9 best received stations here (travel store)", "Belegen", "Store", SettingsMenu::AutoStoreButtons),
         }, false});
         p.push_back({"Empfang", "Reception", "Sender und Empfang", "Stations and reception", {
             Slider("Sendereichweite", "Broadcast range", "Grundreichweite einer Stadt", "Base range of a city", [](Config& c) -> double& { return c.radius; }, 2000, 20000, 500,
@@ -92,6 +103,11 @@ const std::vector<Page>& Pages() {
             Slider("Auto-Lautst\u00e4rke", "Auto volume", "Lauter bei h\u00f6herem Tempo (ab 30 km/h, voll bei 90 km/h)",
                    "Louder at higher speed (from 30 km/h, full at 90 km/h)", [](Config& c) -> double& { return c.autoVolume; }, 0, 1, 0.1,
                    [](double v, bool en) { return v < 0.05 ? std::wstring(en ? L"Off" : L"Aus") : L"+" + Num(20 * std::log10(1 + v), 1, en) + L" dB"; }),
+            Choice("Region wechseln", "Change region", "Wann das Radio einen Sender einer anderen Region w\u00e4hlt",
+                   "When the radio picks a station of another region", [](Config& c) -> std::string& { return c.switchMode; },
+                   {"lost", "better"}, {{"Erst wenn der Sender weg ist", "Only when the station is lost"}, {"Bei besserem Empfang", "On better reception"}}),
+            Slider("DAB+-Reichweite", "DAB+ range", "Im Vergleich zu FM", "Compared to FM", [](Config& c) -> double& { return c.dabRange; }, 1, 3, 0.1,
+                   [](double v, bool en) { return Num(v, 1, en) + L" \u00d7"; }),
             Toggle("Rauschen bei schwachem Empfang", "Static on weak reception", "", "", [](Config& c) -> bool& { return c.whitenoise; }),
             Toggle("Umschaltgeräusch", "Tuning sound", "Beim Senderwechsel", "When the station changes", [](Config& c) -> bool& { return c.transitionWhitenoise; }),
         }, false});
@@ -107,9 +123,31 @@ const std::vector<Page>& Pages() {
             Choice("Design", "Design", "Aussehen der Anzeige im LKW", "Look of the display in the truck", [](Config& c) -> std::string& { return c.screen.design; },
                    {"modern", "ocean", "sport", "light", "retro"},
                    {{"Modern", "Modern"}, {"Ozean", "Ocean"}, {"Sport", "Sport"}, {"Hell", "Light"}, {"Retro (LCD)", "Retro (LCD)"}}),
+            Toggle("Start-Logo beim Einschalten", "Start logo at ignition on", "Hersteller des LKWs auf Schwarz (Bild w\u00e4hlen: Seite LKW)",
+                   "The truck's manufacturer on black (choose the picture: page Trucks)", [](Config& c) -> bool& { return c.screen.startLogo; }),
+            Slider("Dauer Start-Logo", "Start logo time", "", "", [](Config& c) -> double& { return c.screen.startLogoSeconds; }, 1.5, 10, 0.5, secs),
+            Slider("Gr\u00f6\u00dfe Start-Logo", "Start logo size", "H\u00f6he des Logos im Anzeigebereich (Vorschau: Seite LKW)",
+                   "Height of the logo in the display area (preview: page Trucks)", [](Config& c) -> double& { return c.screen.startLogoScale; }, 0.2, 1, 0.05, pct),
+            Slider("Gr\u00f6\u00dfe Schrift und Bilder", "Size of text and pictures", "Inhalt gr\u00f6\u00dfer oder kleiner (h\u00f6chstens so hoch wie der Bereich)",
+                   "Content larger or smaller (at most as high as the area)", [](Config& c) -> double& { return c.screen.scale; }, 0.6, 1.6, 0.05, pct),
+            Slider("Gr\u00f6\u00dfe Senderlogo / Cover", "Size of station logo / cover", "", "",
+                   [](Config& c) -> double& { return c.screen.logoSize; }, 0.5, 1.3, 0.05, pct),
             page,
             KeyRow("Taste: Navi \u2194 Radio-Seite", "Key: navigation \u2194 radio page", "", "", Action::ScreenPage),
             Heading("Position auf dem Bildschirm", "Position on the screen"),
+            [] {
+                D d = Choice("Zeichenfl\u00e4che", "Drawing surface", "", "", [](Config& c) -> std::string& { static std::string s; return s; },
+                             {"0", "1", "2", "3", "4"}, {{"Alle", "All"}, {"1", "1"}, {"2", "2"}, {"3", "3"}, {"4", "4"}});
+                d.get = [](const Config& c) { return (double)std::clamp(c.screen.target, 0, 4); };
+                d.set = [](Config& c, double v) { c.screen.target = std::clamp((int)std::lround(v), 0, 4); };
+                d.hintFn = [](bool en) {
+                    int n = D3D11Overlay::ScreenTargetsSeen();
+                    std::wstring s = n > 0 ? (en ? L"Found: " : L"Gefunden: ") + std::to_wstring(n) + (en ? L" with this size" : L" mit dieser Gr\u00f6\u00dfe")
+                                           : std::wstring(en ? L"Shows up twice? Draw into one only" : L"Doppelt zu sehen? Nur in eine zeichnen");
+                    return s + (en ? L" \u2022 per truck in the preset" : L" \u2022 je LKW im Preset");
+                };
+                return d;
+            }(),
             Toggle("Testmodus", "Test mode", "Gitter + Rahmen der Anzeige im LKW (Men\u00fc am Titel verschiebbar)",
                    "Grid + frame of the display in the truck (drag the menu by its title)", [](Config& c) -> bool& { return c.screen.grid; }),
             Button("Automatisch erkennen (Beta)", "Detect automatically (beta)", "Im LKW sitzen, Navigation sichtbar", "Sit in the truck with the navigation visible",
@@ -170,7 +208,9 @@ const std::vector<Page>& Pages() {
 
 const Action kRows[] = {Action::Next, Action::Previous, Action::VolumeUp, Action::VolumeDown, Action::Mute, Action::Stop,
                         Action::Source, Action::NextDisc, Action::PreviousDisc, Action::ScreenPage, Action::MakeFavourite,
-                        Action::GoToFavourite, Action::ShowOverlay, Action::Menu};
+                        Action::GoToFavourite, Action::ShowOverlay, Action::Menu, Action::Band,
+                        Action::Memory1, Action::Memory2, Action::Memory3, Action::Memory4, Action::Memory5,
+                        Action::Memory6, Action::Memory7, Action::Memory8, Action::Memory9};
 constexpr int kRowCount = (int)(sizeof(kRows) / sizeof(kRows[0]));
 static_assert(kRowCount == (int)Action::Count, "every action needs a row in the key menu");
 
@@ -190,6 +230,10 @@ const char* LabelDe(Action a) {
     case Action::GoToFavourite: return "Zum Favoriten";
     case Action::ShowOverlay: return "Overlay einblenden";
     case Action::Menu: return "Dieses Menü";
+    case Action::Band: return "Band: FM / DAB+";
+    case Action::Memory1: return "Stationstaste 1"; case Action::Memory2: return "Stationstaste 2"; case Action::Memory3: return "Stationstaste 3";
+    case Action::Memory4: return "Stationstaste 4"; case Action::Memory5: return "Stationstaste 5"; case Action::Memory6: return "Stationstaste 6";
+    case Action::Memory7: return "Stationstaste 7"; case Action::Memory8: return "Stationstaste 8"; case Action::Memory9: return "Stationstaste 9";
     default: return "?";
     }
 }
@@ -209,6 +253,10 @@ const char* LabelEn(Action a) {
     case Action::GoToFavourite: return "Go to favourite";
     case Action::ShowOverlay: return "Show overlay";
     case Action::Menu: return "This menu";
+    case Action::Band: return "Band: FM / DAB+";
+    case Action::Memory1: return "Station button 1"; case Action::Memory2: return "Station button 2"; case Action::Memory3: return "Station button 3";
+    case Action::Memory4: return "Station button 4"; case Action::Memory5: return "Station button 5"; case Action::Memory6: return "Station button 6";
+    case Action::Memory7: return "Station button 7"; case Action::Memory8: return "Station button 8"; case Action::Memory9: return "Station button 9";
     default: return "?";
     }
 }
@@ -271,6 +319,30 @@ void SettingsMenu::BuildPresetDefs() {
                            "Sender, Favoriten, Lautst\u00e4rke, Quelle und USB-Titel merkt sich jeder LKW",
                            "Every truck keeps its own stations, favourites, volume, source and USB track",
                            [](Config& cfg) -> bool& { return cfg.truckMemory; }));
+    // start logo of this truck (stored in the active preset)
+    defs_.push_back(Heading("Start-Logo", "Start logo"));
+    {
+        std::vector<std::string> vals = {"", "text"};
+        for (auto& f : logos_) vals.push_back(f);
+        D l; l.kind = MenuItemKind::Choice; l.de = "Start-Logo"; l.en = "Start logo";
+        l.whint = logos_.empty() ? T("Kein Bild f\u00fcr diesen LKW im Ordner truck-logos \u2013 der Name wird gezeigt",
+                                     "No picture for this truck in the folder truck-logos - the name is shown")
+                                 : std::to_wstring(logos_.size()) + T(" Bild(er) \u2022 im aktiven Preset gespeichert", " picture(s) \u2022 stored in the active preset");
+        l.mx = (double)vals.size() - 1;
+        l.names.push_back(T("Automatisch", "Automatic"));
+        l.names.push_back(T("Nur Name", "Name only"));
+        for (auto& f : logos_) { std::wstring w = Utf8ToWide(f); size_t d = w.rfind(L'.'); l.names.push_back(d == std::wstring::npos ? w : w.substr(0, d)); }
+        l.get = [vals](const Config& cfg) {
+            for (size_t i = 0; i < vals.size(); ++i) if (_stricmp(vals[i].c_str(), cfg.screen.startLogoFile.c_str()) == 0) return (double)i;
+            return 0.0;
+        };
+        l.set = [vals](Config& cfg, double v) { cfg.screen.startLogoFile = vals[std::clamp((int)std::lround(v), 0, (int)vals.size() - 1)]; };
+        defs_.push_back(l);
+    }
+    defs_.push_back(Button("Vorschau auf dem Navi", "Preview on the screen", "", "", "Zeigen", "Show", PreviewStartLogo));
+    defs_.push_back(Button("Logo-Ordner", "Logo folder", "\u00d6ffnet den Ordner des Herstellers \u2013 Bilder einfach hineinlegen",
+                           "Opens the folder of this brand - just put pictures in",
+                           "\u00d6ffnen", "Open", OpenTruckLogoFolder));
     defs_.push_back(Heading("Navi-Presets", "Screen presets"));
     // active preset
     std::vector<std::string> names; names.push_back("");
@@ -388,6 +460,15 @@ void SettingsMenu::PresetCommand(int cmd, int index) {
     BuildDefs();
     sel_ = std::clamp(keep, 0, std::max(0, RowCount() - 1));
     EnsureVisible();
+}
+
+void SettingsMenu::SetLogos(const std::vector<std::wstring>& files) {
+    std::vector<std::string> l;
+    for (auto& f : files) l.push_back(WideToUtf8(f));
+    if (l == logos_) return;
+    logos_ = l;
+    if (PresetsPage()) { int keep = sel_; BuildDefs(); sel_ = std::clamp(keep, 0, std::max(0, RowCount() - 1)); }
+    dirty_ = true;
 }
 
 void SettingsMenu::SetTruck(const std::string& id, const std::string& name) {
@@ -721,6 +802,7 @@ MenuView SettingsMenu::View() const {
             it.label = Utf8ToWide(en ? d.en : d.de); it.hint = Utf8ToWide(en ? d.hen : d.hde);
             if (!d.wlabel.empty()) it.label = d.wlabel;
             if (!d.whint.empty()) it.hint = d.whint;
+            if (d.hintFn) it.hint = d.hintFn(en);
             if (d.folderTracks >= 0) {   // media type of a music folder
                 it.label = d.folder.empty() ? T("(Dateien direkt im Ordner usb)", "(files directly in the usb folder)") : d.folder;
                 it.hint = std::to_wstring(d.folderTracks) + T(" Titel", d.folderTracks == 1 ? " track" : " tracks");

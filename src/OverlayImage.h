@@ -58,11 +58,16 @@ std::shared_ptr<OverlayImage> RenderRadioLcd(const std::wstring& text, int scrol
 
 // In-cab screen card (drawn over the navigation for a few seconds): station or volume
 // design: modern (default) | ocean | sport | light | retro
-std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const OverlayImage* logo, int width, int height, const std::string& design = "modern");
+std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const OverlayImage* logo, int width, int height, const std::string& design = "modern",
+                                               float scale = 1.f, float logoSize = 1.f);   // scale: text and pictures, logoSize: logo / cover tile
 // Coordinate grid (10 x 10 cells labelled with their x/y position in tenths) for finding the visible area
 std::shared_ptr<OverlayImage> RenderScreenGrid(int width, int height, bool flipX = false, bool flipY = false);
 // Test mode: grid plus the area the card is drawn into (target coordinates 0..1), with its values in the corners
 std::shared_ptr<OverlayImage> RenderScreenTest(int width, int height, bool flipX, bool flipY, float ax, float ay, float aw, float ah);
+// start screen at ignition on: logo (or the brand name) on black
+std::shared_ptr<OverlayImage> PrepareLogoImage(const OverlayImage& src);   // dark background -> transparent, cut to the logo
+std::shared_ptr<OverlayImage> RenderScreenSplash(const OverlayImage* logo, const std::wstring& brand, const std::wstring& model, int width, int height,
+                                                 float logoScale = 0.55f, float scale = 1.f);
 // Test pattern for finding the right render target
 std::shared_ptr<OverlayImage> RenderScreenProbe(const std::wstring& label, int width, int height);
 

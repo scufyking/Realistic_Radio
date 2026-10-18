@@ -19,6 +19,12 @@ public:
     void Tick();                                                        // ~20x per second
     // Radio page: keep the card on the in-cab screen permanently (instead of the navigation) until switched off
     void SetScreenPinned(bool pinned);
+    // start screen when the ignition is switched on: brands\<brandId>.png|.jpg, else the brand name, fading in on black
+    void ShowStartLogo(const std::string& truckId, const std::string& brandId, const std::wstring& brand, const std::wstring& model);
+    // pictures for this truck in truck-logos\: sub folders <truck id>\ and <brand id>\, files <brand id>.png / <brand id>-*.png
+    // (paths relative to truck-logos\, sorted)
+    std::vector<std::wstring> StartLogoFiles(const std::string& truckId, const std::string& brandId) const;
+    std::wstring TruckLogoDir() const { return dataDir_ + L"truck-logos\\"; }
     // Key menu: shown in the middle of the upper half of the game picture while open
     void PrepareMenu();                                   // makes sure the D3D11 hook is installed
     void ShowMenu(std::shared_ptr<OverlayImage> img);
@@ -67,6 +73,10 @@ private:
     OverlayInfo scrInfo_;
     OverlayInfo pageInfo_;              // latest station/track info: content of the radio page
     bool pinned_ = false;
+    ULONGLONG splashAt_ = 0, splashUntil_ = 0;
+    std::shared_ptr<OverlayImage> splash_;
+    std::wstring dataDir_;
+    bool Splashing(ULONGLONG now) const { return splash_ && now < splashUntil_; }
     bool menu_ = false;
     float menuX_ = -1, menuY_ = -1;           // -1 = centred
     int detectPhase_ = 0, detectResult_ = 0;

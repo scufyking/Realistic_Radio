@@ -6,7 +6,9 @@
 #include "Common.h"
 #include "DisplayWindow.h"
 
-enum class Action { Next, Previous, Stop, VolumeUp, VolumeDown, MakeFavourite, GoToFavourite, Mute, ShowOverlay, Source, NextDisc, PreviousDisc, ScreenPage, Menu, Count };
+enum class Action { Next, Previous, Stop, VolumeUp, VolumeDown, MakeFavourite, GoToFavourite, Mute, ShowOverlay, Source, NextDisc, PreviousDisc, ScreenPage, Menu,
+                    Band, Memory1, Memory2, Memory3, Memory4, Memory5, Memory6, Memory7, Memory8, Memory9, Count };
+inline bool IsMemoryAction(Action a) { return a >= Action::Memory1 && a <= Action::Memory9; }
 
 struct KeyBinding { int vk = 0; bool ctrl = false, shift = false, alt = false; };
 
@@ -32,6 +34,13 @@ struct ScreenConfig {
     bool flipX = false;                 // flipX + flipY = rotated by 180 degrees
     bool grid = false;                  // test mode: coordinate grid + the card's area on the target (to find areaX/Y/W/H)
     std::string design = "modern";      // look of the card: modern | ocean | sport | light | retro
+    bool startLogo = true;              // start screen with the manufacturer's logo (truck-logos\\) or name when the ignition is switched on
+    double startLogoSeconds = 3.5;
+    double startLogoScale = 0.55;       // height of the start logo, part of the display area (0.2 - 1)
+    int target = 1;                     // several textures of that size per frame: draw into the 1st, 2nd, ... (0 = all)
+    double scale = 1.0;                 // size of text and pictures on the display (0.6 - 1.6, never taller than the area)
+    double logoSize = 1.0;              // station logo / cover tile (0.5 - 1.3)
+    std::string startLogoFile;          // picture in truck-logos\\ ("" = automatic: the first one for the truck, "text" = only the name)
 };
 
 // USB / CD mode: own music files from realistic-radio\usb\ (or another folder)
@@ -57,6 +66,9 @@ struct TruckPreset {
     double areaX = 0.1, areaY = 0.3, areaW = 0.8, areaH = 0.4, durationSeconds = 4.0;
     bool flipX = false, flipY = true;
     std::string design = "modern";
+    std::string logo;                   // start logo (ScreenConfig::startLogoFile)
+    int target = 1;
+    double scale = 1.0, logoScale = 0.55, logoSize = 1.0;
 };
 
 struct OverlayConfig {
@@ -98,6 +110,13 @@ struct Config {
     std::string activePreset;          // name, empty = none
     bool presetAuto = true;            // load the preset linked to the truck when the truck changes
     bool truckMemory = false;          // every truck remembers its own stations, favourites, volume, source and USB track
+    // Radio (1.4.0)
+    std::string band = "fm";           // fm | dab (remembered)
+    double dabRange = 1.5;             // DAB+ reaches this much further than FM
+    std::string switchMode = "lost";   // lost: change region only when the station is out of range | better: when another region is received better
+    bool memoryButtons = true;         // station buttons 1-9 (numpad): tap = select, hold = save
+    double memoryHoldSeconds = 1.5;
+    std::map<std::string, std::string> stationButtons;   // "1".."9" -> "<region>|<station name>" (remembered)
     // Reception (original web/config.js)
     double radius = 7500.0;
     double threshold = 0.15;

@@ -11,7 +11,7 @@ void Save(const std::shared_ptr<OverlayImage>& img, const char* p) {
 int main() {
     const int W = 819, H = 410;   // MAN TGX visible area (1024 * 0.8 x 1024 * 0.4)
     auto logo = LoadRaw("logo.raw"), cover = LoadRaw("cover.raw");
-    OverlayInfo r; r.source = L"Radio"; r.headline = L"Jetzt läuft:"; r.title = L"ROCK ANTENNE"; r.subtitle = L"Deutschland"; r.detail = L"Sender 3 / 41"; r.bars = 4; r.favourite = true;
+    OverlayInfo r; r.source = L"Radio DAB+"; r.headline = L"Jetzt läuft:"; r.title = L"ROCK ANTENNE"; r.subtitle = L"Deutschland"; r.detail = L"Sender 3 / 41  •  Taste 3"; r.bars = 4; r.favourite = true;
     Save(RenderScreenCard(r, logo.get(), W, H), "c1.raw");
     OverlayInfo r2 = r; r2.title = L"Radio Bollerwagen"; r2.favourite = false; r2.bars = 2; r2.subtitle = L"Deutschland  •  verbinde…";
     Save(RenderScreenCard(r2, nullptr, W, H), "c2.raw");
@@ -73,5 +73,40 @@ int main() {
     }
     { OverlayInfo e; e.source = L"Medien"; e.media = true; e.mediaType = "none"; e.paused = true; e.title = L"Kein Medientyp erkannt";
       e.subtitle = L"Musik in realistic-radio\\usb ablegen"; e.detail = L"Ctrl+0 → USB / CD → Musikordner öffnen"; Save(RenderScreenCard(e, nullptr, 819, 410), "empty.raw"); }
+    { const char* ds[] = {"modern", "ocean", "sport", "light", "retro"};
+      for (int k = 0; k < 5; ++k) {
+          OverlayInfo r; r.source = L"Radio"; r.headline = L"Jetzt läuft:"; r.title = L"ROCK ANTENNE"; r.subtitle = L"Deutschland"; r.detail = L"Sender 3 / 41"; r.bars = 4; r.favourite = true;
+          char n[32]; snprintf(n, 32, "d%d.raw", k); Save(RenderScreenCard(r, logo.get(), 819, 410, ds[k]), n);
+          OverlayInfo m2; m2.source = L"CD 2"; m2.media = true; m2.mediaType = "cd"; m2.headline = L"Rock Music  •  Titel 3 / 12"; m2.title = L"Highway Through the Night"; m2.subtitle = L"The Midnight Truckers"; m2.posSec = 83; m2.lenSec = 247;
+          snprintf(n, 32, "e%d.raw", k); Save(RenderScreenCard(m2, nullptr, 819, 410, ds[k]), n);
+          OverlayInfo v; v.source = L"Radio"; v.volume = 65; v.volumeLabel = L"Lautstärke";
+          snprintf(n, 32, "f%d.raw", k); Save(RenderScreenCard(v, nullptr, 819, 410, ds[k]), n);
+      }
+      Save(RenderScreenTest(1024, 1024, false, true, 0.1f, 0.3f, 0.8f, 0.4f), "test.raw"); }
+    { MenuView pv = mv; pv.items.clear(); pv.page = 3; pv.section = L"Navi-Einstellungen je LKW"; pv.selected = 3; pv.hover = 5; pv.hoverControl = MenuHit::ItemButton;
+      pv.pages = {L"Radio", L"Empfang", L"Navi-Bildschirm", L"LKW-Presets", L"Popup-Overlay", L"USB / CD", L"Speicher", L"Tasten"};
+      auto T = [](MenuItemKind k, const wchar_t* l, const wchar_t* h, const wchar_t* val, bool on = false) { MenuItem it; it.kind = k; it.label = l; it.hint = h; it.value = val; it.on = on; return it; };
+      auto B = [&](const wchar_t* l, const wchar_t* h, const wchar_t* b) { MenuItem it = T(MenuItemKind::Button, l, h, L""); it.button = b; return it; };
+      pv.items.push_back(B(L"Dieser LKW: Scania S", L"Preset: Scania S  (vehicle.scania.s_2016)", L"Neues Preset"));
+      pv.items.push_back(T(MenuItemKind::Choice, L"Aktives Preset", L"Wird geladen und merkt sich Änderungen der Navi-Seite", L"Scania S"));
+      pv.items.push_back(T(MenuItemKind::Toggle, L"Automatisch je LKW wechseln", L"Beim Einsteigen lädt das Preset des LKWs (LKW-ID aus der Telemetrie)", L"", true));
+      pv.items.push_back(T(MenuItemKind::Heading, L"Aktives Preset", L"", L""));
+      pv.items.push_back(B(L"Mit diesem LKW verknüpfen", L"Das aktive Preset lädt dann automatisch in diesem LKW", L"Verknüpfen"));
+      pv.items.push_back(B(L"Verknüpfung lösen", L"Dieser LKW lädt das aktive Preset nicht mehr automatisch", L"Lösen"));
+      pv.items.push_back(B(L"Aktives Preset löschen", L"Die Navi-Einstellungen bleiben", L"Löschen"));
+      pv.items.push_back(T(MenuItemKind::Heading, L"Gespeicherte Presets", L"", L""));
+      pv.items.push_back(B(L"\u25b6 Scania S", L"Scania S", L"Laden"));
+      pv.items.push_back(B(L"MAN TGX", L"vehicle.man.tgx_2020", L"Laden"));
+      pv.selected = 1; pv.hover = 0;
+      pv.unsaved = true; pv.status = L"Preset „Scania S“ angelegt";
+      Save(RenderMenu(pv, 1080), "menu5.raw"); }
+    Save(RenderScreenSplash(nullptr, L"Scania", L"S 2016", 819, 410, 0.55f, 1.f), "s1.raw");
+    Save(RenderScreenSplash(logo.get(), L"Scania", L"S 2016", 819, 410, 0.55f, 1.f), "s2.raw");
+    { auto m = LoadRaw("man.raw"); auto pm = PrepareLogoImage(*m); Save(RenderScreenSplash(pm.get(), L"MAN", L"", 819, 475, 0.55f, 1.f), "l1.raw");
+      auto s = LoadRaw("scania.raw"); auto ps = PrepareLogoImage(*s); Save(RenderScreenSplash(ps.get(), L"Scania", L"", 819, 475, 0.55f, 1.f), "l2.raw"); }
+    { OverlayInfo r; r.source = L"Radio FM"; r.headline = L"Jetzt läuft:"; r.title = L"ROCK ANTENNE"; r.subtitle = L"Deutschland"; r.detail = L"Sender 3 / 41  •  Taste 3"; r.bars = 4;
+      Save(RenderScreenCard(r, nullptr, 819, 410, "modern", 0.7f), "k1.raw"); Save(RenderScreenCard(r, nullptr, 819, 410, "modern", 1.4f), "k2.raw");
+      OverlayInfo m; m.source = L"USB 2"; m.media = true; m.mediaType = "cd"; m.headline = L"Rock Music  •  Titel 3 / 12"; m.title = L"Highway Through the Night"; m.subtitle = L"The Midnight Truckers"; m.posSec = 83; m.lenSec = 247;
+      Save(RenderScreenCard(m, nullptr, 819, 594, "modern", 1.25f, 1.2f), "k3.raw"); Save(RenderScreenCard(r, nullptr, 819, 594, "modern", 1.f, 1.f), "k4.raw"); }
     Save(RenderMenuCursor(1080), "cursor.raw");
 }

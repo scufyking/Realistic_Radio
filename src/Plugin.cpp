@@ -29,23 +29,27 @@ std::atomic<float> g_speed{0.f};   // m/s, negative when reversing
 
 // Truck identity (configuration event "truck"): used to pick the truck preset of the in-cab screen
 std::mutex g_truckMtx;
-std::string g_truckId, g_truckName;
+std::string g_truckId, g_truckName, g_truckBrandId, g_truckBrand, g_truckModel;
 std::atomic<int> g_truckVersion{0};
 SCSAPI_VOID OnConfiguration(const scs_event_t, const void* const info, const scs_context_t) {
     const auto* cfg = static_cast<const scs_telemetry_configuration_t*>(info);
     if (!cfg || !cfg->id || strcmp(cfg->id, SCS_TELEMETRY_CONFIG_truck) != 0) return;
-    std::string id, brand, name;
+    std::string id, brand, name, brandId;
     for (const scs_named_value_t* a = cfg->attributes; a && a->name; ++a) {
         if (a->value.type != SCS_VALUE_TYPE_string || !a->value.value_string.value) continue;
         if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_id)) id = a->value.value_string.value;
         else if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_brand)) brand = a->value.value_string.value;
         else if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_name)) name = a->value.value_string.value;
+        else if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_brand_id)) brandId = a->value.value_string.value;
     }
     if (id.empty()) return;
     std::lock_guard<std::mutex> l(g_truckMtx);
     if (id == g_truckId) return;
     g_truckId = id;
     g_truckName = brand.empty() ? name : (name.rfind(brand, 0) == 0 ? name : brand + " " + name);
+    g_truckBrandId = brandId; g_truckBrand = brand;
+    g_truckModel = (!brand.empty() && name.rfind(brand, 0) == 0) ? name.substr(brand.size()) : name;
+    g_truckModel.erase(0, g_truckModel.find_first_not_of(' '));
     ++g_truckVersion;
 }
 
@@ -84,12 +88,12 @@ DWORD WINAPI RadioThread(LPVOID) {
     while (!g_quit) {
         if (radio.MenuOpen()) {   // key menu: keys go to the menu, no radio actions
             if (radio.MenuTick(input)) { input.Init(radio.Settings()); input.Resync(); }
-        } else input.Poll([&](Action a) { Log::Write("Action: %s", ActionName(a)); radio.OnAction(a); });
+        } else input.Poll([&](Action a, bool hold) { Log::Write("Action: %s%s", ActionName(a), hold ? " (held)" : ""); radio.OnAction(a, hold); });
         if (int v = g_truckVersion.load(); v != truckVersion) {
             truckVersion = v;
-            std::string id, name;
-            { std::lock_guard<std::mutex> l(g_truckMtx); id = g_truckId; name = g_truckName; }
-            radio.SetTruck(id, name);
+            std::string id, name, brandId, brand, model;
+            { std::lock_guard<std::mutex> l(g_truckMtx); id = g_truckId; name = g_truckName; brandId = g_truckBrandId; brand = g_truckBrand; model = g_truckModel; }
+            radio.SetTruck(id, name, brandId, brand, model);
         }
         radio.Tick(g_x, g_z, g_havePos, g_electric, g_engine, g_speed);
         Sleep(radio.MenuOpen() ? 15 : 50);   // the menu reacts faster to the mouse

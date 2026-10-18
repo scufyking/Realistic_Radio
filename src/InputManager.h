@@ -12,13 +12,16 @@
 class InputManager {
 public:
     void Init(const Config& cfg);
-    void Poll(const std::function<void(Action)>& fire);
+    // fire(action, hold): station buttons fire when released (hold = false) or once when held long enough (hold = true)
+    void Poll(const std::function<void(Action, bool)>& fire);
     void Resync();          // take the current key state as "already pressed" (no action for keys still held)
     int PollNewButton();    // key menu: number of a controller button pressed since the last call, -1 = none
 private:
     bool GameFocused() const;
     Config cfg_;
     bool keyDown_[(int)Action::Count] = {};
+    bool holdDone_[(int)Action::Count] = {};
+    ULONGLONG pressAt_[(int)Action::Count] = {};
     DWORD lastButtons_ = 0;
     bool joyOk_ = true;
     ULONGLONG nextJoyRetry_ = 0;
