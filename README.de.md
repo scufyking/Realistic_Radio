@@ -14,7 +14,7 @@ Von **ScufyKing**. Das ganze Radio läuft im Spiel:
 
 Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels kopieren, ETS2 starten, das Radio läuft. Senderdaten und Sounds stecken in der DLL.
 
-> **Version 1.4.1** · [Änderungen](CHANGELOG.md#changelog-deutsch)
+> **Version 1.4.2** · [Änderungen](CHANGELOG.md#changelog-deutsch)
 >
 > **Stand:** Getestet in ETS2 1.61 (Windows x64) mit mehreren MAN- und Scania-Modellen sowie Mod-LKW: Das Plugin wird geladen, liest die LKW-Position, wechselt Sender nach Region, spielt Ton ab und zeigt Sender und Lautstärke auf dem Navi-Bildschirm. Daten für American Truck Simulator sind enthalten, ATS ist aber ungetestet.
 
@@ -90,9 +90,10 @@ plugins\
     ├── realistic-radio.json         Einstellungen (wird beim ersten Start angelegt)
     ├── favourites-ets2.json         deine Favoriten (wird automatisch angelegt)
     ├── trucks-ets2.json             Radio-Speicher je LKW (wenn eingeschaltet)
+    ├── tunnels-own.json             eigene Tunnel (Tunnel-Taste, optional)
     ├── usb\                         deine eigene Musik für den USB/CD-Modus (legst du hinein)
     ├── logos\                       heruntergeladene Senderlogos und Cover (Zwischenspeicher)
-    ├── truck-logos\                 Bilder für den Startbildschirm: ein Ordner pro Hersteller (man\, scania\, …) oder Mod-LKW
+    ├── truck-logos\                 Logos für den Startbildschirm (mitgelieferte + eigene): ein Ordner pro Hersteller (man\, scania\, …) oder Mod-LKW
     └── realistic-radio.log          Logdatei
 ```
 
@@ -118,10 +119,11 @@ plugins\
 | Quelle wechseln: Radio → USB 1 → USB 2 → … → Radio | Pos1 | `keys.source` |
 | Nächster / vorheriger USB bzw. CD | – | `keys.nextDisc`, `keys.previousDisc` |
 | Navi-Bildschirm: Navigation ↔ Radio-Seite | Einfg (Insert) | `keys.screenPage` |
-| Einstellungsmenü öffnen | Strg + 0 | `keys.menu` |
+| Einstellungsmenü öffnen | Strg + 0 **oder** Strg + F1 | `keys.menu`, `keys.menu2` |
 | Band: FM ↔ DAB+ | Umschalt + Pos1 | `keys.band` |
 | Stationstasten 1–9: kurz = wählen, halten = speichern | Num 1–9 | `keys.memory1` … `keys.memory9` |
 | Frequenz-Radio: 0,1 MHz höher / tiefer | Umschalt + → / Umschalt + ← | `keys.tuneUp`, `keys.tuneDown` |
+| Eigenen Tunnel markieren (am Anfang und am Ende drücken) | – | `keys.tunnelMark` |
 
 „Nächster“ und „Vorheriger“ schalten durch alle Sender aller Regionen, die du gerade empfängst; dasselbe Programm aus mehreren Regionen kommt nur einmal vor. Im USB/CD-Modus haben die Tasten eine andere Bedeutung, siehe [USB / CD](#usb--cd-eigene-musik).
 
@@ -130,6 +132,12 @@ Tasten reagieren nur, wenn ETS2 das aktive Fenster ist. So stören sie keine and
 Sind die Pfeiltasten in ETS2 auch zum Fahren oder für Menüs belegt, passiert beides gleichzeitig. Dann andere Tasten oder eine Kombination wie `"Ctrl+Right"` verwenden.
 
 **Tasten ändern im Spiel:** **Strg + 0** öffnet das [Einstellungsmenü](#einstellungsmenü-strg--0). Auf der Seite **Tasten** das Feld einer Funktion anklicken und die neue Taste, Tastenkombination oder den Controller-Knopf drücken.
+
+### Kein Empfang im Tunnel
+
+Fährt man in einen Tunnel, verliert das Radio wie ein echtes den Empfang: **FM** geht innerhalb von etwa zwei Sekunden ins Rauschen über, **DAB+** stottert kurz und ist dann still; an der Ausfahrt kommt das Programm zurück. USB / CD spielt weiter. Kurze Unterführungen und Brücken zählen nicht – nur überdachte Strecken ab 200 m.
+
+Die Tunnel stammen aus den Datenbanken von **ETS2 Tunnel Radio** von Tal (bohbotoly, MIT-Lizenz, siehe NOTICE.md), erstellt aus den Kartendaten des Spiels: **ETS2 1.60 mit allen Karten-DLCs** (4.238 Tunnelstücke) und **ProMods 2.83 + Middle-East** (5.446). Das Plugin liest `game.log.txt` im Dokumente-Ordner und nimmt die ProMods-Datenbank, wenn ProMods geladen ist. Für Map-Mods oder einen fehlenden Tunnel eine Taste für **Eigenen Tunnel markieren** belegen (Seite Tasten), an der Tunneleinfahrt drücken und an der Ausfahrt nochmal – der Tunnel wird in `realistic-radio\tunnels-own.json` gespeichert. Einstellungsmenü → Empfang → **Kein Empfang im Tunnel** schaltet es ab. Für ATS gibt es keine Tunnel-Datenbank (eigene Tunnel gehen).
 
 ### Frequenz-Radio (wie früher)
 
@@ -156,12 +164,12 @@ Alternativ lassen sich die Tasten weiterhin in der Datei eintragen. **Tastenname
 
 ## Einstellungsmenü (Strg + 0)
 
-Die wichtigsten Einstellungen lassen sich direkt im Spiel ändern. **Strg + 0** öffnet das Menü in der Bildmitte; es lässt sich mit der Maus und mit der Tastatur bedienen.
+Die wichtigsten Einstellungen lassen sich direkt im Spiel ändern. **Strg + 0** (oder **Strg + F1**) öffnet das Menü in der Bildmitte; es lässt sich mit der Maus und mit der Tastatur bedienen.
 
 | Seite | Inhalt |
 |---|---|
 | Radio | Lautstärke, Stumm, Radio an bei (Zündung / Motor läuft / immer), automatisch starten, Sprache des Menüs, **Band FM / DAB+** und seine Taste, **Stationstasten** an/aus und Haltezeit, **Senderwahl: Senderliste oder Frequenz**, **RDS-AF** |
-| Empfang | Sendereichweite, Wechselschwelle, **Region wechseln** (erst wenn der Sender weg ist / bei besserem Empfang), **DAB+-Reichweite**, Auto-Lautstärke, Rauschen, Umschaltgeräusch |
+| Empfang | Sendereichweite, Wechselschwelle, **Region wechseln** (erst wenn der Sender weg ist / bei besserem Empfang), **DAB+-Reichweite**, Auto-Lautstärke, Rauschen, Umschaltgeräusch, **kein Empfang im Tunnel**, Taste zum Markieren eigener Tunnel |
 | Navi-Bildschirm | Anzeige an/aus, Anzeigedauer, **Design**, **Start-Logo** an/aus, Dauer und Größe, **Größe von Schrift und Bildern**, **Größe des Senderlogos**, **Zeichenfläche** (falls die Anzeige doppelt erscheint), Radio-Seite dauerhaft, Taste für Navi ↔ Radio-Seite, **Testmodus**, **automatische Erkennung (Beta)** und Position der Anzeige (Bereich X / Y / Breite / Höhe, umdrehen, spiegeln) |
 | LKW | Aktueller LKW (aus der Telemetrie), **Radio-Speicher je LKW**, **Start-Logo** (Auswahl, Vorschau, Logo-Ordner), neues Preset, aktives Preset, automatisch je LKW wechseln, verknüpfen / lösen, löschen, gespeichertes Preset laden |
 | Popup-Overlay | Modus, Stil, Position, Größe, Anzeigedauer, Senderlogos |
@@ -209,6 +217,7 @@ Alle Einstellungen stehen in `realistic-radio\realistic-radio.json`. Die Datei w
 | `tuning` | `"list"` | FM: `"list"` = Weiter / Zurück schaltet durch die Sender in Reichweite; `"frequency"` = Frequenz-Radio wie früher (siehe unten) |
 | `rdsAf` | `false` | Frequenz-Radio: dem Programm auf seine andere Frequenz folgen, wenn es weg ist (RDS-AF). `false` = wie früher: die Frequenz bleibt stehen |
 | `tunedFreq` | – | Zuletzt eingestellte Frequenz in 0,1 MHz, z. B. `947` (wird automatisch gespeichert) |
+| `tunnelSignal` | `true` | Kein Empfang im Tunnel (FM: Rauschen, DAB+: Aussetzer, dann Stille) |
 | `screenPage` | `"navi"` | `"radio"` = Radio-Seite dauerhaft auf dem Navi-Bildschirm (wird mit der Taste `screenPage` umgeschaltet und gespeichert) |
 
 ### Overlay (`"overlay": { … }`)
@@ -267,7 +276,7 @@ Weil jeder LKW und jede Mod andere Zeichenflächen nutzt, muss die richtige einm
 | `flipX` | `false` | Waagerecht spiegeln (`flipX` + `flipY` = um 180° gedreht) |
 | `grid` | `false` | Testmodus (am einfachsten im Einstellungsmenü): ein 10×10-Koordinatengitter über der ganzen Zeichenfläche und ein orangefarbener Rahmen, der zeigt, wohin die Anzeige gezeichnet wird, mit den Werten in den Ecken. Den Rahmen mit den Bereichs-Reglern verschieben, bis er ganz im sichtbaren Teil des Bildschirms liegt. Wird nie als „an“ gespeichert |
 | `design` | `"modern"` | Aussehen der Anzeige: `"modern"` (dunkel, Amber), `"ocean"` (Ozean: Marineblau, Hellblau), `"sport"` (Schwarz, Rot), `"light"` (Hell: Weiß, Blau), `"retro"` (grüne LCD-Optik) |
-| `startLogo` | `true` | Startbildschirm beim Einschalten der Zündung (auch bei ausgeschaltetem Radio): Das Logo des Herstellers wird auf Schwarz eingeblendet, wie bei modernen Infotainment-Systemen. Die Bilder kommen aus `realistic-radio\truck-logos\` (siehe [Truck-Logos](#truck-logos-startbildschirm)); ohne Bild werden Herstellername und Modell gezeigt |
+| `startLogo` | `true` | Startbildschirm beim Einschalten der Zündung (auch bei ausgeschaltetem Radio): Das Logo des Herstellers wird auf Schwarz eingeblendet, wie bei modernen Infotainment-Systemen. Die Logos kommen aus `realistic-radio\truck-logos\` (mitgeliefert für DAF, Iveco, MAN, Mercedes-Benz, Scania, Volvo) (siehe [Truck-Logos](#truck-logos-startbildschirm)); ohne Bild werden Herstellername und Modell gezeigt |
 | `startLogoFile` | `""` | Gezeigtes Bild, relativ zu `truck-logos\` (z. B. `"mercedes\\gold.png"`); `""` = das erste Bild für den LKW, `"text"` = nur der Name. Wird im LKW-Preset gespeichert (`"logo"`) – am einfachsten im Einstellungsmenü, Seite LKW |
 | `startLogoScale` | `0.55` | Höhe des Start-Logos als Anteil des Anzeigebereichs (0,2–1) |
 | `target` | `1` | Manche LKW zeichnen pro Bild mehrere Flächen in der Größe des Bildschirms (z. B. Navi und Kombiinstrument), dann konnte die Anzeige doppelt erscheinen. `1` = nur in die erste zeichnen, `2` = in die zweite, … `0` = in alle (Verhalten bis 1.3). Am einfachsten im Einstellungsmenü bei eingeschaltetem Testmodus; wird je LKW im Preset gespeichert |
@@ -301,7 +310,7 @@ Für weitere LKW legt man einmal ein Preset im Einstellungsmenü an, Seite **LKW
 
 ### Truck-Logos (Startbildschirm)
 
-Beim Einschalten der Zündung zeigt das Navi ein paar Sekunden das Logo des Herstellers. Logo-Bilder liegen dem Plugin nicht bei; eigene Bilder kommen in `realistic-radio\truck-logos\`. Den Ordner legt das Plugin selbst an, mit einem Unterordner für jeden Hersteller im Spiel und – sobald du einen fährst – für jede Mod-Marke; du musst die Bilder also nur hineinlegen. Einstellungsmenü → LKW → **Logo-Ordner** öffnet den Ordner des LKWs, in dem du sitzt:
+Beim Einschalten der Zündung zeigt das Navi ein paar Sekunden das Logo des Herstellers. Logos für **DAF, Iveco, MAN, Mercedes-Benz (8 Farben), Scania und Volvo** liefert das Plugin mit: Sie stecken in der DLL und werden beim ersten Start in `realistic-radio\truck-logos\` abgelegt (jedes nur einmal – gelöschte oder ersetzte Logos bleiben so, siehe `delivered-logos.txt`). Für Renault, Mod-LKW oder andere Bilder legst du eigene in denselben Ordner. Den Ordner legt das Plugin selbst an, mit einem Unterordner für jeden Hersteller im Spiel und – sobald du einen fährst – für jede Mod-Marke; du musst die Bilder also nur hineinlegen. Einstellungsmenü → LKW → **Logo-Ordner** öffnet den Ordner des LKWs, in dem du sitzt:
 
 - ein Ordner pro Hersteller-ID: `man\`, `scania\`, `volvo\`, `daf\`, `mercedes\`, `iveco\`, `renault\` – mit beliebig vielen Bildern (PNG, JPG, BMP), z. B. `mercedes\gold.png`, `mercedes\silber.png`
 - oder Dateien direkt in `truck-logos\`: `scania.png`, `scania-neon.png`

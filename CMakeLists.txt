@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(realistic-radio SHARED
     src/Plugin.cpp src/Logger.cpp src/Config.cpp src/StationDatabase.cpp src/ReceptionCalculator.cpp
     src/RadioManager.cpp src/AudioEngine.cpp src/StreamSource.cpp src/InputManager.cpp src/MiniaudioImpl.cpp
-    src/Overlay.cpp src/OverlayImage.cpp src/D3D11Overlay.cpp src/DisplayWindow.cpp src/EmbeddedData.cpp src/MediaLibrary.cpp src/MenuInput.cpp src/SettingsMenu.cpp src/InputBlock.cpp
+    src/Overlay.cpp src/OverlayImage.cpp src/D3D11Overlay.cpp src/DisplayWindow.cpp src/EmbeddedData.cpp src/MediaLibrary.cpp src/MenuInput.cpp src/SettingsMenu.cpp src/InputBlock.cpp src/TunnelMap.cpp
     ${CMAKE_BINARY_DIR}/resources.rc
     src/exports.def)
 target_include_directories(realistic-radio PRIVATE src third_party sdk/include)
@@ -24,7 +24,7 @@ set_target_properties(realistic-radio PROPERTIES PREFIX "" OUTPUT_NAME "realisti
 set(RR_DATA ${CMAKE_SOURCE_DIR}/data)
 configure_file(${CMAKE_SOURCE_DIR}/src/resources.rc.in ${CMAKE_BINARY_DIR}/resources.rc @ONLY)
 set_source_files_properties(${CMAKE_BINARY_DIR}/resources.rc PROPERTIES OBJECT_DEPENDS
-    "${RR_DATA}/ets2.json;${RR_DATA}/ats.json;${RR_DATA}/audio/whitestatic.mp3;${RR_DATA}/audio/radio_switch.mp3;${RR_DATA}/custom-stations-ets2.example.json")
+    "${RR_DATA}/ets2.json;${RR_DATA}/ats.json;${RR_DATA}/audio/whitestatic.mp3;${RR_DATA}/audio/radio_switch.mp3;${RR_DATA}/custom-stations-ets2.example.json;${RR_DATA}/tunnels/tunnels-ets2.json;${RR_DATA}/tunnels/tunnels-ets2-promods.json;${RR_DATA}/truck-logos/daf/daf.png;${RR_DATA}/truck-logos/iveco/iveco.png;${RR_DATA}/truck-logos/man/man.png;${RR_DATA}/truck-logos/mercedes/blau.png;${RR_DATA}/truck-logos/mercedes/gold.png;${RR_DATA}/truck-logos/mercedes/gruen.png;${RR_DATA}/truck-logos/mercedes/kupfer.png;${RR_DATA}/truck-logos/mercedes/lila.png;${RR_DATA}/truck-logos/mercedes/perlmutt.png;${RR_DATA}/truck-logos/mercedes/rosa.png;${RR_DATA}/truck-logos/mercedes/silber.png;${RR_DATA}/truck-logos/scania/scania.png;${RR_DATA}/truck-logos/volvo/volvo.png")
 
 # ---------------------------------------------------------------------------------------------------------------
 # Truckers-RealisticRadio.dll: Realistic Radio + Trucker Chat (addons/trucker-chat) in ONE plugin. Two separate

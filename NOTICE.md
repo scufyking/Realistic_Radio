@@ -25,6 +25,42 @@ Radio streams are provided by their respective broadcasters.
 
 ---
 
+## Tunnel databases — ETS2 Tunnel Radio (`data/tunnels/`)
+
+Files: `data/tunnels/tunnels-ets2.json`, `data/tunnels/tunnels-ets2-promods.json` (converted with `tools/convert-tunnels.py`,
+embedded in the DLL); the check whether the truck is inside a tunnel (`src/TunnelMap.*`) follows the same method.
+
+From **ETS2 Tunnel Radio** by Tal (bohbotoly) — https://github.com/bohbotoly/ets2-tunnel-radio
+(databases: ETS2 1.60 + map DLCs, and ProMods 2.83 + Middle-East add-on; built from the game's "no weather" zones).
+
+MIT License
+
+Copyright (c) 2026 Tal (bohbotoly)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## Truck logos (`data/truck-logos/`)
+
+The logo pictures for the start screen (DAF, Iveco, MAN, Mercedes-Benz, Scania, Volvo) were prepared by ScufyKing and are embedded in `realistic-radio.dll`. The brand names and logos are trademarks of their respective owners; they are used only to show the manufacturer of the driven truck. Realistic Radio is not affiliated with, endorsed or sponsored by any of these manufacturers or by SCS Software. The MPL-2.0 license of this project does not grant any rights to these trademarks.
+
 ## SCS Telemetry SDK (`sdk/`)
 
 Copyright (C) 2016 SCS Software

@@ -14,7 +14,7 @@ By **ScufyKing**. The whole radio runs inside the game:
 
 Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ETS2, and the radio plays. Station data and sounds are built into the DLL.
 
-> **Version 1.4.1** · [Changes](CHANGELOG.md)
+> **Version 1.4.2** · [Changes](CHANGELOG.md)
 >
 > **Status:** Tested in ETS2 1.61 (Windows x64) with several MAN and Scania models and mod trucks: the plugin loads, reads the truck position, switches stations by region, plays audio and shows station and volume on the navigation screen. American Truck Simulator data is included but ATS is untested.
 
@@ -90,9 +90,10 @@ plugins\
     ├── realistic-radio.json         settings (created on first start)
     ├── favourites-ets2.json         your favourites (created automatically)
     ├── trucks-ets2.json             radio memory per truck (if switched on)
+    ├── tunnels-own.json             your own tunnels (tunnel key, optional)
     ├── usb\                         your own music for the USB/CD mode (you put it there)
     ├── logos\                       downloaded station logos and covers (cache)
-    ├── truck-logos\                 pictures for the start screen: a folder per brand (man\, scania\, …) or mod truck
+    ├── truck-logos\                 logos for the start screen (delivered ones + your own): a folder per brand (man\, scania\, …) or mod truck
     └── realistic-radio.log          log file
 ```
 
@@ -118,10 +119,11 @@ plugins\
 | Switch source: radio → USB 1 → USB 2 → … → radio | Home | `keys.source` |
 | Next / previous USB or CD | – | `keys.nextDisc`, `keys.previousDisc` |
 | Navigation screen: navigation ↔ radio page | Insert | `keys.screenPage` |
-| Open the settings menu | Ctrl + 0 | `keys.menu` |
+| Open the settings menu | Ctrl + 0 **or** Ctrl + F1 | `keys.menu`, `keys.menu2` |
 | Band: FM ↔ DAB+ | Shift + Home | `keys.band` |
 | Station buttons 1–9: tap = select, hold = save | NumPad 1–9 | `keys.memory1` … `keys.memory9` |
 | Frequency radio: tune 0.1 MHz up / down | Shift + → / Shift + ← | `keys.tuneUp`, `keys.tuneDown` |
+| Mark an own tunnel (press at the entry and at the exit) | – | `keys.tunnelMark` |
 
 "Next" and "Previous" step through every station of every region you currently receive; the same programme from several regions appears only once. In USB/CD mode the keys work differently, see [USB / CD](#usb--cd-your-own-music).
 
@@ -130,6 +132,12 @@ Keys only react while ETS2 is the active window, so they do not interfere with o
 If the arrow keys are also bound to driving or menus in ETS2, both happen at the same time. In that case use other keys or a combination such as `"Ctrl+Right"`.
 
 **Changing keys in the game:** **Ctrl + 0** opens the [settings menu](#settings-menu-ctrl--0). On the **Keys** page click the field of a function and press the new key, key combination or controller button.
+
+### No reception in tunnels
+
+Drive into a tunnel and the radio loses its signal like a real one: **FM** fades into static within about two seconds, **DAB+** stutters for a moment and then goes silent; at the exit the programme comes back. USB / CD keeps playing. Short underpasses and bridges do not count – only covered stretches of 200 m and more.
+
+The tunnels come from the databases of **ETS2 Tunnel Radio** by Tal (bohbotoly, MIT license, see NOTICE.md), built from the game's own map data: **ETS2 1.60 with all map DLCs** (4,238 tunnel pieces) and **ProMods 2.83 + Middle-East** (5,446). The plugin reads `game.log.txt` in your documents folder and uses the ProMods database when ProMods is loaded. For map mods or a tunnel that is missing, assign a key to **Mark an own tunnel** (page Keys), press it at the tunnel entry and again at the exit – the tunnel is saved in `realistic-radio\tunnels-own.json`. Settings menu → Reception → **No reception in tunnels** switches it off. ATS has no tunnel database (own tunnels work).
 
 ### Frequency radio (like in the old days)
 
@@ -156,12 +164,12 @@ You can still enter keys in the file as well. **Key names** use the .NET key nam
 
 ## Settings menu (Ctrl + 0)
 
-The most important settings can be changed right in the game. **Ctrl + 0** opens the menu in the middle of the screen; it works with mouse and keyboard.
+The most important settings can be changed right in the game. **Ctrl + 0** (or **Ctrl + F1**) opens the menu in the middle of the screen; it works with mouse and keyboard.
 
 | Page | Contents |
 |---|---|
 | Radio | Volume, mute, radio on with (ignition / engine running / always), start automatically, menu language, **band FM / DAB+** and its key, **station buttons** on/off and hold time, **tuning: station list or frequency**, **RDS AF** |
-| Reception | Broadcast range, switch threshold, **change region** (only when the station is lost / on better reception), **DAB+ range**, auto volume, static, tuning sound |
+| Reception | Broadcast range, switch threshold, **change region** (only when the station is lost / on better reception), **DAB+ range**, auto volume, static, tuning sound, **no reception in tunnels**, key to mark an own tunnel |
 | Navigation screen | Display on/off, display time, **design**, **start logo** on/off, time and size, **size of text and pictures**, **size of the station logo**, **drawing surface** (if the display appears twice), keep the radio page on, key for navigation ↔ radio page, **test mode**, **automatic detection (beta)** and the position of the display (area X / Y / width / height, flip, mirror) |
 | Trucks | Current truck (from the telemetry), **radio memory per truck**, **start logo** (choice, preview, logo folder), new preset, active preset, change automatically per truck, link / unlink, delete, load a saved preset |
 | Pop-up overlay | Mode, style, position, size, display time, station logos |
@@ -209,6 +217,7 @@ All settings are in `realistic-radio\realistic-radio.json`. The file is created 
 | `tuning` | `"list"` | FM: `"list"` = Next / Previous step through the stations in range; `"frequency"` = frequency radio like in the old days (see below) |
 | `rdsAf` | `false` | Frequency radio: follow the programme to its other frequency when it is lost (RDS AF). `false` = old style: the dial stays where it is |
 | `tunedFreq` | – | Last frequency in 0.1 MHz, e.g. `947` (saved automatically) |
+| `tunnelSignal` | `true` | No reception in tunnels (FM: static, DAB+: drop-outs, then silence) |
 | `screenPage` | `"navi"` | `"radio"` = radio page permanently on the navigation screen (switched with the `screenPage` key and saved) |
 
 ### Overlay (`"overlay": { … }`)
@@ -267,7 +276,7 @@ Because every truck and mod uses different render targets, the right one must be
 | `flipX` | `false` | Mirror horizontally (`flipX` + `flipY` = rotated by 180°) |
 | `grid` | `false` | Test mode (easiest in the settings menu): a 10×10 coordinate grid over the whole render target and an orange frame showing where the display is drawn, with its values in the corners. Move the frame with the area sliders until it lies fully on the visible part of the screen. Not saved as on |
 | `design` | `"modern"` | Look of the display: `"modern"` (dark, amber), `"ocean"` (navy, light blue), `"sport"` (black, red), `"light"` (white, blue), `"retro"` (green LCD look) |
-| `startLogo` | `true` | Start screen when the ignition is switched on (also with the radio off): the manufacturer's logo fades in on black, like on modern infotainment systems. Pictures come from `realistic-radio\truck-logos\` (see [Truck logos](#truck-logos-start-screen)); without one the brand name and model are shown |
+| `startLogo` | `true` | Start screen when the ignition is switched on (also with the radio off): the manufacturer's logo fades in on black, like on modern infotainment systems. Logos come from `realistic-radio\truck-logos\` (delivered for DAF, Iveco, MAN, Mercedes-Benz, Scania, Volvo) (see [Truck logos](#truck-logos-start-screen)); without one the brand name and model are shown |
 | `startLogoFile` | `""` | Picture to show, relative to `truck-logos\` (e.g. `"mercedes\\gold.png"`); `""` = the first picture for the truck, `"text"` = the name only. Stored in the truck preset (`"logo"`) – easiest in the settings menu, page Trucks |
 | `startLogoScale` | `0.55` | Height of the start logo as part of the display area (0.2–1) |
 | `target` | `1` | Some trucks render several textures of the screen's size per frame (e.g. navigation and instrument display), so the display could appear twice. `1` = draw into the first one only, `2` = the second, … `0` = into all (behaviour up to 1.3). Easiest in the settings menu with test mode switched on; stored per truck in the preset |
@@ -301,7 +310,7 @@ Changes on the **Navigation screen** page are stored in the active preset right 
 
 ### Truck logos (start screen)
 
-When the ignition is switched on, the navigation screen shows the manufacturer's logo for a few seconds. The plugin comes without logo pictures; put your own into `realistic-radio\truck-logos\`. The plugin creates the folder itself, with a sub folder for every manufacturer of the game and – as soon as you drive one – for every mod brand, so you only have to drop the pictures in. Settings menu → Trucks → **Logo folder** opens the folder of the truck you are in:
+When the ignition is switched on, the navigation screen shows the manufacturer's logo for a few seconds. Logos for **DAF, Iveco, MAN, Mercedes-Benz (8 colours), Scania and Volvo** come with the plugin: they are inside the DLL and are put into `realistic-radio\truck-logos\` on the first start (each one only once – logos you delete or replace stay that way, see `delivered-logos.txt`). For Renault, mod trucks or other pictures, put your own into the same folder. The plugin creates the folder itself, with a sub folder for every manufacturer of the game and – as soon as you drive one – for every mod brand, so you only have to drop the pictures in. Settings menu → Trucks → **Logo folder** opens the folder of the truck you are in:
 
 - one folder per brand id: `man\`, `scania\`, `volvo\`, `daf\`, `mercedes\`, `iveco\`, `renault\` – with any number of pictures (PNG, JPG, BMP), e.g. `mercedes\gold.png`, `mercedes\silver.png`
 - or files directly in `truck-logos\`: `scania.png`, `scania-neon.png`

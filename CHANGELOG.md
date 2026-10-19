@@ -2,6 +2,16 @@
 
 **English** · [Deutsch](#changelog-deutsch)
 
+## 1.4.2 – No reception in tunnels, truck logos included, second key for the settings menu
+
+### New
+- **No reception in tunnels.** Drive into a tunnel and **FM** fades into static, **DAB+** stutters for a moment and goes silent; at the exit the programme comes back (USB / CD keeps playing, the signal bars show 0). Only covered stretches of 200 m and more count. The tunnels come from the databases of **ETS2 Tunnel Radio** by Tal (bohbotoly, MIT license, see NOTICE.md), built from the game's map data: ETS2 1.60 with all map DLCs, and ProMods 2.83 + Middle-East – chosen automatically from `game.log.txt`. Own tunnels for map mods: assign the new key **Mark an own tunnel**, press it at the entry and the exit (saved in `tunnels-own.json`). Settings menu → Reception → **No reception in tunnels**. Setting `"tunnelSignal"`, key `tunnelMark`.
+- **Truck logos included.** The start screen now shows real logos right away: the DLL brings logos for **DAF, Iveco, MAN, Mercedes-Benz (8 colours: blue, gold, green, copper, purple, pearl, pink, silver), Scania and Volvo** and puts them into `realistic-radio\truck-logos\` on the first start (in ATS only Volvo). Each logo is written only once – a logo you delete or replace with your own picture stays the way you left it (`truck-logos\delivered-logos.txt`), and own pictures with the same name are never overwritten. For the Mercedes colour: settings menu → Trucks → **Start logo**. Renault and mod trucks still use own pictures or the brand name.
+- **The settings menu also opens with Ctrl + F1.** For some players **Ctrl + 0** did not open the menu because the game's free camera (developer mode) uses the 0 key. The second key can be changed on the Keys page ("This menu (second key)") or in the file (`keys.menu2`); Ctrl + 0 keeps working.
+
+### Upgrade notes
+- Replace `realistic-radio.dll` only. The new keys are added to the settings file automatically.
+
 ## 1.4.1 – Frequency radio and updated truck presets
 
 ### New
@@ -162,6 +172,16 @@
 
 <a id="changelog-deutsch"></a>
 # Changelog (Deutsch)
+
+## 1.4.2 – Kein Empfang im Tunnel, Truck-Logos dabei, zweite Taste für das Einstellungsmenü
+
+### Neu
+- **Kein Empfang im Tunnel.** Fährt man in einen Tunnel, geht **FM** ins Rauschen über, **DAB+** stottert kurz und ist dann still; an der Ausfahrt kommt das Programm zurück (USB / CD spielt weiter, die Empfangsbalken zeigen 0). Es zählen nur überdachte Strecken ab 200 m. Die Tunnel stammen aus den Datenbanken von **ETS2 Tunnel Radio** von Tal (bohbotoly, MIT-Lizenz, siehe NOTICE.md), erstellt aus den Kartendaten des Spiels: ETS2 1.60 mit allen Karten-DLCs sowie ProMods 2.83 + Middle-East – automatisch gewählt anhand von `game.log.txt`. Eigene Tunnel für Map-Mods: die neue Taste **Eigenen Tunnel markieren** belegen, an der Einfahrt und an der Ausfahrt drücken (gespeichert in `tunnels-own.json`). Einstellungsmenü → Empfang → **Kein Empfang im Tunnel**. Einstellung `"tunnelSignal"`, Taste `tunnelMark`.
+- **Truck-Logos sind dabei.** Der Startbildschirm zeigt jetzt sofort echte Logos: Die DLL bringt Logos für **DAF, Iveco, MAN, Mercedes-Benz (8 Farben: blau, gold, grün, kupfer, lila, perlmutt, rosa, silber), Scania und Volvo** mit und legt sie beim ersten Start in `realistic-radio\truck-logos\` ab (in ATS nur Volvo). Jedes Logo wird nur einmal geschrieben – ein Logo, das du löschst oder durch ein eigenes Bild ersetzt, bleibt so (`truck-logos\delivered-logos.txt`), und eigene Bilder mit gleichem Namen werden nie überschrieben. Die Mercedes-Farbe wählst du im Einstellungsmenü → LKW → **Start-Logo**. Renault und Mod-LKW nutzen weiter eigene Bilder oder den Herstellernamen.
+- **Das Einstellungsmenü öffnet sich auch mit Strg + F1.** Bei manchen Spielern hat **Strg + 0** das Menü nicht geöffnet, weil die freie Kamera des Spiels (Entwicklermodus) die Taste 0 belegt. Die zweite Taste lässt sich auf der Seite Tasten („Dieses Menü (zweite Taste)“) oder in der Datei (`keys.menu2`) ändern; Strg + 0 funktioniert weiterhin.
+
+### Hinweise zum Update
+- Nur `realistic-radio.dll` ersetzen. Die neuen Tasten werden automatisch in die Einstellungsdatei eingetragen.
 
 ## 1.4.1 – Frequenz-Radio und neue LKW-Presets
 
