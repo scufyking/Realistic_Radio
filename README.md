@@ -14,7 +14,7 @@ By **ScufyKing**. The whole radio runs inside the game:
 
 Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ETS2, and the radio plays. Station data and sounds are built into the DLL.
 
-> **Version 1.4.3** · [Changes](CHANGELOG.md)
+> **Version 1.4.4** · [Changes](CHANGELOG.md)
 >
 > **Status:** Tested in ETS2 1.61 (Windows x64) with several MAN and Scania models and mod trucks: the plugin loads, reads the truck position, switches stations by region, plays audio and shows station and volume on the navigation screen. American Truck Simulator data is included but ATS is untested.
 
@@ -49,6 +49,7 @@ Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ET
 - **Smooth transitions** with a tuning sound.
 - **Radio page on the navigation screen.** Press **Insert** to switch between the navigation and a permanent radio page that shows the station or track live.
 - **Display on the truck's navigation screen.** On every station change the logo, station name, country, signal and "station 3 / 12" appear on the in-cab navigation screen for a few seconds, on volume changes a speaker symbol, a large percentage and a 20-segment bar; then the navigation is back. Works in trucks with a modern infotainment/navigation screen (tested: several MAN and Scania models and mod trucks; see "In-cab screen").
+- **Live song title.** Artist and title of the song the station is playing right now appear on the navigation screen – switched exactly when the song changes in what you hear, and scrolling when the title is long (settings menu → Radio → **Live song title**).
 - **Radio memory per truck** (optional): every truck keeps its own stations, favourites, volume, source and USB track.
 - **Truck presets:** the position and design of the screen display can be saved per truck; the right preset is loaded automatically by the truck id from the telemetry.
 - **Start screen** when the ignition is switched on: the truck's manufacturer fades in on black, like on modern infotainment systems (your own logo pictures can be added).
@@ -170,7 +171,7 @@ The buttons come **pre-stored**: on the first start they are filled with the nin
 
 You can still enter keys in the file as well. **Key names** use the .NET key names: letters `A`–`Z`, digits `0`–`9`, `F1`–`F24`, `NumPad0`–`NumPad9`, `PageUp`, `Next` (= Page Down), `Home`, `End`, `Insert`, `Delete`, `Up`, `Down`, `Left`, `Right`, `Pause`, `Space`, `Oemplus`, `OemMinus`, `Add`, `Subtract`, `MediaNextTrack`, `MediaPlayPause` and more. Combinations work too, e.g. `"Ctrl+Shift+R"`. An empty value `""` disables a key.
 
-**Controller:** set `controllerIndex` (0 = first controller) and give each action a button number under `buttons`, counting from 0. `-1` disables it. The button numbers match those shown in the Windows controller settings minus 1.
+**Controller:** every connected controller works – steering wheels (also with several devices such as Moza or Fanatec: base, wheel, button box), pads and button boxes, with up to 128 buttons and the hat switch (POV). Easiest in the settings menu: Keys page, click the **Controller** column and press the button. In the file, `buttons` holds `"Device name/12"` (button 12 of that controller, `"Device name/POV1 up"` for the hat switch), a plain number (counted from 0, any controller; older files) or `-1` (none). The log lists the controllers found (`Controller: … found`).
 
 ## Settings menu (Ctrl + 0)
 
@@ -227,6 +228,7 @@ All settings are in `realistic-radio\realistic-radio.json`. The file is created 
 | `tuning` | `"list"` | FM: `"list"` = Next / Previous step through the stations in range; `"frequency"` = frequency radio like in the old days (see below) |
 | `rdsAf` | `false` | Frequency radio: follow the programme to its other frequency when it is lost (RDS AF). `false` = old style: the dial stays where it is |
 | `tunedFreq` | – | Last frequency in 0.1 MHz, e.g. `947` (saved automatically) |
+| `songTitle` | `true` | Live song title of the station on the navigation screen (and in the dot-matrix display). Read from the stream (ICY `StreamTitle`), switched exactly when the song changes in the audio; for AAC streams it is asked for every 20 s. Stations that send no title show none |
 | `tunnelSignal` | `true` | No reception in tunnels (FM: static, DAB+: drop-outs, then silence) |
 | `screenPage` | `"navi"` | `"radio"` = radio page permanently on the navigation screen (switched with the `screenPage` key and saved) |
 
@@ -286,6 +288,7 @@ Because every truck and mod uses different render targets, the right one must be
 | `flipX` | `false` | Mirror horizontally (`flipX` + `flipY` = rotated by 180°) |
 | `grid` | `false` | Test mode (easiest in the settings menu): a 10×10 coordinate grid over the whole render target and an orange frame showing where the display is drawn, with its values in the corners. Move the frame with the area sliders until it lies fully on the visible part of the screen. Not saved as on |
 | `design` | `"modern"` | Look of the display: `"modern"` (dark, amber), `"ocean"` (navy, light blue), `"sport"` (black, red), `"light"` (white, blue), `"retro"` (green LCD look) |
+| `volumeStyle` | `"card"` | How the volume is shown on the navigation screen: `"card"` = large card, `"bar"` = slim bar at the top like on modern infotainment systems ("20%" and a thin level line; the navigation stays visible). Settings menu → Navigation screen → **Volume display** |
 | `startLogo` | `true` | Start screen when the ignition is switched on (also with the radio off): the manufacturer's logo fades in on black, like on modern infotainment systems. Logos come from `realistic-radio\truck-logos\` (delivered for DAF, Iveco, MAN, Mercedes-Benz, Scania, Volvo) (see [Truck logos](#truck-logos-start-screen)); without one the brand name and model are shown |
 | `startLogoFile` | `""` | Picture to show, relative to `truck-logos\` (e.g. `"mercedes\\gold.png"`); `""` = the first picture for the truck, `"text"` = the name only. Stored in the truck preset (`"logo"`) – easiest in the settings menu, page Trucks |
 | `startLogoScale` | `0.55` | Height of the start logo as part of the display area (0.2–1) |
@@ -436,6 +439,7 @@ Almost every problem can be diagnosed from `realistic-radio\realistic-radio.log`
 | "Media Foundation cannot open …" | Windows cannot play this format (e.g. some HLS or Ogg streams). Switch to another station or replace the URL. |
 | Overlay says "Station unavailable" | The stream cannot be reached right now. The plugin keeps retrying in the background; usually it is quicker to switch stations. |
 | No pop-up overlay | It is off by default: set `"overlay": { "mode": "auto" }`. If it is on but not visible, look for `Overlay:` in the log; `Present hook installed` and `D3D11 renderer ready` mean it is active. If another overlay tool conflicts, try `"mode": "window"`. |
+| Menu invisible or navigation-screen display missing with Snowymoon, ReShade or another graphics tool | From 1.4.4 Realistic Radio draws after the tool's effects (log: `graphics tool detected`); a menu that cannot be drawn closes again after 2.5 s. If the tool uses **End** for its own menu, move Realistic Radio's Stop key (`keys.stop`) to another key. Still a problem? Send the log (lines starting with `Overlay:`). |
 | Overlay hides part of the HUD | Change `position`, `offsetY` or `scale`. |
 | No station logo | Logos are downloaded from `radio.scufystudio.de` on first use; without internet, or if the server is down, the panel is shown without a logo and the download is retried after 10 minutes. |
 | Keys do nothing | Is the game the active window? Another program may be using the key; pick a different one. |

@@ -14,7 +14,7 @@ Von **ScufyKing**. Das ganze Radio läuft im Spiel:
 
 Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels kopieren, ETS2 starten, das Radio läuft. Senderdaten und Sounds stecken in der DLL.
 
-> **Version 1.4.3** · [Änderungen](CHANGELOG.md#changelog-deutsch)
+> **Version 1.4.4** · [Änderungen](CHANGELOG.md#changelog-deutsch)
 >
 > **Stand:** Getestet in ETS2 1.61 (Windows x64) mit mehreren MAN- und Scania-Modellen sowie Mod-LKW: Das Plugin wird geladen, liest die LKW-Position, wechselt Sender nach Region, spielt Ton ab und zeigt Sender und Lautstärke auf dem Navi-Bildschirm. Daten für American Truck Simulator sind enthalten, ATS ist aber ungetestet.
 
@@ -49,6 +49,7 @@ Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels ko
 - **Sanfte Übergänge** mit Umschaltgeräusch.
 - **Radio-Seite auf dem Navi-Bildschirm.** Mit **Einfg** zwischen Navigation und einer dauerhaften Radio-Seite umschalten, die Sender bzw. Titel live anzeigt.
 - **Anzeige auf dem Navi-Bildschirm im LKW.** Bei jedem Senderwechsel erscheinen Logo, Sendername, Land, Empfang und „Sender 3 / 12“ für ein paar Sekunden auf dem Navi-Bildschirm im Cockpit, bei Lautstärkeänderungen ein Lautsprechersymbol, eine große Prozentzahl und ein Balken aus 20 Segmenten; danach ist die Navigation wieder da. Funktioniert in LKW mit modernem Infotainment-/Navi-Bildschirm (getestet: mehrere MAN- und Scania-Modelle sowie Mod-LKW; siehe „Anzeige auf dem Cockpit-Bildschirm“).
+- **Songtitel live.** Interpret und Titel des Songs, den der Sender gerade spielt, erscheinen auf dem Navi – genau dann, wenn der Song in dem, was du hörst, wechselt, und laufen bei langen Titeln durch (Einstellungsmenü → Radio → **Songtitel live**).
 - **Radio-Speicher je LKW** (optional): Jeder LKW merkt sich eigene Sender, Favoriten, Lautstärke, Quelle und USB-Titel.
 - **LKW-Presets:** Position und Design der Navi-Anzeige lassen sich pro LKW speichern; das passende Preset lädt automatisch über die LKW-ID aus der Telemetrie.
 - **Startbildschirm** beim Einschalten der Zündung: Der Hersteller des LKWs wird auf Schwarz eingeblendet, wie bei modernen Infotainment-Systemen (eigene Logo-Bilder möglich).
@@ -170,7 +171,7 @@ Die Tasten sind **vorbelegt**: Beim ersten Start bekommen sie die neun am besten
 
 Alternativ lassen sich die Tasten weiterhin in der Datei eintragen. **Tastennamen** sind die .NET-Tastennamen: Buchstaben `A`–`Z`, Ziffern `0`–`9`, `F1`–`F24`, `NumPad0`–`NumPad9`, `PageUp`, `Next` (= Bild ↓), `Home`, `End`, `Insert`, `Delete`, `Up`, `Down`, `Left`, `Right`, `Pause`, `Space`, `Oemplus`, `OemMinus`, `Add`, `Subtract`, `MediaNextTrack`, `MediaPlayPause` und weitere. Kombinationen gehen auch, z. B. `"Ctrl+Shift+R"`. Ein leerer Wert `""` schaltet eine Taste ab.
 
-**Controller:** `controllerIndex` setzen (0 = erster Controller) und unter `buttons` jeder Aktion eine Tastennummer geben, gezählt ab 0. `-1` schaltet sie ab. Die Nummern entsprechen denen in den Windows-Controller-Einstellungen minus 1.
+**Controller:** Jeder angeschlossene Controller funktioniert – Lenkräder (auch aus mehreren Geräten wie bei Moza oder Fanatec: Basis, Lenkrad, Button-Box), Gamepads und Button-Boxen, mit bis zu 128 Knöpfen und dem Coolie-Hat (POV). Am einfachsten im Einstellungsmenü: Seite Tasten, in der Spalte **Controller** klicken und den Knopf drücken. In der Datei steht unter `buttons` `"Gerätename/12"` (Knopf 12 dieses Controllers, `"Gerätename/POV1 up"` für den Coolie-Hat), eine reine Zahl (ab 0 gezählt, beliebiger Controller; ältere Dateien) oder `-1` (keiner). Im Log stehen die gefundenen Controller (`Controller: … found`).
 
 ## Einstellungsmenü (Strg + 0)
 
@@ -227,6 +228,7 @@ Alle Einstellungen stehen in `realistic-radio\realistic-radio.json`. Die Datei w
 | `tuning` | `"list"` | FM: `"list"` = Weiter / Zurück schaltet durch die Sender in Reichweite; `"frequency"` = Frequenz-Radio wie früher (siehe unten) |
 | `rdsAf` | `false` | Frequenz-Radio: dem Programm auf seine andere Frequenz folgen, wenn es weg ist (RDS-AF). `false` = wie früher: die Frequenz bleibt stehen |
 | `tunedFreq` | – | Zuletzt eingestellte Frequenz in 0,1 MHz, z. B. `947` (wird automatisch gespeichert) |
+| `songTitle` | `true` | Songtitel des Senders live auf dem Navi (und im Punktmatrix-Display). Kommt aus dem Stream (ICY `StreamTitle`) und wechselt genau dann, wenn der Song im Ton wechselt; bei AAC-Streams wird er alle 20 s abgefragt. Sender ohne Titel zeigen keinen |
 | `tunnelSignal` | `true` | Kein Empfang im Tunnel (FM: Rauschen, DAB+: Aussetzer, dann Stille) |
 | `screenPage` | `"navi"` | `"radio"` = Radio-Seite dauerhaft auf dem Navi-Bildschirm (wird mit der Taste `screenPage` umgeschaltet und gespeichert) |
 
@@ -286,6 +288,7 @@ Weil jeder LKW und jede Mod andere Zeichenflächen nutzt, muss die richtige einm
 | `flipX` | `false` | Waagerecht spiegeln (`flipX` + `flipY` = um 180° gedreht) |
 | `grid` | `false` | Testmodus (am einfachsten im Einstellungsmenü): ein 10×10-Koordinatengitter über der ganzen Zeichenfläche und ein orangefarbener Rahmen, der zeigt, wohin die Anzeige gezeichnet wird, mit den Werten in den Ecken. Den Rahmen mit den Bereichs-Reglern verschieben, bis er ganz im sichtbaren Teil des Bildschirms liegt. Wird nie als „an“ gespeichert |
 | `design` | `"modern"` | Aussehen der Anzeige: `"modern"` (dunkel, Amber), `"ocean"` (Ozean: Marineblau, Hellblau), `"sport"` (Schwarz, Rot), `"light"` (Hell: Weiß, Blau), `"retro"` (grüne LCD-Optik) |
+| `volumeStyle` | `"card"` | Wie die Lautstärke auf dem Navi erscheint: `"card"` = große Karte, `"bar"` = schmale Leiste oben wie bei modernen Infotainment-Systemen („20%“ und eine dünne Pegellinie; die Navigation bleibt sichtbar). Einstellungsmenü → Navi-Bildschirm → **Lautstärke-Anzeige** |
 | `startLogo` | `true` | Startbildschirm beim Einschalten der Zündung (auch bei ausgeschaltetem Radio): Das Logo des Herstellers wird auf Schwarz eingeblendet, wie bei modernen Infotainment-Systemen. Die Logos kommen aus `realistic-radio\truck-logos\` (mitgeliefert für DAF, Iveco, MAN, Mercedes-Benz, Scania, Volvo) (siehe [Truck-Logos](#truck-logos-startbildschirm)); ohne Bild werden Herstellername und Modell gezeigt |
 | `startLogoFile` | `""` | Gezeigtes Bild, relativ zu `truck-logos\` (z. B. `"mercedes\\gold.png"`); `""` = das erste Bild für den LKW, `"text"` = nur der Name. Wird im LKW-Preset gespeichert (`"logo"`) – am einfachsten im Einstellungsmenü, Seite LKW |
 | `startLogoScale` | `0.55` | Höhe des Start-Logos als Anteil des Anzeigebereichs (0,2–1) |
@@ -428,6 +431,7 @@ Fast jedes Problem lässt sich an `realistic-radio\realistic-radio.log` erkennen
 
 | Problem | Ursache und Lösung |
 |---|---|
+| Menü unsichtbar oder Radioanzeige auf dem Navi fehlt mit Snowymoon, ReShade oder anderen Grafik-Tools | Ab 1.4.4 zeichnet Realistic Radio erst nach den Effekten des Tools (Log: `graphics tool detected`); ein Menü, das nicht gezeichnet werden kann, schließt sich nach 2,5 s wieder. Nutzt das Tool **Ende** für sein eigenes Menü, die Stopp-Taste von Realistic Radio (`keys.stop`) auf eine andere Taste legen. Klappt es trotzdem nicht: Log schicken (Zeilen mit `Overlay:`). |
 | Es wird keine `realistic-radio.log` angelegt | Die DLL wurde nicht geladen. Ordner prüfen: Er muss `bin\win_x64\plugins\` heißen. Wurde die Meldung zu den „erweiterten SDK-Funktionen“ mit OK bestätigt? |
 | Radio bei Lautstärke 0 noch hörbar oder zwei Sender gleichzeitig | Das Plugin ist doppelt installiert (z. B. `realistic-radio (1).dll`). Im Log steht dann `WARNING: another radio plugin DLL is in the plugins folder`; nur eine DLL behalten. Eine zweite Kopie dieser Version bleibt von selbst inaktiv. |
 | „Data file not found“ im Log | Das Plugin konnte seinen Ordner neben der DLL nicht schreiben (z. B. keine Schreibrechte im Spielordner). Im Log nach „Could not write“ suchen. |

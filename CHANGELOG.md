@@ -2,6 +2,22 @@
 
 **English** · [Deutsch](#changelog-deutsch)
 
+## 1.4.4 – Live song title, modern volume bar, works with Snowymoon and other graphics tools
+
+> **Note:** The fix for Snowymoon was not tested with Snowymoon.
+
+### New
+- **Live song title.** The navigation screen shows artist and title of the song the station is playing right now, in its own line under the station; long titles scroll. Most internet radios send the title inside the stream (ICY `StreamTitle`); the plugin takes it out at its exact position in the audio, so the title changes in the second the song changes in what you hear – not when the data arrives. For AAC streams the title is asked for every 20 s. Also in the dot-matrix display of the overlay. Settings menu → Radio → **Live song title** (on by default), setting `"songTitle"`.
+- **Volume as a slim bar at the top.** New second style for the volume on the navigation screen, like on modern infotainment systems: a bar at the top edge with "20%" and a thin level line, the navigation stays visible below (over the radio page when it is pinned). Colours follow the chosen design. Settings menu → Navigation screen → **Volume display**: *Large card* (as before, default) or *Bar at the top (modern)*; setting `"screen": { "volumeStyle": "bar" }`.
+
+### Fixed
+- **Works with graphics tools such as Snowymoon or ReShade.** These tools put their own `d3d11.dll` / `dxgi.dll` next to the game. With Snowymoon the settings menu stayed invisible (the game seemed frozen until Esc) and the radio display on the navigation screen was missing. Realistic Radio now draws at Windows' own swap chain, after the tool's effects. The log names a detected tool (`graphics tool detected`) and shows after 20 s how many frames reached the overlay.
+- **The settings menu no longer blocks the game when it cannot be drawn.** If no picture reaches the overlay within 2.5 s after opening, the menu closes again and the log says why.
+- **Steering wheels like Moza can be assigned.** Until now only the first controller with up to 32 buttons was read (an old Windows interface), so with wheels made of several devices (Moza, Fanatec: base, wheel, button box) or with higher button numbers nothing happened on the Keys page. Now every connected controller is read through DirectInput: up to 128 buttons and the hat switch (POV) per controller. A button is stored with its controller (`"buttons": { "next": "MOZA R9 Base/12" }`); the Keys page shows e.g. "MOZA 12". Older button numbers keep working (any controller). The log lists the controllers found.
+
+### Upgrade notes
+- Replace `realistic-radio.dll` only. The live song title is on by default (setting `songTitle`).
+
 ## 1.4.3 – Runs together with Trucker Chat
 
 ### New
@@ -186,6 +202,22 @@
 
 <a id="changelog-deutsch"></a>
 # Changelog (Deutsch)
+
+## 1.4.4 – Songtitel live, moderne Lautstärke-Leiste, läuft mit Snowymoon und anderen Grafik-Tools
+
+> **Hinweis:** Der Fix für Snowymoon wurde nicht mit Snowymoon getestet.
+
+### Neu
+- **Songtitel live.** Das Navi zeigt Interpret und Titel des Songs, den der Sender gerade spielt, in einer eigenen Zeile unter dem Sender; lange Titel laufen durch. Die meisten Internetradios schicken den Titel im Stream mit (ICY `StreamTitle`); das Plugin nimmt ihn an seiner genauen Stelle im Ton heraus, so wechselt der Titel in der Sekunde, in der der Song in dem, was du hörst, wechselt – nicht schon, wenn die Daten ankommen. Bei AAC-Streams wird der Titel alle 20 s abgefragt. Auch im Punktmatrix-Display des Overlays. Einstellungsmenü → Radio → **Songtitel live** (standardmäßig an), Einstellung `"songTitle"`.
+- **Lautstärke als schmale Leiste oben.** Neuer zweiter Stil für die Lautstärke auf dem Navi, wie bei modernen Infotainment-Systemen: eine Leiste am oberen Rand mit „20%“ und einer dünnen Pegellinie, darunter bleibt die Navigation sichtbar (bei dauerhaft eingeblendeter Radio-Seite liegt sie über ihr). Die Farben folgen dem gewählten Design. Einstellungsmenü → Navi-Bildschirm → **Lautstärke-Anzeige**: *Große Karte* (wie bisher, Standard) oder *Leiste oben (modern)*; Einstellung `"screen": { "volumeStyle": "bar" }`.
+
+### Behoben
+- **Läuft mit Grafik-Tools wie Snowymoon oder ReShade.** Diese Tools legen eine eigene `d3d11.dll` / `dxgi.dll` neben das Spiel. Mit Snowymoon blieb das Einstellungsmenü unsichtbar (das Spiel wirkte bis Esc eingefroren) und die Radioanzeige auf dem Navi fehlte. Realistic Radio zeichnet jetzt an der Bildausgabe von Windows selbst, nach den Effekten des Tools. Ein erkanntes Tool steht im Log (`graphics tool detected`), nach 20 s außerdem, wie viele Bilder beim Overlay ankommen.
+- **Das Einstellungsmenü blockiert das Spiel nicht mehr, wenn es nicht gezeichnet werden kann.** Kommt 2,5 s nach dem Öffnen kein Bild beim Overlay an, schließt es sich wieder, und im Log steht warum.
+- **Lenkräder wie Moza lassen sich belegen.** Bisher wurde nur der erste Controller mit bis zu 32 Knöpfen gelesen (eine alte Windows-Schnittstelle); bei Lenkrädern aus mehreren Geräten (Moza, Fanatec: Basis, Lenkrad, Button-Box) oder höheren Knopfnummern passierte auf der Seite Tasten deshalb nichts. Jetzt wird jeder angeschlossene Controller über DirectInput gelesen: bis zu 128 Knöpfe und der Coolie-Hat (POV) je Controller. Ein Knopf wird mit seinem Controller gespeichert (`"buttons": { "next": "MOZA R9 Base/12" }`); die Seite Tasten zeigt z. B. „MOZA 12“. Ältere Knopfnummern funktionieren weiter (beliebiger Controller). Im Log stehen die gefundenen Controller.
+
+### Hinweise zum Update
+- Nur `realistic-radio.dll` ersetzen. Der Songtitel live ist standardmäßig an (Einstellung `songTitle`).
 
 ## 1.4.3 – Läuft zusammen mit Trucker Chat
 
