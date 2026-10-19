@@ -14,7 +14,7 @@ Von **ScufyKing**. Das ganze Radio läuft im Spiel:
 
 Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels kopieren, ETS2 starten, das Radio läuft. Senderdaten und Sounds stecken in der DLL.
 
-> **Version 1.4.2** · [Änderungen](CHANGELOG.md#changelog-deutsch)
+> **Version 1.4.3** · [Änderungen](CHANGELOG.md#changelog-deutsch)
 >
 > **Stand:** Getestet in ETS2 1.61 (Windows x64) mit mehreren MAN- und Scania-Modellen sowie Mod-LKW: Das Plugin wird geladen, liest die LKW-Position, wechselt Sender nach Region, spielt Ton ab und zeigt Sender und Lautstärke auf dem Navi-Bildschirm. Daten für American Truck Simulator sind enthalten, ATS ist aber ungetestet.
 
@@ -102,6 +102,16 @@ plugins\
 **Umstieg von „ETS2 Local Radio Native“** (der frühere Name): `realistic-radio.dll` nach `plugins` kopieren und `local-radio-native.dll` löschen. Beim ersten Start werden Einstellungen, Favoriten, eigene Sender und gespeicherte Logos automatisch aus dem alten Ordner `local-radio\` übernommen; danach kannst du auch diesen Ordner löschen.
 
 **Deinstallieren:** `realistic-radio.dll` und den Ordner `realistic-radio` löschen.
+
+### Zusammen mit Trucker Chat
+
+**Trucker Chat** (Stream-Livechat von Twitch / YouTube auf dem Navi, ebenfalls von ScufyKing) läuft als eigenes Plugin neben Realistic Radio: `realistic-radio.dll` und `trucker-chat.dll` liegen beide in `plugins\`.
+
+- **Ab 1.4.3 zeichnet Realistic Radio den Chat mit.** Trucker Chat (ab 0.1.1 Alpha) erkennt das Radio beim Start und hängt sich dann nicht selbst an Direct3D, sondern gibt seine Bilder an das Radio weiter. Zwei Hooks an denselben Stellen konnten das Spiel abstürzen lassen; jetzt gibt es nur noch einen. Im `trucker-chat.log` steht dann `Realistic Radio: linked`.
+- Der Chat zeichnet dort, wo das Radio zeichnet: Zeichenfläche, Bereich und Drehung kommen aus den LKW-Presets des Radios, der Navi-Bereich wird nur einmal eingestellt.
+- Zeigt das Radio gerade eine Karte (Senderwechsel, Lautstärke, Start-Logo), erscheint die Chat-Nachricht danach. Ist die Radioanzeige dauerhaft eingeblendet, liegt der Chat darüber.
+- Was man im Chat-Menü (**Strg + 9**) tippt, steuert das Radio nicht.
+- Für Entwickler: Die Schnittstelle (`rr_api_version`, `rr_chat_screen_image` …) ist in `src/PluginApi.cpp` beschrieben.
 
 ## Bedienung
 
@@ -547,6 +557,7 @@ Der Ordner `server/logo/` enthält alle Logos (verkleinert auf 200 px) in genau 
 │   ├── DisplayWindow.*        optionales Display-Fenster
 │   ├── InputManager.*         Tastatur und Controller
 │   ├── InputBlock.*           hält die Maus vom Spiel fern, solange das Menü offen ist
+│   ├── PluginApi.cpp          Zeichen-Schnittstelle für Trucker Chat (rr_…-Exporte)
 │   ├── SettingsMenu.*         Einstellungsmenü (Strg + 0)
 │   ├── MenuInput.*            Tastatur und Maus fürs Menü (vom Spiel ferngehalten)
 │   ├── Config.*, Logger.*     Einstellungen und Log

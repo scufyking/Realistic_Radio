@@ -2,15 +2,29 @@
 
 **English** · [Deutsch](#changelog-deutsch)
 
-## 1.4.2 – No reception in tunnels, truck logos included, second key for the settings menu
+## 1.4.3 – Runs together with Trucker Chat
+
+### New
+- **Drawing interface for other plugins (Trucker Chat).** Realistic Radio can now draw pictures of another plugin in the same game, so that only one plugin hooks Direct3D. Two plugins hooking the same Direct3D functions could crash the game. Trucker Chat 0.1.1 Alpha uses this: `realistic-radio.dll` and `trucker-chat.dll` stay two separate plugins and run side by side; the radio draws its own picture first and then the chat. The interface also tells the other plugin the radio's screen (from the active truck preset) and whether a radio card is showing right now. For developers: `src/PluginApi.cpp` (exports `rr_api_version`, `rr_chat_screen_image` …).
+
+### Changed
+- **Typing in the Trucker Chat menu no longer controls the radio** (arrow keys, numpad etc. while the chat menu window is active).
+- `Truckers-RealisticRadio.dll` (radio and chat in one DLL) is no longer needed and no longer included. If you use it, replace it with `realistic-radio.dll` and `trucker-chat.dll`.
+
+### Upgrade notes
+- Replace `realistic-radio.dll`. With Trucker Chat, also update `trucker-chat.dll` to 0.1.1 Alpha.
+
+## 1.4.2 – No reception in tunnels, truck logos included, radio + Trucker Chat in one DLL, second menu key
 
 ### New
 - **No reception in tunnels.** Drive into a tunnel and **FM** fades into static, **DAB+** stutters for a moment and goes silent; at the exit the programme comes back (USB / CD keeps playing, the signal bars show 0). Only covered stretches of 200 m and more count. The tunnels come from the databases of **ETS2 Tunnel Radio** by Tal (bohbotoly, MIT license, see NOTICE.md), built from the game's map data: ETS2 1.60 with all map DLCs, and ProMods 2.83 + Middle-East – chosen automatically from `game.log.txt`. Own tunnels for map mods: assign the new key **Mark an own tunnel**, press it at the entry and the exit (saved in `tunnels-own.json`). Settings menu → Reception → **No reception in tunnels**. Setting `"tunnelSignal"`, key `tunnelMark`.
 - **Truck logos included.** The start screen now shows real logos right away: the DLL brings logos for **DAF, Iveco, MAN, Mercedes-Benz (8 colours: blue, gold, green, copper, purple, pearl, pink, silver), Scania and Volvo** and puts them into `realistic-radio\truck-logos\` on the first start (in ATS only Volvo). Each logo is written only once – a logo you delete or replace with your own picture stays the way you left it (`truck-logos\delivered-logos.txt`), and own pictures with the same name are never overwritten. For the Mercedes colour: settings menu → Trucks → **Start logo**. Renault and mod trucks still use own pictures or the brand name.
+- **Radio + Trucker Chat in one DLL: `Truckers-RealisticRadio.dll`.** For streamers who also use Trucker Chat (Twitch / YouTube live chat on the navigation screen): the new second DLL contains Realistic Radio and Trucker Chat 0.1.1 Alpha. As two separate plugins both hooked Direct3D and did not run reliably together; in one DLL a single hook draws the radio and then the chat. The chat follows the radio's truck presets (drawing surface, area, flip – set up once), waits while the radio shows a card, and typing in the chat menu no longer controls the radio. Install only this DLL (remove `realistic-radio.dll` and `trucker-chat.dll`); the folders `realistic-radio\` and `trucker-chat\` and their settings stay as they are. Chat menu **Ctrl + 9**, radio menu **Ctrl + 0** / **Ctrl + F1**.
 - **The settings menu also opens with Ctrl + F1.** For some players **Ctrl + 0** did not open the menu because the game's free camera (developer mode) uses the 0 key. The second key can be changed on the Keys page ("This menu (second key)") or in the file (`keys.menu2`); Ctrl + 0 keeps working.
 
 ### Upgrade notes
 - Replace `realistic-radio.dll` only. The new keys are added to the settings file automatically.
+- With Trucker Chat: use `Truckers-RealisticRadio.dll` instead and remove `realistic-radio.dll` and `trucker-chat.dll`.
 
 ## 1.4.1 – Frequency radio and updated truck presets
 
@@ -173,15 +187,29 @@
 <a id="changelog-deutsch"></a>
 # Changelog (Deutsch)
 
-## 1.4.2 – Kein Empfang im Tunnel, Truck-Logos dabei, zweite Taste für das Einstellungsmenü
+## 1.4.3 – Läuft zusammen mit Trucker Chat
+
+### Neu
+- **Zeichen-Schnittstelle für andere Plugins (Trucker Chat).** Realistic Radio kann jetzt die Bilder eines anderen Plugins im selben Spiel mitzeichnen, damit sich nur ein Plugin an Direct3D hängt. Zwei Plugins an denselben Direct3D-Funktionen konnten das Spiel abstürzen lassen. Trucker Chat 0.1.1 Alpha nutzt das: `realistic-radio.dll` und `trucker-chat.dll` bleiben zwei eigenständige Plugins und laufen nebeneinander; das Radio zeichnet erst sein eigenes Bild, dann den Chat. Die Schnittstelle verrät dem anderen Plugin außerdem den Navi-Bereich des Radios (aus dem aktiven LKW-Preset) und ob gerade eine Radio-Karte zu sehen ist. Für Entwickler: `src/PluginApi.cpp` (Exporte `rr_api_version`, `rr_chat_screen_image` …).
+
+### Geändert
+- **Tippen im Trucker-Chat-Menü steuert das Radio nicht mehr** (Pfeiltasten, Nummernblock usw., solange das Chat-Menü aktiv ist).
+- `Truckers-RealisticRadio.dll` (Radio und Chat in einer DLL) wird nicht mehr gebraucht und liegt nicht mehr bei. Wer sie nutzt, ersetzt sie durch `realistic-radio.dll` und `trucker-chat.dll`.
+
+### Hinweise zum Update
+- `realistic-radio.dll` ersetzen. Mit Trucker Chat auch `trucker-chat.dll` auf 0.1.1 Alpha aktualisieren.
+
+## 1.4.2 – Kein Empfang im Tunnel, Truck-Logos dabei, Radio + Trucker Chat in einer DLL, zweite Menü-Taste
 
 ### Neu
 - **Kein Empfang im Tunnel.** Fährt man in einen Tunnel, geht **FM** ins Rauschen über, **DAB+** stottert kurz und ist dann still; an der Ausfahrt kommt das Programm zurück (USB / CD spielt weiter, die Empfangsbalken zeigen 0). Es zählen nur überdachte Strecken ab 200 m. Die Tunnel stammen aus den Datenbanken von **ETS2 Tunnel Radio** von Tal (bohbotoly, MIT-Lizenz, siehe NOTICE.md), erstellt aus den Kartendaten des Spiels: ETS2 1.60 mit allen Karten-DLCs sowie ProMods 2.83 + Middle-East – automatisch gewählt anhand von `game.log.txt`. Eigene Tunnel für Map-Mods: die neue Taste **Eigenen Tunnel markieren** belegen, an der Einfahrt und an der Ausfahrt drücken (gespeichert in `tunnels-own.json`). Einstellungsmenü → Empfang → **Kein Empfang im Tunnel**. Einstellung `"tunnelSignal"`, Taste `tunnelMark`.
 - **Truck-Logos sind dabei.** Der Startbildschirm zeigt jetzt sofort echte Logos: Die DLL bringt Logos für **DAF, Iveco, MAN, Mercedes-Benz (8 Farben: blau, gold, grün, kupfer, lila, perlmutt, rosa, silber), Scania und Volvo** mit und legt sie beim ersten Start in `realistic-radio\truck-logos\` ab (in ATS nur Volvo). Jedes Logo wird nur einmal geschrieben – ein Logo, das du löschst oder durch ein eigenes Bild ersetzt, bleibt so (`truck-logos\delivered-logos.txt`), und eigene Bilder mit gleichem Namen werden nie überschrieben. Die Mercedes-Farbe wählst du im Einstellungsmenü → LKW → **Start-Logo**. Renault und Mod-LKW nutzen weiter eigene Bilder oder den Herstellernamen.
+- **Radio + Trucker Chat in einer DLL: `Truckers-RealisticRadio.dll`.** Für Streamer, die zusätzlich Trucker Chat nutzen (Twitch- / YouTube-Livechat auf dem Navi): Die neue zweite DLL enthält Realistic Radio und Trucker Chat 0.1.1 Alpha. Als zwei getrennte Plugins haben sich beide an Direct3D gehängt und liefen nicht zuverlässig zusammen; in einer DLL zeichnet ein einziger Hook erst das Radio, dann den Chat. Der Chat übernimmt die LKW-Presets des Radios (Zeichenfläche, Bereich, Drehung – nur einmal einstellen), wartet, solange das Radio eine Karte zeigt, und Tippen im Chat-Menü steuert das Radio nicht mehr. Nur diese DLL einsetzen (`realistic-radio.dll` und `trucker-chat.dll` entfernen); die Ordner `realistic-radio\` und `trucker-chat\` und ihre Einstellungen bleiben wie sie sind. Chat-Menü **Strg + 9**, Radio-Menü **Strg + 0** / **Strg + F1**.
 - **Das Einstellungsmenü öffnet sich auch mit Strg + F1.** Bei manchen Spielern hat **Strg + 0** das Menü nicht geöffnet, weil die freie Kamera des Spiels (Entwicklermodus) die Taste 0 belegt. Die zweite Taste lässt sich auf der Seite Tasten („Dieses Menü (zweite Taste)“) oder in der Datei (`keys.menu2`) ändern; Strg + 0 funktioniert weiterhin.
 
 ### Hinweise zum Update
 - Nur `realistic-radio.dll` ersetzen. Die neuen Tasten werden automatisch in die Einstellungsdatei eingetragen.
+- Mit Trucker Chat: stattdessen `Truckers-RealisticRadio.dll` nehmen und `realistic-radio.dll` sowie `trucker-chat.dll` entfernen.
 
 ## 1.4.1 – Frequenz-Radio und neue LKW-Presets
 

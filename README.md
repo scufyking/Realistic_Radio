@@ -14,7 +14,7 @@ By **ScufyKing**. The whole radio runs inside the game:
 
 Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ETS2, and the radio plays. Station data and sounds are built into the DLL.
 
-> **Version 1.4.2** · [Changes](CHANGELOG.md)
+> **Version 1.4.3** · [Changes](CHANGELOG.md)
 >
 > **Status:** Tested in ETS2 1.61 (Windows x64) with several MAN and Scania models and mod trucks: the plugin loads, reads the truck position, switches stations by region, plays audio and shows station and volume on the navigation screen. American Truck Simulator data is included but ATS is untested.
 
@@ -102,6 +102,16 @@ plugins\
 **Coming from "ETS2 Local Radio Native"** (the previous name): copy `realistic-radio.dll` into `plugins` and delete `local-radio-native.dll`. On the first start, your settings, favourites, own stations and cached logos are copied over from the old `local-radio\` folder automatically; afterwards you can delete that folder too.
 
 **Uninstalling:** delete `realistic-radio.dll` and the `realistic-radio` folder.
+
+### Together with Trucker Chat
+
+**Trucker Chat** (stream live chat from Twitch / YouTube on the navigation screen, also by ScufyKing) runs as its own plugin next to Realistic Radio: `realistic-radio.dll` and `trucker-chat.dll` both go into `plugins\`.
+
+- **From 1.4.3 Realistic Radio draws the chat.** Trucker Chat (0.1.1 Alpha or newer) detects the radio at start and then does not hook Direct3D itself; it hands its pictures to the radio. Two hooks on the same functions could crash the game; now there is only one. `trucker-chat.log` then says `Realistic Radio: linked`.
+- The chat draws where the radio draws: drawing surface, area and flip come from the radio's truck presets, so the navigation area is set up once.
+- While the radio shows a card (station change, volume, start logo), a chat message appears afterwards. If the radio display is pinned on the screen, the chat is drawn on top.
+- Typing in the chat menu (**Ctrl + 9**) does not control the radio.
+- For developers: the interface (`rr_api_version`, `rr_chat_screen_image` …) is described in `src/PluginApi.cpp`.
 
 ## Controls
 
@@ -547,6 +557,7 @@ The folder `server/logo/` contains all logos (downscaled to 200 px) in exactly t
 │   ├── DisplayWindow.*        optional display window
 │   ├── InputManager.*         keyboard and controller
 │   ├── InputBlock.*           keeps the mouse from the game while the menu is open
+│   ├── PluginApi.cpp          drawing interface for Trucker Chat (rr_… exports)
 │   ├── SettingsMenu.*         settings menu (Ctrl + 0)
 │   ├── MenuInput.*            keyboard and mouse for the menu (kept from the game)
 │   ├── Config.*, Logger.*     settings and log
