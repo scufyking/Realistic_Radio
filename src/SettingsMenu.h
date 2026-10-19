@@ -67,7 +67,7 @@ private:
     void Activate(int row);                 // Enter / click
     void SetSlider(int row, float frac);
     void BindKey(int row, const KeyBinding& b);
-    void BindButton(int row, int button);
+    void BindButton(int row, int button, const std::string& device);
     void ClearBinding(int row);
     void Defaults();
     void Revert();

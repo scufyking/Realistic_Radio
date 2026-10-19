@@ -6,6 +6,10 @@
 #include "Common.h"
 #include "miniaudio.h"
 #include <memory>
+#include <mutex>
+#include <string>
+#include <utility>
+#include <vector>
 
 constexpr ma_uint32 kRate = 48000;
 constexpr ma_uint32 kChannels = 2;
@@ -28,6 +32,12 @@ public:
     uint64_t PlayedFrames() const { return played_.load(); }           // frames handed to the mixer (48 kHz)
     uint64_t LengthFrames() const { return length_.load(); }           // 0 = unknown
     const std::string& Url() const { return url_; }
+    // Live song title of the station (ICY "StreamTitle"), switched exactly when that part of the audio is played.
+    // false = the stream has sent no title (yet).
+    bool Title(std::string& out);
+    void AddTitle(const std::string& title, uint64_t atFrame);   // worker: title from the stream, valid from frame atFrame
+    static void SetMetadataEnabled(bool on) { metadata_ = on; }   // asks servers for titles (new connections)
+    static bool MetadataEnabled() { return metadata_.load(); }
 
     // used by the worker implementation
     std::atomic<bool> stop_{false};
@@ -47,7 +57,12 @@ private:
     std::atomic<int> failures_{0};
     bool once_ = false;
     std::atomic<bool> decoded_{false}, ended_{false};
-    std::atomic<uint64_t> played_{0}, length_{0};
+    std::atomic<uint64_t> played_{0}, length_{0}, written_{0};
+    static std::atomic<bool> metadata_;
+    std::mutex titleMtx_;
+    std::vector<std::pair<uint64_t, std::string>> titles_;   // pending: frame from which on, title
+    std::string title_;
+    bool haveTitle_ = false;
     HANDLE thread_ = nullptr;
     HANDLE done_ = nullptr;
 };

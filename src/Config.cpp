@@ -216,6 +216,7 @@ bool Config::Load(const std::wstring& path) {
         tuning = j.value("tuning", tuning); if (tuning != "frequency") tuning = "list";
         rdsAf = j.value("rdsAf", rdsAf);
         tunnelSignal = j.value("tunnelSignal", tunnelSignal);
+        songTitle = j.value("songTitle", songTitle);
         tunedFreq = j.value("tunedFreq", tunedFreq);
         memoryHoldSeconds = std::clamp(j.value("memoryHoldSeconds", memoryHoldSeconds), 0.5, 3.0);
         if (j.contains("stationButtons") && j["stationButtons"].is_object())
@@ -272,6 +273,7 @@ bool Config::Load(const std::wstring& path) {
             c.areaW = sc.value("areaW", c.areaW); c.areaH = sc.value("areaH", c.areaH);
             c.flipY = sc.value("flipY", c.flipY); c.flipX = sc.value("flipX", c.flipX); c.grid = sc.value("grid", c.grid);
             c.design = sc.value("design", c.design);
+            c.volumeStyle = sc.value("volumeStyle", c.volumeStyle); if (c.volumeStyle != "bar") c.volumeStyle = "card";
             c.startLogo = sc.value("startLogo", c.startLogo);
             c.startLogoSeconds = std::clamp(sc.value("startLogoSeconds", c.startLogoSeconds), 1.5, 10.0);
             c.startLogoFile = sc.value("startLogoFile", c.startLogoFile);
@@ -320,8 +322,11 @@ bool Config::Load(const std::wstring& path) {
         for (int i = 0; i < (int)Action::Count; ++i) {
             if (j.contains("keys") && j["keys"].contains(kActionNames[i]))
                 keys[i] = ParseKeyBinding(j["keys"][kActionNames[i]].get<std::string>());
-            if (j.contains("buttons") && j["buttons"].contains(kActionNames[i]))
-                buttons[i] = j["buttons"][kActionNames[i]].get<int>();
+            if (j.contains("buttons") && j["buttons"].contains(kActionNames[i])) {
+                const json& v = j["buttons"][kActionNames[i]];
+                if (v.is_number_integer()) buttons[i] = std::clamp(v.get<int>(), -1, 143);   // any controller (older files)
+                else if (v.is_string()) buttons[i] = ButtonFromText(v.get<std::string>());   // "Device name/12"
+            }
         }
         // Earlier versions wrote PageUp / Next / Oemplus / OemMinus as defaults. If the file still has exactly
         // those (i.e. the user never changed them), switch to the new default: arrow keys.
@@ -410,7 +415,8 @@ void Config::SaveBindings(const std::wstring& path) const {
         f.close();
         for (int i = 0; i < (int)Action::Count; ++i) {
             j["keys"][kActionNames[i]] = KeyBindingName(keys[i]);
-            j["buttons"][kActionNames[i]] = buttons[i];
+            std::string named = ButtonToText(buttons[i]);
+            if (named.empty()) j["buttons"][kActionNames[i]] = buttons[i] < 0 ? -1 : buttons[i] % kPadSlot; else j["buttons"][kActionNames[i]] = named;
         }
         std::ofstream o{std::filesystem::path(path)}; o << j.dump(2);
     } catch (...) { Log::Write("Could not save key bindings"); }
@@ -426,7 +432,7 @@ static json MenuJsonObj(const Config& c) {
     j["activePreset"] = c.activePreset; j["presetAuto"] = c.presetAuto; j["truckMemory"] = c.truckMemory;
     j["band"] = c.band; j["dabRange"] = c.dabRange; j["switchMode"] = c.switchMode;
     j["memoryButtons"] = c.memoryButtons; j["memoryHoldSeconds"] = c.memoryHoldSeconds;
-    j["tuning"] = c.tuning; j["rdsAf"] = c.rdsAf; j["tunnelSignal"] = c.tunnelSignal;
+    j["tuning"] = c.tuning; j["rdsAf"] = c.rdsAf; j["tunnelSignal"] = c.tunnelSignal; j["songTitle"] = c.songTitle;
     j["presets"] = json::array();
     for (auto& p : c.presets) {
         json o; o["name"] = p.name; o["trucks"] = p.trucks;
@@ -437,7 +443,7 @@ static json MenuJsonObj(const Config& c) {
     }
     j["screen"]["enabled"] = c.screen.enabled; j["screen"]["durationSeconds"] = c.screen.durationSeconds;
     j["screen"]["areaX"] = R6(c.screen.areaX); j["screen"]["areaY"] = R6(c.screen.areaY); j["screen"]["areaW"] = R6(c.screen.areaW); j["screen"]["areaH"] = R6(c.screen.areaH);
-    j["screen"]["flipX"] = c.screen.flipX; j["screen"]["flipY"] = c.screen.flipY; j["screen"]["design"] = c.screen.design;
+    j["screen"]["flipX"] = c.screen.flipX; j["screen"]["flipY"] = c.screen.flipY; j["screen"]["design"] = c.screen.design; j["screen"]["volumeStyle"] = c.screen.volumeStyle;
     j["screen"]["startLogo"] = c.screen.startLogo; j["screen"]["startLogoSeconds"] = c.screen.startLogoSeconds;
     j["screen"]["startLogoFile"] = c.screen.startLogoFile; j["screen"]["startLogoScale"] = R6(c.screen.startLogoScale);
     j["screen"]["target"] = c.screen.target; j["screen"]["scale"] = R6(c.screen.scale); j["screen"]["logoSize"] = R6(c.screen.logoSize);
@@ -452,7 +458,11 @@ static json MenuJsonObj(const Config& c) {
     m["shuffle"] = c.media.shuffle; m["repeat"] = c.media.repeat;
     m["types"] = json::object();
     for (auto& [k, v] : c.media.types) m["types"][k] = v;
-    for (int i = 0; i < (int)Action::Count; ++i) { j["keys"][kActionNames[i]] = KeyBindingName(c.keys[i]); j["buttons"][kActionNames[i]] = c.buttons[i]; }
+    for (int i = 0; i < (int)Action::Count; ++i) {
+        j["keys"][kActionNames[i]] = KeyBindingName(c.keys[i]);
+        std::string named = c.ButtonToText(c.buttons[i]);
+        if (named.empty()) j["buttons"][kActionNames[i]] = c.buttons[i] < 0 ? -1 : c.buttons[i] % Config::kPadSlot; else j["buttons"][kActionNames[i]] = named;
+    }
     return j;
 }
 std::string Config::MenuJson() const { return MenuJsonObj(*this).dump(); }
@@ -474,11 +484,11 @@ void CopyMenuSettings(Config& d, const Config& s) {
     d.menuLanguage = s.menuLanguage; d.screenPage = s.screenPage;
     d.presets = s.presets; d.activePreset = s.activePreset; d.presetAuto = s.presetAuto; d.truckMemory = s.truckMemory;
     d.band = s.band; d.dabRange = s.dabRange; d.switchMode = s.switchMode; d.memoryButtons = s.memoryButtons; d.memoryHoldSeconds = s.memoryHoldSeconds;
-    d.tuning = s.tuning; d.rdsAf = s.rdsAf; d.tunnelSignal = s.tunnelSignal;
+    d.tuning = s.tuning; d.rdsAf = s.rdsAf; d.tunnelSignal = s.tunnelSignal; d.songTitle = s.songTitle;
     d.screen.width = s.screen.width; d.screen.height = s.screen.height; d.screen.format = s.screen.format;
     d.screen.enabled = s.screen.enabled; d.screen.durationSeconds = s.screen.durationSeconds;
     d.screen.areaX = s.screen.areaX; d.screen.areaY = s.screen.areaY; d.screen.areaW = s.screen.areaW; d.screen.areaH = s.screen.areaH;
-    d.screen.flipX = s.screen.flipX; d.screen.flipY = s.screen.flipY; d.screen.design = s.screen.design;
+    d.screen.flipX = s.screen.flipX; d.screen.flipY = s.screen.flipY; d.screen.design = s.screen.design; d.screen.volumeStyle = s.screen.volumeStyle;
     d.screen.startLogo = s.screen.startLogo; d.screen.startLogoSeconds = s.screen.startLogoSeconds;
     d.screen.startLogoFile = s.screen.startLogoFile; d.screen.startLogoScale = s.screen.startLogoScale;
     d.screen.target = s.screen.target; d.screen.scale = s.screen.scale; d.screen.logoSize = s.screen.logoSize;
@@ -488,6 +498,7 @@ void CopyMenuSettings(Config& d, const Config& s) {
     d.overlay.radio.position = s.overlay.radio.position; d.overlay.radio.scale = s.overlay.radio.scale;
     d.media.enabled = s.media.enabled; d.media.folderPerDisc = s.media.folderPerDisc; d.media.label = s.media.label;
     d.media.shuffle = s.media.shuffle; d.media.repeat = s.media.repeat; d.media.types = s.media.types;
+    d.controllers = s.controllers;
     for (int i = 0; i < (int)Action::Count; ++i) { d.keys[i] = s.keys[i]; d.buttons[i] = s.buttons[i]; }
 }
 
@@ -602,4 +613,55 @@ void Config::SaveVolume(const std::wstring& path) const {
         j["mediaResume"] = r;
         std::ofstream o{std::filesystem::path(path)}; o << j.dump(2);
     } catch (...) {}
+}
+
+// --- controller buttons ---------------------------------------------------------------------------------------------
+namespace {
+const char* kPovDir[] = {"up", "right", "down", "left"};
+}
+int Config::ButtonSlot(const std::string& device) {
+    if (device.empty()) return 0;
+    for (size_t i = 0; i < controllers.size(); ++i) if (controllers[i] == device) return (int)i + 1;
+    controllers.push_back(device);
+    return (int)controllers.size();
+}
+int Config::ButtonFromText(const std::string& v) {
+    size_t p = v.rfind('/');
+    if (p == std::string::npos || p == 0) return -1;
+    std::string dev = v.substr(0, p), b = v.substr(p + 1);
+    int btn = -1;
+    if (b.rfind("POV", 0) == 0) {   // "POV1 up"
+        int n = atoi(b.c_str() + 3);
+        size_t sp = b.find(' ');
+        std::string d = sp == std::string::npos ? "" : b.substr(sp + 1);
+        for (int k = 0; k < 4; ++k) if (d == kPovDir[k] && n >= 1 && n <= 4) btn = 128 + (n - 1) * 4 + k;
+    } else if (!b.empty()) btn = atoi(b.c_str()) - 1;
+    if (btn < 0 || btn >= 144) return -1;
+    return ButtonSlot(dev) * kPadSlot + btn;
+}
+std::string Config::ButtonToText(int b) const {
+    if (b < 0) return "";
+    int slot = b / kPadSlot, btn = b % kPadSlot;
+    if (slot <= 0 || slot > (int)controllers.size()) return "";
+    std::string s = controllers[slot - 1] + "/";
+    if (btn >= 128) s += "POV" + std::to_string((btn - 128) / 4 + 1) + " " + kPovDir[(btn - 128) % 4];
+    else s += std::to_string(btn + 1);
+    return s;
+}
+std::wstring Config::ButtonText(int b, bool en) const {
+    if (b < 0) return L"\u2013";
+    int slot = b / kPadSlot, btn = b % kPadSlot;
+    std::wstring t;
+    if (btn >= 128) {
+        static const wchar_t* arrows[] = {L"\u2191", L"\u2192", L"\u2193", L"\u2190"};
+        t = L"POV" + ((btn - 128) / 4 ? std::to_wstring((btn - 128) / 4 + 1) : std::wstring()) + L" " + arrows[(btn - 128) % 4];
+    } else t = std::to_wstring(btn + 1);
+    if (slot > 0 && slot <= (int)controllers.size()) {   // short device name: first word ("MOZA", "Logitech", "Xbox")
+        std::wstring n = Utf8ToWide(controllers[slot - 1]);
+        size_t sp = n.find(L' ');
+        if (sp != std::wstring::npos && sp >= 2) n = n.substr(0, sp);
+        if (n.size() > 10) n = n.substr(0, 10);
+        return n + L" " + t;
+    }
+    return (btn >= 128 ? L"" : std::wstring(en ? L"Button " : L"Knopf ")) + t;
 }

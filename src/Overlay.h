@@ -71,6 +71,10 @@ private:
     ScreenConfig scfg_;
     bool screenOn_ = false, collecting_ = false;
     OverlayInfo scrInfo_;
+    std::shared_ptr<OverlayImage> scrCard_;   // card without the song title (it scrolls over it)
+    SongLine scrSong_;
+    ULONGLONG songScrollAt_ = 0;              // time the song line started (scrolls after a short pause)
+    int songOff_ = -1;
     OverlayInfo pageInfo_;              // latest station/track info: content of the radio page
     bool pinned_ = false;
     ULONGLONG splashAt_ = 0, splashUntil_ = 0;

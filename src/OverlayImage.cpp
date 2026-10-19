@@ -536,7 +536,7 @@ const CardTheme& ThemeFor(const std::string& d) {
 } // namespace
 
 static std::shared_ptr<OverlayImage> RenderScreenCardImpl(const OverlayInfo& info, const OverlayImage* logo, int W, int H, const std::string& design,
-                                                          float uLayout, float logoSize) {
+                                                          float uLayout, float logoSize, SongLine* songOut) {
     const CardTheme& th = ThemeFor(design);
     FontScope fontScope(th.font);
     auto img = std::make_shared<OverlayImage>();
@@ -717,13 +717,29 @@ static std::shared_ptr<OverlayImage> RenderScreenCardImpl(const OverlayInfo& inf
         SelectObject(mdc, o);
         titleH = std::min((int)r.bottom, U(80)) + U(4);
     }
-    int subH = info.subtitle.empty() ? 0 : U(34), detH = info.detail.empty() ? 0 : U(28);
-    int blockH = titleH + subH + detH;
+    const bool song = !info.media && !info.song.empty();
+    int subH = info.subtitle.empty() ? 0 : U(34), detH = info.detail.empty() ? 0 : U(28), songH = song ? U(32) : 0;
+    int blockH = titleH + subH + songH + detH;
     int y = tileY + (T - blockH) / 2;
     if (twoLines) DrawText2(mask, px, ft, info.title, RECT{tx0, y, tx1, y + titleH}, TR, TG, TB);
     else DrawText(mask, px, ft, info.title, RECT{tx0, y, tx1, y + titleH}, TR, TG, TB);
     y += titleH;
     DrawText(mask, px, fSub, info.subtitle, RECT{tx0, y, tx1, y + subH}, th.sub[0], th.sub[1], th.sub[2]); y += subH;
+    if (song) {   // live song title in the accent colour
+        HFONT fSong = MakeFont(U(23), FW_SEMIBOLD);
+        std::wstring text = L"\u266A  " + info.song;
+        if (songOut) {   // as a strip: the caller lets it scroll
+            int sw = Measure(mdc, fSong, text).cx + U(4);
+            auto strip = std::make_shared<OverlayImage>();
+            strip->width = std::max(1, sw); strip->height = songH; strip->renderedForScreenHeight = H;
+            strip->pixels.assign((size_t)strip->width * songH, 0u);
+            Gdi sm(strip->width, songH);
+            DrawText(sm, strip->pixels, fSong, text, RECT{0, 0, strip->width, songH}, AR, AG, AB);
+            songOut->x = tx0; songOut->y = y; songOut->w = tw; songOut->h = songH; songOut->strip = strip;
+        } else DrawText(mask, px, fSong, text, RECT{tx0, y, tx1, y + songH}, AR, AG, AB);
+        DeleteObject(fSong);
+        y += songH;
+    }
     DrawText(mask, px, fDet, info.detail, RECT{tx0, y, tx1, y + detH}, MR, MG, MB);
     DeleteObject(fTitle); DeleteObject(fTitle2); DeleteObject(fSub); DeleteObject(fDet);
 
@@ -748,13 +764,14 @@ static std::shared_ptr<OverlayImage> RenderScreenCardImpl(const OverlayInfo& inf
 // Size setting: the layout is 360 units high; "scale" makes the units larger or smaller, but never taller than the area.
 // If the content is lower than the area it is centred vertically and the background is extended.
 std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const OverlayImage* logo, int W, int H, const std::string& design, float scale,
-                                               float logoSize) {
+                                               float logoSize, SongLine* song) {
     float base = std::min(W / 16.f, H / 9.f) / 40.f;
     float u = std::min(base * std::clamp(scale, 0.4f, 2.f), H / 360.f);
     logoSize = std::clamp(logoSize, 0.4f, 1.5f);
     int h2 = (int)std::ceil(360.f * u);
-    if (h2 >= H - 2) return RenderScreenCardImpl(info, logo, W, H, design, u, logoSize);
-    auto inner = RenderScreenCardImpl(info, logo, W, h2, design, u, logoSize);
+    if (song) *song = SongLine{};
+    if (h2 >= H - 2) return RenderScreenCardImpl(info, logo, W, H, design, u, logoSize, song);
+    auto inner = RenderScreenCardImpl(info, logo, W, h2, design, u, logoSize, song);
     auto img = std::make_shared<OverlayImage>();
     img->width = W; img->height = H; img->renderedForScreenHeight = H;
     img->pixels.resize((size_t)W * H);
@@ -762,6 +779,80 @@ std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const Ov
     for (int y = 0; y < H; ++y) {
         int sy = std::clamp(y - off, 0, h2 - 1);   // above / below: the first / last row of the background
         std::copy(inner->pixels.begin() + (size_t)sy * W, inner->pixels.begin() + (size_t)(sy + 1) * W, img->pixels.begin() + (size_t)y * W);
+    }
+    if (song && song->strip) song->y += off;
+    return img;
+}
+
+std::shared_ptr<OverlayImage> RenderScreenVolumeBar(const OverlayInfo& info, int W, int H, const std::string& design, float scale,
+                                                    const OverlayImage* under) {
+    const CardTheme& th = ThemeFor(design);
+    FontScope fontScope(th.font);
+    std::shared_ptr<OverlayImage> img;
+    if (under && under->width == W && under->height == H) img = std::make_shared<OverlayImage>(*under);
+    else {
+        img = std::make_shared<OverlayImage>();
+        img->width = W; img->height = H; img->renderedForScreenHeight = H;
+        img->pixels.assign((size_t)W * H, 0u);
+    }
+    const float u = std::min(W / 16.f, H / 9.f) / 40.f * std::clamp(scale, 0.4f, 2.f);
+    auto U = [&](float v) { return std::max(1, (int)std::lround(v * u)); };
+    const int sh = std::min(H, U(86));
+    Canvas cv{img->pixels, W, H};
+    // the bar: background of the design, slightly transparent, rounded lower corners (the top edge is the screen's)
+    for (int y = 0; y < sh; ++y) {
+        float t = (float)y / std::max(1, sh - 1);
+        float r = th.bgTop[0] + (th.bgBottom[0] - th.bgTop[0]) * t * 0.5f, g = th.bgTop[1] + (th.bgBottom[1] - th.bgTop[1]) * t * 0.5f,
+              b = th.bgTop[2] + (th.bgBottom[2] - th.bgTop[2]) * t * 0.5f;
+        const float rad = (float)U(14);
+        for (int x = 0; x < W; ++x) {
+            float cov = 1.f;
+            float dy = y + 0.5f - (sh - rad);
+            if (dy > 0) {   // lower corners
+                float dx = x + 0.5f < rad ? rad - (x + 0.5f) : x + 0.5f > W - rad ? x + 0.5f - (W - rad) : 0.f;
+                if (dx > 0) cov = std::clamp(rad - std::hypot(dx, dy) + 0.5f, 0.f, 1.f);
+            }
+            cv.Blend(x, y, cov, r, g, b, 0.94f);
+        }
+    }
+    const bool muted = info.muted;
+    const int v = std::clamp(info.volume, 0, 100);
+    const float TR = th.text[0], TG = th.text[1], TB = th.text[2], MR = th.muted[0], MG = th.muted[1], MB = th.muted[2];
+    Gdi mask(W, sh);
+    HFONT fNum = MakeFont(U(40), FW_SEMIBOLD);
+    std::wstring text = muted ? (info.volumeLabel.empty() ? L"Mute" : info.volumeLabel) : std::to_wstring(v) + L"%";
+    DrawText(mask, img->pixels, fNum, text, RECT{0, U(6), W, sh - U(24)}, muted ? MR : TR, muted ? MG : TG, muted ? MB : TB, DT_CENTER);
+    DeleteObject(fNum);
+    // level line: thin track over the whole width, the filled part in the text colour (grey while muted)
+    const int lx0 = U(26), lx1 = W - U(26), lh = std::max(2, U(4)), ly = sh - U(15) - lh / 2;
+    cv.Round(lx0, ly, lx1 - lx0, lh, lh / 2.f, th.inactive[0], th.inactive[1], th.inactive[2]);
+    int fw = (int)std::lround((lx1 - lx0) * v / 100.f);
+    if (fw >= lh) cv.Round(lx0, ly, fw, lh, lh / 2.f, muted ? MR : TR, muted ? MG : TG, muted ? MB : TB);
+    return img;
+}
+
+std::shared_ptr<OverlayImage> ComposeSongLine(const OverlayImage& card, const SongLine& s, int offset) {
+    auto img = std::make_shared<OverlayImage>(card);
+    if (!s.strip || s.w <= 0 || s.h <= 0) return img;
+    const OverlayImage& st = *s.strip;
+    const bool scroll = st.width > s.w;
+    const int period = st.width + s.h * 3;            // the title, then a gap, then the title again
+    const int fade = scroll ? std::max(1, s.h / 2) : 0;   // soft edges while it scrolls
+    for (int y = 0; y < s.h && y < st.height; ++y) {
+        int dy = s.y + y;
+        if (dy < 0 || dy >= img->height) continue;
+        for (int x = 0; x < s.w; ++x) {
+            int dx = s.x + x;
+            if (dx < 0 || dx >= img->width) continue;
+            int sx = scroll ? ((x + offset) % period + period) % period : x;
+            if (sx >= st.width) continue;
+            uint32_t p = st.pixels[(size_t)y * st.width + sx];
+            float a = ((p >> 24) & 255) / 255.f;
+            if (a <= 0.f) continue;
+            float k = 1.f;
+            if (fade) k = std::min({1.f, (x + 0.5f) / fade, (s.w - x - 0.5f) / fade});
+            Over(img->pixels[(size_t)dy * img->width + dx], a * k, ((p >> 16) & 255) / 255.f * k, ((p >> 8) & 255) / 255.f * k, (p & 255) / 255.f * k);
+        }
     }
     return img;
 }

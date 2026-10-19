@@ -49,6 +49,8 @@ private:
     void UpdateDisplay();
     bool lastBuffering_ = false;
     bool lastFailed_ = false;
+    std::wstring song_;                // live song title of the station (shown on the screen card)
+    ULONGLONG songAt_ = 0;
     bool powered_ = true;
     void SetPower(bool on);
     int lastBars_ = -1;
@@ -57,6 +59,7 @@ private:
     int currentIndex_ = -1;
     bool playing_ = false, initialReceived_ = false;
     ULONGLONG lastRefresh_ = 0, switchUntil_ = 0, swapAt_ = 0, flutterAt_ = 0;
+    ULONGLONG menuOpenAt_ = 0; long long menuFrames_ = 0;   // the menu must really be drawn, else it closes again
     std::string pendingUrl_;
     bool noiseAllowed_ = true;
     struct Entry { std::string country; size_t index; double whitenoise; };

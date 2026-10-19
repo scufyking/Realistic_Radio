@@ -11,16 +11,19 @@
 #include <mferror.h>
 #include <algorithm>
 #include <cstring>
+#include <thread>
 #include "NetReader.h"
 
 namespace {
 struct Http {
     HINTERNET session = nullptr, connect = nullptr, request = nullptr;
     std::string contentType;
+    int metaint = 0, kbps = 0;      // ICY: audio bytes between two metadata blocks, bit rate (icy-br)
     StreamSession* owner = nullptr;
+    bool abortable = true;          // Stop() may close this request (not the title poller's own request)
     ~Http() { Close(); }
     void Close() {
-        if (owner) owner->req_.store(nullptr);
+        if (owner && abortable) owner->req_.store(nullptr);
         if (request) WinHttpCloseHandle(request);
         if (connect) WinHttpCloseHandle(connect);
         if (session) WinHttpCloseHandle(session);
@@ -59,9 +62,12 @@ bool HttpOpen(Http& h, const std::string& url) {
     h.request = WinHttpOpenRequest(h.connect, L"GET", obj.c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
                                    uc.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0);
     if (!h.request) return false;
-    h.owner->req_.store(h.request);
-    // No "Icy-MetaData: 1" header -> servers send pure audio without interleaved metadata.
-    if (!WinHttpSendRequest(h.request, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
+    if (h.abortable) h.owner->req_.store(h.request);
+    // "Icy-MetaData: 1": the server puts the song title into the stream every icy-metaint bytes (only when the live song
+    // title is switched on; without it servers send pure audio)
+    const bool icy = StreamSession::MetadataEnabled();
+    if (!WinHttpSendRequest(h.request, icy ? L"Icy-MetaData: 1\r\n" : WINHTTP_NO_ADDITIONAL_HEADERS, icy ? (DWORD)-1L : 0,
+                            WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
         !WinHttpReceiveResponse(h.request, nullptr)) {
         Log::Write("HTTP request failed for %s (error %lu)", url.c_str(), GetLastError());
         return false;
@@ -73,7 +79,70 @@ bool HttpOpen(Http& h, const std::string& url) {
     if (WinHttpQueryHeaders(h.request, WINHTTP_QUERY_CONTENT_TYPE, WINHTTP_HEADER_NAME_BY_INDEX, ct, &sz, WINHTTP_NO_HEADER_INDEX))
         h.contentType = WideToUtf8(ct);
     std::transform(h.contentType.begin(), h.contentType.end(), h.contentType.begin(), ::tolower);
+    if (icy) {
+        auto header = [&](const wchar_t* name) {
+            wchar_t v[64] = {0}; DWORD n = sizeof(v);
+            return WinHttpQueryHeaders(h.request, WINHTTP_QUERY_CUSTOM, name, v, &n, WINHTTP_NO_HEADER_INDEX) ? _wtoi(v) : 0;
+        };
+        h.metaint = std::clamp(header(L"icy-metaint"), 0, 1 << 20);
+        h.kbps = std::clamp(header(L"icy-br"), 0, 1024);
+    }
     return true;
+}
+
+// --- ICY song title -----------------------------------------------------------------------------------------------
+bool ReadFull(Http& h, void* buf, size_t n) {
+    size_t got = 0;
+    while (got < n) { DWORD k = h.Read((char*)buf + got, (DWORD)(n - got)); if (!k) return false; got += k; }
+    return true;
+}
+bool ValidUtf8(const std::string& s) {
+    for (size_t i = 0; i < s.size();) {
+        unsigned char c = (unsigned char)s[i];
+        int n = c < 0x80 ? 0 : (c >> 5) == 6 ? 1 : (c >> 4) == 14 ? 2 : (c >> 3) == 30 ? 3 : -1;
+        if (n < 0 || i + n >= s.size() + (n == 0 ? 1 : 0)) return false;
+        for (int k = 1; k <= n; ++k) if (((unsigned char)s[i + k] >> 6) != 2) return false;
+        i += n + 1;
+    }
+    return true;
+}
+// StreamTitle='Artist - Title'; -> "Artist - Title" (UTF-8; older servers send Windows-1252). found = the field exists.
+std::string IcyTitle(const std::string& meta, bool& found) {
+    found = false;
+    size_t p = meta.find("StreamTitle='");
+    if (p == std::string::npos) return "";
+    found = true;
+    p += 13;
+    size_t e = meta.find("';", p);
+    if (e == std::string::npos) e = meta.find('\'', p);
+    std::string t = meta.substr(p, e == std::string::npos ? std::string::npos : e - p);
+    while (!t.empty() && (t.back() == '\0' || t.back() == ' ')) t.pop_back();
+    while (!t.empty() && t.front() == ' ') t.erase(0, 1);
+    if (t == "-" || t == " - ") t.clear();
+    if (!ValidUtf8(t)) {
+        int n = MultiByteToWideChar(1252, 0, t.c_str(), (int)t.size(), nullptr, 0);
+        std::wstring w(n, L'\0'); MultiByteToWideChar(1252, 0, t.c_str(), (int)t.size(), &w[0], n);
+        t = WideToUtf8(w);
+    }
+    return t;
+}
+// Opens the stream once, reads up to the first metadata block and closes again (streams Media Foundation plays)
+bool FetchIcyTitle(StreamSession* owner, const std::string& url, std::string& title) {
+    Http h; h.owner = owner; h.abortable = false;
+    if (!HttpOpen(h, url) || h.metaint <= 0) return false;
+    std::vector<char> skip(std::min(h.metaint, 1 << 16));
+    for (int left = h.metaint; left > 0;) {
+        int k = std::min(left, (int)skip.size());
+        if (!ReadFull(h, skip.data(), (size_t)k)) return false;
+        left -= k;
+    }
+    unsigned char len = 0;
+    if (!ReadFull(h, &len, 1)) return false;
+    std::string meta(len * 16, '\0');
+    if (len && !ReadFull(h, &meta[0], meta.size())) return false;
+    bool found = false;
+    title = IcyTitle(meta, found);
+    return found;
 }
 
 bool EndsWithI(std::string s, const std::string& suffix) {
@@ -138,6 +207,7 @@ bool StreamSession::Write(const float* frames, ma_uint32 count) {
         if (n == 0) { Sleep(20); continue; }
         memcpy(buf, frames, n * kChannels * sizeof(float));
         ma_pcm_rb_commit_write(&rb_, n);
+        written_ += n;
         frames += n * kChannels; count -= n;
         if (!ready_ && ma_pcm_rb_available_read(&rb_) >= kRate) { ready_ = true; failures_ = 0; }   // 1 s pre-buffer
     }
@@ -211,7 +281,42 @@ bool StreamSession::PlayMp3(void* httpPtr) {
     ma_decoder_config cfg = ma_decoder_config_init(ma_format_f32, kChannels, kRate);
     cfg.encodingFormat = ma_encoding_format_mp3;
     ma_decoder dec;
-    NetReader reader([h](void* buf, size_t n) -> size_t { return h->Read(buf, (DWORD)std::min<size_t>(n, 1 << 20)); });
+    // ICY: every `metaint` audio bytes comes a metadata block (length byte * 16) with the song title. It is taken out of
+    // the audio and timed by its byte position, so the title changes exactly when the song does (not when it arrives).
+    const uint64_t base = written_.load();   // frames before this connection
+    uint64_t audioBytes = 0;
+    int untilMeta = h->metaint;
+    bool firstTitle = true;
+    if (h->metaint > 0) Log::Write("Song title: in the stream every %d bytes%s", h->metaint, h->kbps ? "" : " (bit rate measured)");
+    NetReader reader([&, h](void* buf, size_t n) -> size_t {
+        for (;;) {
+            if (h->metaint > 0 && untilMeta == 0) {
+                unsigned char len = 0;
+                if (!ReadFull(*h, &len, 1)) return 0;
+                std::string meta(len * 16, '\0');
+                if (len && !ReadFull(*h, &meta[0], meta.size())) return 0;
+                untilMeta = h->metaint;
+                bool found = false;
+                std::string t = IcyTitle(meta, found);
+                if (found) {
+                    // frames per audio byte: from the bit rate, else measured (decoded frames / bytes so far)
+                    double fpb = h->kbps > 0 ? kRate / (h->kbps * 125.0)
+                               : (audioBytes > 200000 ? (double)(written_.load() - base) / (double)audioBytes : 0.0);
+                    uint64_t at = firstTitle ? base : fpb > 0 ? base + (uint64_t)(audioBytes * fpb) : written_.load();
+                    firstTitle = false;
+                    AddTitle(t, at);
+                }
+                continue;
+            }
+            size_t want = std::min<size_t>(n, 1 << 20);
+            if (h->metaint > 0) want = std::min<size_t>(want, (size_t)untilMeta);
+            DWORD got = h->Read(buf, (DWORD)want);
+            if (!got) return 0;
+            if (h->metaint > 0) untilMeta -= (int)got;
+            audioBytes += got;
+            return got;
+        }
+    });
     ma_result r0 = ma_decoder_init(McbRead, McbSeek, &reader, &cfg, &dec);
     if (r0 != MA_SUCCESS) { Log::Write("MP3 decoder init failed (%s)", ma_result_description(r0)); return false; }
     Log::Write("MP3 decoder ready");
@@ -248,6 +353,20 @@ bool StreamSession::PlayLocalFile(const std::string& path) {
 bool StreamSession::PlayMediaFoundation(const std::string& url) {
     if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) return false;
     bool any = false;
+    // AAC and other streams Media Foundation opens itself: ask the server for the title every 20 s on a short second
+    // connection (the title then follows the audio that was decoded at that moment)
+    std::atomic<bool> pollStop{false};
+    std::thread poller;
+    std::string lower = url; std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+    if (MetadataEnabled() && !once_ && (lower.rfind("http://", 0) == 0 || lower.rfind("https://", 0) == 0) && lower.find(".m3u8") == std::string::npos)
+        poller = std::thread([this, url, &pollStop] {
+            int fails = 0;
+            while (!stop_ && !pollStop && MetadataEnabled() && fails < 3) {
+                std::string t;
+                if (FetchIcyTitle(this, url, t)) { fails = 0; AddTitle(t, written_.load()); } else ++fails;
+                for (int i = 0; i < 200 && !stop_ && !pollStop; ++i) Sleep(100);
+            }
+        });
     IMFSourceReader* reader = nullptr; IMFMediaType* type = nullptr; IMFMediaType* actual = nullptr;
     ma_data_converter conv; bool convInit = false;
     do {
@@ -296,10 +415,32 @@ bool StreamSession::PlayMediaFoundation(const std::string& url) {
             sample->Release();
         }
     } while (false);
+    pollStop = true;
+    if (poller.joinable()) poller.join();
     if (convInit) ma_data_converter_uninit(&conv, nullptr);
     if (actual) actual->Release();
     if (type) type->Release();
     if (reader) reader->Release();
     MFShutdown();
     return any;
+}
+
+// --- live song title --------------------------------------------------------------------------------------------
+std::atomic<bool> StreamSession::metadata_{true};
+void StreamSession::AddTitle(const std::string& title, uint64_t atFrame) {
+    std::lock_guard<std::mutex> l(titleMtx_);
+    const std::string& last = titles_.empty() ? title_ : titles_.back().second;
+    if (title == last && (!titles_.empty() || haveTitle_)) return;
+    titles_.push_back({atFrame, title});
+    if (titles_.size() > 16) titles_.erase(titles_.begin());
+}
+bool StreamSession::Title(std::string& out) {
+    std::lock_guard<std::mutex> l(titleMtx_);
+    uint64_t played = played_.load();
+    while (!titles_.empty() && titles_.front().first <= played) {
+        title_ = titles_.front().second; haveTitle_ = true;
+        titles_.erase(titles_.begin());
+    }
+    out = title_;
+    return haveTitle_;
 }

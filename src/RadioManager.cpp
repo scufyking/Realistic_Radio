@@ -5,6 +5,7 @@
 // Station selection, reception and favourite logic derived from MPL-2.0 licensed code (see NOTICE.md).
 #include "RadioManager.h"
 #include "EmbeddedData.h"
+#include "D3D11Overlay.h"
 #include "Logger.h"
 #include "json.hpp"
 #include <fstream>
@@ -28,6 +29,7 @@ bool RadioManager::Init(const std::wstring& dir, const std::string& game) {
     fav_.Load(dir + L"favourites-" + Utf8ToWide(game) + L".json");
     memPath_ = dir + L"trucks-" + Utf8ToWide(game) + L".json";
     LoadMemory();
+    StreamSession::SetMetadataEnabled(cfg_.songTitle);   // ask the stations for the song title
     if (!audio_.Init(dir, cfg_.reconnectMaxSeconds)) return false;
     audio_.SetMaster((float)cfg_.volume); audio_.SetMuted(cfg_.muted);
     playing_ = cfg_.autoPlay;
@@ -261,6 +263,17 @@ OverlayInfo RadioManager::MediaInfo(const std::wstring& sub) {
     return i;
 }
 bool RadioManager::MenuTick(InputManager& input) {
+    if (menuOpenAt_ && GetTickCount64() - menuOpenAt_ > 2500) {   // no frame drawn since the menu opened: it cannot be seen
+        bool drawn = D3D11Overlay::D3D11Frames() > menuFrames_;
+        menuOpenAt_ = 0;
+        if (!drawn) {
+            Log::Write("Settings menu: no picture reached the overlay since it opened (%lld D3D11 / %lld other frames) - closed again so the "
+                       "game can be used. Another graphics tool may be presenting the picture differently; please send this log.",
+                       D3D11Overlay::D3D11Frames(), D3D11Overlay::OtherFrames());
+            menu_.Close(); overlay_.HideMenu();
+            return true;
+        }
+    }
     SettingsMenu::Result res = menu_.Tick(input);
     if (menu_.TakeChanged()) ApplySettings(menu_.Edited());   // changes apply immediately
     switch (menu_.TakeCommand()) {
@@ -439,7 +452,16 @@ bool RadioManager::FavHas(const std::string& country) const { return !FavGet(cou
 void RadioManager::ApplySettings(const Config& e) {
     bool memWasOn = cfg_.truckMemory;
     std::string oldBand = cfg_.band, oldTuning = cfg_.tuning;
+    bool oldSong = cfg_.songTitle;
     CopyMenuSettings(cfg_, e);
+    if (cfg_.songTitle != oldSong) {
+        StreamSession::SetMetadataEnabled(cfg_.songTitle);
+        Log::Write("Live song title: %s", cfg_.songTitle ? "on" : "off");
+        if (!cfg_.songTitle) song_.clear();
+        // the station sends titles only on a new connection: connect again (without the tuning sound)
+        if (cfg_.songTitle && source_ == Source::Radio && playing_ && !pendingUrl_.empty() && !swapAt_) audio_.PlayUrl(ResolveUrl(pendingUrl_));
+        overlay_.Update(CurrentInfo());
+    }
     if (cfg_.tuning != oldTuning) { lastRefresh_ = 0; flipUntil_ = 0; Log::Write("Tuning: %s", cfg_.tuning.c_str()); }
     if (cfg_.band != oldBand) {   // band changed in the menu: tune again like the band key (stays in USB mode)
         Log::Write("Band: %s", Dab() ? "DAB+" : "FM");
@@ -497,6 +519,7 @@ OverlayInfo RadioManager::CurrentInfo(const std::wstring& sub) {
     if (int b = CurrentButton()) i.detail += (i.detail.empty() ? L"" : L"  \u2022  ") + std::wstring(cfg_.menuLanguage == "en" ? L"Button " : L"Taste ") + std::to_wstring(b);
     i.lcd = i.title;
     if (FreqMode() && s.freq > 0) i.lcd = i.title + L" " + FreqText(s.freq);
+    if (playing_ && cfg_.songTitle && !song_.empty()) { i.song = song_; i.lcd = i.title + L"  \u266A " + song_; }
     if (!playing_) i.lcd = Utf8ToWide(cfg_.overlay.textStopped);
     if (!sub.empty()) { i.subtitle = sub; i.lcd = sub; }
     else {
@@ -592,8 +615,19 @@ void RadioManager::Tick(double x, double z, bool valid, bool electric, bool engi
         }
         auto it = last_.available.find(currentCountry_);
         int bars = it == last_.available.end() ? 0 : ReceptionBars(it->second.whitenoise);
-        if (buf != lastBuffering_ || bars != lastBars_) { lastBuffering_ = buf; lastBars_ = bars; overlay_.Update(CurrentInfo()); }
-    }
+        bool changed = buf != lastBuffering_ || bars != lastBars_;
+        if (now >= songAt_) {   // live song title: switches when that part of the audio is played
+            songAt_ = now + 200;
+            std::string t;
+            std::wstring song = cfg_.songTitle && audio_.SongTitle(t) ? Utf8ToWide(t) : std::wstring();
+            if (song != song_) {
+                song_ = song;
+                if (!song_.empty()) Log::Write("Song: %s", t.c_str());
+                changed = true;
+            }
+        }
+        if (changed) { lastBuffering_ = buf; lastBars_ = bars; overlay_.Update(CurrentInfo()); }
+    } else if (!song_.empty()) { song_.clear(); }
     overlay_.Tick();
     UpdateDisplay();
 }
@@ -1048,6 +1082,7 @@ void RadioManager::SetRadioStation(const std::string& country, size_t index, dou
     audio_.SetSwitchGain(cfg_.transitionWhitenoise && !s.url.empty() && !quiet ? 1.f : 0.f, 2.5f);
     audio_.SetStreamGain(0, quiet ? 0.4f : 2.0f);
     pendingUrl_ = s.url;
+    song_.clear();   // the title of the old station
     swapAt_ = GetTickCount64() + (quiet ? 500 : 2000);
     switchHoldMs_ = quiet ? 300 : 2200;
     SetWhitenoise(whitenoise);
@@ -1091,6 +1126,7 @@ void RadioManager::OnAction(Action a, bool hold) {
     if (a == Action::Menu) {
         overlay_.PrepareMenu();
         menu_.Open(cfg_);
+        menuOpenAt_ = GetTickCount64(); menuFrames_ = D3D11Overlay::D3D11Frames();
         menu_.SetTruck(truckId_, truckName_);
         menu_.SetLogos(overlay_.StartLogoFiles(truckId_, brandId_));
         if (cfg_.media.enabled) {   // music folders for the media type rows (read again: files may have been added)

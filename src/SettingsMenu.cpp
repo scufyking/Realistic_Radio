@@ -92,6 +92,8 @@ const std::vector<Page>& Pages() {
                    {"list", "frequency"}, {{"Senderliste", "Station list"}, {"Frequenz (wie fr\u00fcher)", "Frequency (old style)"}}),
             Toggle("RDS-AF: Programm folgen", "RDS AF: follow the programme", "Aus = wie fr\u00fcher: die Frequenz bleibt, auch wenn der Sender weg ist",
                    "Off = old style: the frequency stays even when the station is gone", [](Config& c) -> bool& { return c.rdsAf; }),
+            Toggle("Songtitel live", "Live song title", "Interpret und Titel aus dem Stream, l\u00e4uft auf dem Navi mit",
+                   "Artist and title from the stream, scrolls on the navigation screen", [](Config& c) -> bool& { return c.songTitle; }),
             Heading("Stationstasten", "Station buttons"),
             Toggle("Stationstasten 1\u20139", "Station buttons 1\u20139", "Nummernblock: kurz dr\u00fccken = w\u00e4hlen, gedr\u00fcckt halten = speichern",
                    "Numpad: tap = select, hold = save", [](Config& c) -> bool& { return c.memoryButtons; }),
@@ -132,6 +134,9 @@ const std::vector<Page>& Pages() {
             Choice("Design", "Design", "Aussehen der Anzeige im LKW", "Look of the display in the truck", [](Config& c) -> std::string& { return c.screen.design; },
                    {"modern", "ocean", "sport", "light", "retro"},
                    {{"Modern", "Modern"}, {"Ozean", "Ocean"}, {"Sport", "Sport"}, {"Hell", "Light"}, {"Retro (LCD)", "Retro (LCD)"}}),
+            Choice("Lautst\u00e4rke-Anzeige", "Volume display", "Leiste: oben im Navi wie bei modernen Systemen, die Navigation bleibt sichtbar",
+                   "Bar: at the top of the screen like modern systems, the navigation stays visible", [](Config& c) -> std::string& { return c.screen.volumeStyle; },
+                   {"card", "bar"}, {{"Gro\u00dfe Karte", "Large card"}, {"Leiste oben (modern)", "Bar at the top (modern)"}}),
             Toggle("Start-Logo beim Einschalten", "Start logo at ignition on", "Hersteller des LKWs auf Schwarz (Bild w\u00e4hlen: Seite LKW)",
                    "The truck's manufacturer on black (choose the picture: page Trucks)", [](Config& c) -> bool& { return c.screen.startLogo; }),
             Slider("Dauer Start-Logo", "Start logo time", "", "", [](Config& c) -> double& { return c.screen.startLogoSeconds; }, 1.5, 10, 0.5, secs),
@@ -650,9 +655,10 @@ void SettingsMenu::BindKey(int row, const KeyBinding& b) {
     Edited_();
 }
 
-void SettingsMenu::BindButton(int row, int button) {
+void SettingsMenu::BindButton(int row, int btn, const std::string& device) {
     Action a = RowAction(row);
     capture_ = 0; dirty_ = true;
+    const int button = edit_.ButtonSlot(device) * Config::kPadSlot + btn;   // the controller it came from (wheel, button box, ...)
     std::wstring moved;
     for (int i = 0; i < (int)Action::Count; ++i)
         if (i != (int)a && edit_.buttons[i] == button) { edit_.buttons[i] = -1; moved = Utf8ToWide(edit_.menuLanguage == "en" ? LabelEn((Action)i) : LabelDe((Action)i)); }
@@ -778,7 +784,7 @@ SettingsMenu::Result SettingsMenu::Tick(InputManager& input) {
         default: break;
         }
     }
-    if (capture_) { int b = input.PollNewButton(); if (b >= 0) BindButton(sel_, b); }
+    if (capture_) { auto b = input.PollNewButton(); if (b.button >= 0) BindButton(sel_, b.button, b.device); }
     if (moving_) {
         float cx, cy, ix, iy, iw, ih;
         D3D11Overlay::CursorPos(cx, cy);
@@ -811,8 +817,7 @@ MenuView SettingsMenu::View() const {
             MenuItem it; it.kind = MenuItemKind::Key;
             it.label = Utf8ToWide(en ? LabelEn(a) : LabelDe(a));
             it.key = KeyText(edit_.keys[(int)a]);
-            int b = edit_.buttons[(int)a];
-            it.button = b >= 0 ? T("Knopf ", "Button ") + std::to_wstring(b + 1) : L"–";
+            it.button = edit_.ButtonText(edit_.buttons[(int)a], en);
             v.items.push_back(it);
         }
     } else {
@@ -836,8 +841,7 @@ MenuView SettingsMenu::View() const {
             }
             if (d.kind == MenuItemKind::Key) {
                 it.key = KeyText(edit_.keys[(int)d.action]);
-                int b = edit_.buttons[(int)d.action];
-                it.button = b >= 0 ? T("Knopf ", "Button ") + std::to_wstring(b + 1) : L"\u2013";
+                it.button = edit_.ButtonText(edit_.buttons[(int)d.action], en);
                 v.items.push_back(it);
                 continue;
             }

@@ -37,8 +37,9 @@ void Overlay::Reconfigure(const OverlayConfig& cfg, const ScreenConfig& screen) 
     scfg_.durationSeconds = screen.durationSeconds;
     bool areaChanged = scfg_.areaX != screen.areaX || scfg_.areaY != screen.areaY || scfg_.areaW != screen.areaW || scfg_.areaH != screen.areaH ||
                        scfg_.flipX != screen.flipX || scfg_.flipY != screen.flipY;
-    bool designChanged = scfg_.design != screen.design || scfg_.scale != screen.scale || scfg_.logoSize != screen.logoSize, testChanged = scfg_.grid != screen.grid;
+    bool designChanged = scfg_.design != screen.design || scfg_.volumeStyle != screen.volumeStyle || scfg_.scale != screen.scale || scfg_.logoSize != screen.logoSize, testChanged = scfg_.grid != screen.grid;
     if (scfg_.target != screen.target) { D3D11Overlay::SetScreenTargetIndex(screen.target); Log::Write("Screen: drawing into target %d (0 = all)", screen.target); }
+    scfg_.volumeStyle = screen.volumeStyle;
     scfg_.target = screen.target; scfg_.scale = screen.scale; scfg_.startLogoScale = screen.startLogoScale; scfg_.logoSize = screen.logoSize;
     // truck preset with another screen target (render target size / format of the cab screen)
     if (screen.width > 0 && screen.height > 0 &&
@@ -405,7 +406,24 @@ void Overlay::RenderScreen() {
     // render at the pixel size of the visible area, so the card is not stretched
     int w = std::max(64, (int)std::lround(scfg_.width * std::clamp(scfg_.areaW, 0.01, 1.0)));
     int h = std::max(64, (int)std::lround(scfg_.height * std::clamp(scfg_.areaH, 0.01, 1.0)));
-    D3D11Overlay::SetScreenImage(RenderScreenCard(scrInfo_, logo.get(), w, h, scfg_.design, (float)scfg_.scale, (float)scfg_.logoSize));
+    if (scrInfo_.volume >= 0 && scfg_.volumeStyle == "bar") {   // slim bar at the top: over the navigation, or over the pinned radio page
+        std::shared_ptr<OverlayImage> under;
+        if (pinned_ && pageInfo_.volume < 0) {
+            SongLine song;
+            auto page = RenderScreenCard(pageInfo_, cfg_.showLogos ? logo_.get() : nullptr, w, h, scfg_.design, (float)scfg_.scale, (float)scfg_.logoSize, &song);
+            under = song.strip ? ComposeSongLine(*page, song, 0) : page;
+        }
+        D3D11Overlay::SetScreenImage(RenderScreenVolumeBar(scrInfo_, w, h, scfg_.design, (float)scfg_.scale, under.get()));
+        D3D11Overlay::SetScreenTarget(scfg_.width, scfg_.height, scfg_.format);
+        return;
+    }
+    SongLine song;
+    scrCard_ = RenderScreenCard(scrInfo_, logo.get(), w, h, scfg_.design, (float)scfg_.scale, (float)scfg_.logoSize, &song);
+    bool sameSong = scrSong_.strip && song.strip && scrSong_.strip->width == song.strip->width && scrSong_.x == song.x && scrSong_.y == song.y &&
+                    scrSong_.strip->pixels == song.strip->pixels;
+    scrSong_ = song;
+    if (!sameSong) { songScrollAt_ = GetTickCount64(); songOff_ = 0; }   // a new title starts at the beginning
+    D3D11Overlay::SetScreenImage(scrSong_.strip ? ComposeSongLine(*scrCard_, scrSong_, songOff_) : scrCard_);
     D3D11Overlay::SetScreenTarget(scfg_.width, scfg_.height, scfg_.format);
 }
 
@@ -501,6 +519,12 @@ void Overlay::TickScreen(ULONGLONG now) {
         a = std::min(1.f, (now - pinShownAt_) / 250.f);
     } else if (now < scrUntil_) a = std::min({1.f, (now - scrShownAt_) / 200.f, (scrUntil_ - now) / 400.f});
     D3D11Overlay::SetScreenAlpha(a);
+    // live song title wider than its line: let it scroll (only the strip moves, the card is not rendered again)
+    if (a > 0.f && scrCard_ && scrSong_.strip && scrSong_.strip->width > scrSong_.w && scrInfo_.volume < 0 && !Splashing(now)) {
+        const ULONGLONG pause = 2000;
+        int off = now < songScrollAt_ + pause ? 0 : (int)((now - songScrollAt_ - pause) * (scrSong_.h * 1.6) / 1000.0);
+        if (off != songOff_) { songOff_ = off; D3D11Overlay::SetScreenImage(ComposeSongLine(*scrCard_, scrSong_, off)); }
+    }
 }
 
 void Overlay::PrepareMenu() {

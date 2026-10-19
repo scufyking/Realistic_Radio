@@ -34,6 +34,7 @@ struct ScreenConfig {
     bool flipX = false;                 // flipX + flipY = rotated by 180 degrees
     bool grid = false;                  // test mode: coordinate grid + the card's area on the target (to find areaX/Y/W/H)
     std::string design = "modern";      // look of the card: modern | ocean | sport | light | retro
+    std::string volumeStyle = "card";   // volume on the screen: card (large card) | bar (slim bar at the top, modern infotainment)
     bool startLogo = true;              // start screen with the manufacturer's logo (truck-logos\\) or name when the ignition is switched on
     double startLogoSeconds = 3.5;
     double startLogoScale = 0.55;       // height of the start logo, part of the display area (0.2 - 1)
@@ -119,6 +120,7 @@ struct Config {
     std::map<std::string, std::string> stationButtons;   // "1".."9" -> "<region>|<station name>" or "f:<0.1 MHz>" (remembered)
     std::string tuning = "list";       // list: stations in range one after another | frequency: FM dial like an old radio
     bool rdsAf = false;
+    bool songTitle = true;             // live song title of the station (from the stream, in time with the audio) on the screen card
     bool tunnelSignal = true;          // no reception in tunnels (FM: static, DAB+: drop-outs then silence); USB / CD keeps playing                // frequency radio: follow the programme to another frequency (RDS AF); off = like in the old days
     int tunedFreq = 0;                 // last FM frequency in 0.1 MHz (remembered)
     // Reception (original web/config.js)
@@ -135,8 +137,17 @@ struct Config {
     std::string dataFile;         // empty = "<game>.json" from game id
     // Input (original settings.json keys/buttons)
     KeyBinding keys[(int)Action::Count];
+    // Controller buttons: -1 = none, else slot * kPadSlot + button. Slot 0 = any controller (older files: a plain number),
+    // slot n = the controller named controllers[n - 1]. Button 0-127, 128+ = hat switch (POV n: up, right, down, left).
+    // In the file: a number (any controller) or "Device name/12", "Device name/POV1 up".
+    static constexpr int kPadSlot = 1000;
     int buttons[(int)Action::Count];
-    int controllerIndex = 0;      // winmm joystick id (JOYSTICKID1 = 0)
+    std::vector<std::string> controllers;
+    int ButtonFromText(const std::string& v);               // "Device name/12" -> binding (adds the device to `controllers`)
+    std::string ButtonToText(int b) const;                  // binding of a named controller -> "Device name/12" ("" = slot 0)
+    std::wstring ButtonText(int b, bool english) const;     // "Knopf 12", "MOZA 12", "POV ↑"
+    int ButtonSlot(const std::string& device);              // slot of a device name (added when new)
+    int controllerIndex = 0;      // winmm joystick id (JOYSTICKID1 = 0): only used when DirectInput is not available
     bool onlyWhenGameFocused = true;
     int reconnectMaxSeconds = 30;
 

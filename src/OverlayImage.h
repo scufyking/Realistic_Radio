@@ -31,8 +31,9 @@ struct OverlayInfo {
     std::string mediaType;   // usb | cd | sd | cassette | bluetooth | aux: picture when there is no cover
     bool paused = false;
     int posSec = -1, lenSec = -1;   // track position / length in seconds (-1 = unknown)
+    std::wstring song;       // live song title of the station (scrolls on the in-cab screen when it is too long)
     bool operator==(const OverlayInfo& o) const { return headline == o.headline && title == o.title && subtitle == o.subtitle && bars == o.bars && favourite == o.favourite && lcd == o.lcd && volume == o.volume && muted == o.muted &&
-                                                         source == o.source && mediaType == o.mediaType && detail == o.detail && media == o.media && paused == o.paused && posSec == o.posSec && lenSec == o.lenSec; }
+                                                         source == o.source && mediaType == o.mediaType && detail == o.detail && media == o.media && paused == o.paused && posSec == o.posSec && lenSec == o.lenSec && song == o.song; }
 };
 
 // Draws the panel with GDI (text, full Unicode incl. Cyrillic/Greek/Arabic via font fallback) + optional logo.
@@ -58,8 +59,18 @@ std::shared_ptr<OverlayImage> RenderRadioLcd(const std::wstring& text, int scrol
 
 // In-cab screen card (drawn over the navigation for a few seconds): station or volume
 // design: modern (default) | ocean | sport | light | retro
+// Live song title line of the card: where it is and the title as a strip (premultiplied, transparent background), so it
+// can scroll without rendering the whole card again (ComposeSongLine).
+struct SongLine { int x = 0, y = 0, w = 0, h = 0; std::shared_ptr<OverlayImage> strip; };
 std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const OverlayImage* logo, int width, int height, const std::string& design = "modern",
-                                               float scale = 1.f, float logoSize = 1.f);   // scale: text and pictures, logoSize: logo / cover tile
+                                               float scale = 1.f, float logoSize = 1.f,   // scale: text and pictures, logoSize: logo / cover tile
+                                               SongLine* song = nullptr);                  // set: the song line is left empty and returned here
+// Volume as a slim bar at the top of the screen (modern infotainment): "20 %" and a thin level line. The rest stays
+// transparent (the navigation shows through) or shows `under` (the radio page while it is pinned).
+std::shared_ptr<OverlayImage> RenderScreenVolumeBar(const OverlayInfo& info, int width, int height, const std::string& design, float scale,
+                                                    const OverlayImage* under);
+// Card + song strip, shifted left by `offset` pixels (wraps around with a gap when the title is wider than its line)
+std::shared_ptr<OverlayImage> ComposeSongLine(const OverlayImage& card, const SongLine& song, int offset);
 // Coordinate grid (10 x 10 cells labelled with their x/y position in tenths) for finding the visible area
 std::shared_ptr<OverlayImage> RenderScreenGrid(int width, int height, bool flipX = false, bool flipY = false);
 // Test mode: grid plus the area the card is drawn into (target coordinates 0..1), with its values in the corners

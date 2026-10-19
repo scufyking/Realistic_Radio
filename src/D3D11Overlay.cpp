@@ -441,6 +441,83 @@ DXGI_FORMAT RtvFormat(DXGI_FORMAT f) {
 bool PatchSlot(void** vt, int idx, void* fn, void** orig);
 // Hooks the immediate context the game really uses. Its vtable can differ from a self-created device
 // (e.g. single-threaded vs. multithreaded devices use different context classes), so take it from the game.
+// --- graphics proxies (ReShade, Snowymoon and other post-processing tools) -----------------------------------------
+// Such tools put their own d3d11.dll / dxgi.dll next to the game and hand the game WRAPPED device / swap chain
+// objects. A dummy swap chain created through those DLLs is a wrapper too, so its Present slot runs BEFORE the tool's
+// post-processing (TAA, sharpening, upscaling, motion blur): the overlay and the settings menu would be smeared,
+// flicker or vanish. So the real swap chain of Windows' own dxgi.dll is hooked: the tool calls it last, after its effects.
+std::wstring SystemDll(const wchar_t* name) {
+    wchar_t dir[MAX_PATH] = {0};
+    UINT n = GetSystemDirectoryW(dir, MAX_PATH);
+    return std::wstring(dir, n) + L"\\" + name;
+}
+std::wstring ModulePathOf(const void* addr) {
+    HMODULE m = nullptr; wchar_t p[MAX_PATH] = {0};
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)addr, &m) || !m) return L"?";
+    GetModuleFileNameW(m, p, MAX_PATH);
+    return p;
+}
+bool InModule(const void* addr, HMODULE mod) {
+    HMODULE m = nullptr;
+    return mod && GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)addr, &m) && m == mod;
+}
+std::string Narrow(const std::wstring& w) {
+    if (w.empty()) return "";
+    int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), nullptr, 0, nullptr, nullptr);
+    std::string s(n, '\0'); WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), &s[0], n, nullptr, nullptr);
+    return s;
+}
+// Logs graphics DLLs that do not come from Windows (post-processing tools)
+void LogGraphicsProxies() {
+    std::wstring sys = SystemDll(L"");
+    for (const wchar_t* n : {L"d3d11.dll", L"dxgi.dll", L"d3d9.dll", L"d3d12.dll", L"opengl32.dll"}) {
+        HMODULE m = GetModuleHandleW(n);
+        if (!m) continue;
+        wchar_t p[MAX_PATH] = {0}; GetModuleFileNameW(m, p, MAX_PATH);
+        std::wstring path = p, lp = path, ls = sys;
+        for (auto& c : lp) c = towlower(c);
+        for (auto& c : ls) c = towlower(c);
+        if (lp.rfind(ls, 0) != 0) Log::Write("Overlay: graphics tool detected - %s is loaded from %s (e.g. ReShade / Snowymoon); drawing after its post-processing",
+                                             Narrow(n).c_str(), Narrow(path).c_str());
+    }
+}
+// Swap chain vtable of Windows' own dxgi.dll (nullptr if that is not possible)
+void** RealSwapChainVtable(HWND hwnd, bool& hasPresent1) {
+    HMODULE d3d = LoadLibraryW(SystemDll(L"d3d11.dll").c_str());
+    HMODULE dxgi = LoadLibraryW(SystemDll(L"dxgi.dll").c_str());
+    if (!d3d || !dxgi) return nullptr;
+    auto createDevice = (PFN_D3D11_CREATE_DEVICE)(void*)GetProcAddress(d3d, "D3D11CreateDevice");
+    typedef HRESULT(WINAPI* CreateFactory1Fn)(REFIID, void**);
+    auto createFactory = (CreateFactory1Fn)(void*)GetProcAddress(dxgi, "CreateDXGIFactory1");
+    if (!createDevice || !createFactory) return nullptr;
+    void** vt = nullptr;
+    ID3D11Device* dev = nullptr; ID3D11DeviceContext* ctx = nullptr; IDXGIFactory1* f = nullptr; IDXGISwapChain* sc = nullptr;
+    HRESULT hr = E_FAIL;
+    for (D3D_DRIVER_TYPE t : {D3D_DRIVER_TYPE_HARDWARE, D3D_DRIVER_TYPE_WARP}) {
+        hr = createDevice(nullptr, t, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, &dev, nullptr, &ctx);
+        if (SUCCEEDED(hr)) break;
+    }
+    if (SUCCEEDED(hr) && SUCCEEDED(createFactory(__uuidof(IDXGIFactory1), (void**)&f)) && f) {
+        DXGI_SWAP_CHAIN_DESC sd{}; sd.BufferCount = 1; sd.BufferDesc.Width = 64; sd.BufferDesc.Height = 64;
+        sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        sd.OutputWindow = hwnd; sd.SampleDesc.Count = 1; sd.Windowed = TRUE; sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+        if (SUCCEEDED(f->CreateSwapChain(dev, &sd, &sc)) && sc) {
+            void** v = *(void***)sc;
+            // Windows' own swap chain: its code lies in system32\dxgi.dll (a hook of another tool may sit in the slot already)
+            if (InModule(v[2], dxgi) || InModule(v[8], dxgi)) {
+                vt = v;
+                IDXGISwapChain1* sc1 = nullptr;
+                hasPresent1 = SUCCEEDED(sc->QueryInterface(__uuidof(IDXGISwapChain1), (void**)&sc1));
+                if (sc1) sc1->Release();
+                if (!InModule(v[8], dxgi)) Log::Write("Overlay: Present is already hooked by %s (chaining to it)", Narrow(ModulePathOf(v[8])).c_str());
+            }
+        }
+    }
+    if (sc) sc->Release(); if (f) f->Release(); if (ctx) ctx->Release(); if (dev) dev->Release();
+    return vt;   // the DLLs stay loaded (the game uses them anyway)
+}
+
+
 void HookGameContext(IDXGISwapChain* sc) {
     if (!g_wantScreenHook) return;
     ID3D11Device* d = nullptr;
@@ -462,7 +539,26 @@ void HookGameContext(IDXGISwapChain* sc) {
     d->Release();
 }
 
+void Diagnose(IDXGISwapChain* sc) {   // log once what presents the game's picture, and a status after 20 s
+    static bool first = true;
+    static ULONGLONG statusAt = 0;
+    ULONGLONG now = GetTickCount64();
+    if (first) {
+        first = false; statusAt = now + 20000;
+        ID3D11Device* d = nullptr;
+        bool d3d11 = SUCCEEDED(sc->GetDevice(__uuidof(ID3D11Device), (void**)&d)) && d;
+        if (d) d->Release();
+        Log::Write("Overlay: first frame - swap chain of %s, %s", Narrow(ModulePathOf((*(void***)sc)[8])).c_str(),
+                   d3d11 ? "Direct3D 11 device" : "NOT a Direct3D 11 device (overlay and screen cannot be drawn)");
+    } else if (statusAt && now >= statusAt) {
+        statusAt = 0;
+        Log::Write("Overlay: status after 20 s - %lld D3D11 frames, %lld other frames, screen hook %s, %lld render-target changes seen",
+                   g_d3d11Frames.load(), g_otherFrames.load(), g_screenHooked ? "on" : "off", g_rtCalls.load());
+    }
+}
+
 void Draw(IDXGISwapChain* sc) {
+    Diagnose(sc);
     HookGameContext(sc);
     for (int l = 0; l < kLayers; ++l)   // end of frame
         if (g_nFrameTargets[l] > 0) { g_lastFrameTargets[l] = g_nFrameTargets[l]; g_nFrameTargets[l] = 0; }
@@ -545,6 +641,7 @@ HRESULT STDMETHODCALLTYPE HookPresent1(IDXGISwapChain1* sc, UINT sync, UINT flag
     return g_origPresent1(sc, sync, flags, p);
 }
 
+
 bool PatchSlot(void** vt, int idx, void* fn, void** orig) {
     DWORD old;
     if (!VirtualProtect(&vt[idx], sizeof(void*), PAGE_EXECUTE_READWRITE, &old)) return false;
@@ -570,16 +667,25 @@ bool Install() {
     sd.OutputWindow = hwnd; sd.SampleDesc.Count = 1; sd.Windowed = TRUE; sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
     IDXGISwapChain* sc = nullptr; ID3D11Device* dev = nullptr; ID3D11DeviceContext* ctx = nullptr;
     HRESULT hr = E_FAIL;
-    for (D3D_DRIVER_TYPE t : {D3D_DRIVER_TYPE_HARDWARE, D3D_DRIVER_TYPE_WARP}) {
-        hr = D3D11CreateDeviceAndSwapChain(nullptr, t, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, &sd, &sc, &dev, nullptr, &ctx);
-        if (SUCCEEDED(hr)) break;
+    LogGraphicsProxies();
+    bool real1 = false;
+    void** realVt = RealSwapChainVtable(hwnd, real1);   // Windows' own swap chain: after any post-processing tool
+    if (!realVt) {   // fallback: through whatever d3d11.dll the game uses
+        Log::Write("Overlay: Windows' own swap chain not available - using the default way");
+        for (D3D_DRIVER_TYPE t : {D3D_DRIVER_TYPE_HARDWARE, D3D_DRIVER_TYPE_WARP}) {
+            hr = D3D11CreateDeviceAndSwapChain(nullptr, t, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, &sd, &sc, &dev, nullptr, &ctx);
+            if (SUCCEEDED(hr)) break;
+        }
     }
     bool ok = false;
-    if (SUCCEEDED(hr) && sc) {
-        void** vt = *(void***)sc;
-        IDXGISwapChain1* sc1 = nullptr;
-        g_hasPresent1 = SUCCEEDED(sc->QueryInterface(__uuidof(IDXGISwapChain1), (void**)&sc1));
-        if (sc1) sc1->Release();
+    if (realVt || (SUCCEEDED(hr) && sc)) {
+        void** vt = realVt ? realVt : *(void***)sc;
+        if (realVt) g_hasPresent1 = real1;
+        else {
+            IDXGISwapChain1* sc1 = nullptr;
+            g_hasPresent1 = SUCCEEDED(sc->QueryInterface(__uuidof(IDXGISwapChain1), (void**)&sc1));
+            if (sc1) sc1->Release();
+        }
         if (vt[8] == (void*)&HookPresent) ok = true;   // already hooked (plugin re-initialised)
         else {
             ok = PatchSlot(vt, 8, (void*)&HookPresent, (void**)&g_origPresent);

@@ -31,6 +31,7 @@ public:
     bool Running() const { return device_ok_; }
     bool IsBuffering();
     int StreamFailures();
+    bool SongTitle(std::string& out);   // live title of the current stream (false = none sent)
 private:
     // Gain that moves towards `target` by `step` per sample (audio thread). `now` mirrors the current value for SetRamp.
     struct Ramp {
