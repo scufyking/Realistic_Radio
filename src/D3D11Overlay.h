@@ -45,7 +45,7 @@ void SetCollectTargets(bool on);
 struct RenderTargetStat { int w, h, format; long long binds; };
 std::vector<RenderTargetStat> TakeTargetStats();   // colour render targets bound since the last call (not the back buffer)
 bool ScreenHookActive();
-// Combined DLL (Realistic Radio + Trucker Chat): layer 1 of the in-cab screen and a second back-buffer picture for
+// Trucker Chat (separate plugin, through PluginApi.cpp): layer 1 of the in-cab screen and a second back-buffer picture for
 // the chat. Layer 0 is the radio (the functions above). Both screen layers are drawn into a matching target, 0 first.
 void SetLayerScreenImage(int layer, std::shared_ptr<const OverlayImage> img);
 void SetLayerScreenTarget(int layer, int w, int h, int format);
@@ -55,4 +55,9 @@ void SetChatImage(std::shared_ptr<const OverlayImage> img);   // drawn below the
 void SetChatAlpha(float a);
 void SetChatPlacement(int anchor, float offsetX, float offsetY);
 long long RenderTargetCalls();   // diagnostics: render-target changes seen by the hook
+// Trucker Chat: the chat follows the radio's screen (target size / format, area, flip; changes with the truck preset)
+// and waits while the radio shows a card on it (not while the radio display is pinned on the screen).
+bool RadioScreenGeometry(int& w, int& h, int& format, float& x, float& y, float& aw, float& ah, bool& flipY, bool& flipX);
+bool RadioCardShowing();
+void SetRadioPinned(bool pinned);
 }

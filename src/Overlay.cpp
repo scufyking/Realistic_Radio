@@ -597,6 +597,7 @@ void Overlay::ShowStartLogo(const std::string& truckId, const std::string& brand
 void Overlay::SetScreenPinned(bool p) {
     if (p == pinned_) return;
     pinned_ = p;
+    D3D11Overlay::SetRadioPinned(p);
     ULONGLONG now = GetTickCount64();
     if (!ScreenUsable()) return;
     if (p) {

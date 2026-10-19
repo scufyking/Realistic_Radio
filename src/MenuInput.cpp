@@ -26,7 +26,10 @@ std::atomic<float> g_cx{0}, g_cy{0};
 bool GameInFront() {
     HWND fg = GetForegroundWindow(); if (!fg) return false;
     DWORD pid = 0; GetWindowThreadProcessId(fg, &pid);
-    return pid == GetCurrentProcessId();
+    if (pid != GetCurrentProcessId()) return false;
+    wchar_t cls[64] = {0}; GetClassNameW(fg, cls, 64);
+    if (!wcscmp(cls, L"TruckerChatMenu")) return false;   // the Trucker Chat menu window keeps its keys
+    return true;
 }
 void Push(const Event& e) { if (g_queue.size() < 128) g_queue.push_back(e); }
 

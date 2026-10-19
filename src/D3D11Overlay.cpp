@@ -46,7 +46,7 @@ inline const VtHook* FindVt(ID3D11DeviceContext* c) {
 }
 bool g_wantScreenHook = false;
 std::atomic<bool> g_screenHooked{false};
-// Screen layers: 0 = Realistic Radio, 1 = Trucker Chat (combined DLL). Each has its own picture, target size and area;
+// Screen layers: 0 = Realistic Radio, 1 = Trucker Chat (separate plugin, PluginApi.cpp). Each has its own picture, target size and area;
 // both are drawn into a matching render target in this order.
 constexpr int kLayers = 2;
 std::atomic<float> g_scrAlpha[kLayers];
@@ -487,7 +487,7 @@ void Draw(IDXGISwapChain* sc) {
     if (FAILED(sc->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&bb)) || !bb) { dev->Release(); return; }
     D3D11_TEXTURE2D_DESC bd; bb->GetDesc(&bd);
     if (bd.Height >= 200) { g_screenH = (int)bd.Height; g_bbW = (int)bd.Width; }
-    float alpha2 = g_alpha2.load();   // chat (combined DLL), below the radio overlay and the menu
+    float alpha2 = g_alpha2.load();   // Trucker Chat (PluginApi), below the radio overlay and the menu
     if (alpha2 > 0.003f && bd.Width >= 320 && bd.Height >= 200 && EnsureResources(dev) && EnsureTexture2(dev) && g_res.srv2) {
         D3D11_RENDER_TARGET_VIEW_DESC rvd{}; rvd.Format = RtvFormat(bd.Format);
         rvd.ViewDimension = bd.SampleDesc.Count > 1 ? D3D11_RTV_DIMENSION_TEXTURE2DMS : D3D11_RTV_DIMENSION_TEXTURE2D;
@@ -616,6 +616,15 @@ void SetScreenAlpha(float a) { SetLayerScreenAlpha(0, a); }
 void SetScreenTargetIndex(int i) { g_scrTargetIdx = i; }
 int ScreenTargetsSeen() { return g_lastFrameTargets[0]; }
 void SetScreenArea(float x, float y, float w, float h, bool flipY, bool flipX) { SetLayerScreenArea(0, x, y, w, h, flipY, flipX); }
+bool RadioScreenGeometry(int& w, int& h, int& format, float& x, float& y, float& aw, float& ah, bool& flipY, bool& flipX) {
+    w = g_scrW[0].load(); h = g_scrH[0].load(); format = g_scrFmt[0].load();
+    x = g_areaX[0].load(); y = g_areaY[0].load(); aw = g_areaW[0].load(); ah = g_areaH[0].load();
+    flipY = g_flipY[0].load(); flipX = g_flipX[0].load();
+    return w > 0 && h > 0 && aw > 0.f && ah > 0.f;
+}
+namespace { std::atomic<bool> g_radioPinned{false}; }
+void SetRadioPinned(bool pinned) { g_radioPinned = pinned; }
+bool RadioCardShowing() { return !g_radioPinned.load() && g_scrAlpha[0].load() > 0.003f; }
 void SetChatImage(std::shared_ptr<const OverlayImage> img) { std::lock_guard<std::mutex> l(g_img2Mtx); g_img2 = std::move(img); ++g_img2Version; }
 void SetChatAlpha(float a) { g_alpha2 = a; }
 void SetChatPlacement(int anchor, float offsetX, float offsetY) { g_anchor2 = anchor; g_offX2 = offsetX; g_offY2 = offsetY; }

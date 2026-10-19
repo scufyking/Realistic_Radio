@@ -13,10 +13,16 @@ bool InputManager::GameFocused() const {
     return pid == GetCurrentProcessId();   // the DLL lives inside eurotrucks2.exe
 }
 
+static bool ChatMenuInFront() {   // the Trucker Chat menu (separate plugin) is a window of the game process too
+    HWND fg = GetForegroundWindow(); if (!fg) return false;
+    wchar_t cls[64] = {0}; GetClassNameW(fg, cls, 64);
+    return !wcscmp(cls, L"TruckerChatMenu");   // typing in the chat menu must not change the radio
+}
+
 static bool Down(int vk) { return vk && (GetAsyncKeyState(vk) & 0x8000) != 0; }
 
 void InputManager::Poll(const std::function<void(Action, bool)>& fire) {
-    if (cfg_.onlyWhenGameFocused && !GameFocused()) { for (auto& k : keyDown_) k = false; for (auto& h : holdDone_) h = true; return; }
+    if ((cfg_.onlyWhenGameFocused && !GameFocused()) || ChatMenuInFront()) { for (auto& k : keyDown_) k = false; for (auto& h : holdDone_) h = true; return; }
     bool pressed[(int)Action::Count] = {};
     for (int i = 0; i < (int)Action::Count; ++i) {
         const KeyBinding& b = cfg_.keys[i];
