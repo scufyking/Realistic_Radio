@@ -1,0 +1,23 @@
+EXPORTS
+    scs_telemetry_init
+    scs_telemetry_shutdown
+    rr_api_version
+    rr_attach
+    rr_detach
+    rr_enable_screen_hook
+    rr_chat_screen_image
+    rr_chat_screen_target
+    rr_chat_screen_alpha
+    rr_chat_screen_area
+    rr_chat_image
+    rr_chat_alpha
+    rr_chat_placement
+    rr_d3d11_frames
+    rr_other_frames
+    rr_screen_height
+    rr_screen_hook_active
+    rr_render_target_calls
+    rr_collect_targets
+    rr_take_target_stats
+    rr_radio_screen
+    rr_radio_card_showing
