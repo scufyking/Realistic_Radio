@@ -1,0 +1,205 @@
+// Realistic Radio
+// Copyright (c) 2026 ScufyKing
+// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+// If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
+// SCS Telemetry SDK entry points. ETS2/ATS load every DLL from <game>\bin\win_x64\plugins\ and call
+// scs_telemetry_init / scs_telemetry_shutdown. DllMain does nothing (loader lock!); all work starts in
+// scs_telemetry_init on a separate "radio thread", so the game callbacks never block on audio or network.
+#include "Common.h"
+#include <objbase.h>
+#include "Logger.h"
+#include "RadioManager.h"
+#include "InputManager.h"
+#include "EmbeddedData.h"
+#include <scssdk_telemetry.h>
+#include <eurotrucks2/scssdk_eut2.h>
+#include <eurotrucks2/scssdk_telemetry_eut2.h>
+#include <amtrucks/scssdk_ats.h>
+#include <amtrucks/scssdk_telemetry_ats.h>
+#include <common/scssdk_telemetry_common_channels.h>
+#include <common/scssdk_telemetry_truck_common_channels.h>
+#include <common/scssdk_telemetry_common_configs.h>
+#include <scssdk_telemetry_event.h>
+
+
+namespace {
+std::atomic<double> g_x{0}, g_z{0};
+std::atomic<bool> g_havePos{false};
+std::atomic<bool> g_electric{false}, g_engine{false};
+std::atomic<float> g_speed{0.f};   // m/s, negative when reversing
+
+// Truck identity (configuration event "truck"): used to pick the truck preset of the in-cab screen
+std::mutex g_truckMtx;
+std::string g_truckId, g_truckName, g_truckBrandId, g_truckBrand, g_truckModel;
+std::atomic<int> g_truckVersion{0};
+SCSAPI_VOID OnConfiguration(const scs_event_t, const void* const info, const scs_context_t) {
+    const auto* cfg = static_cast<const scs_telemetry_configuration_t*>(info);
+    if (!cfg || !cfg->id || strcmp(cfg->id, SCS_TELEMETRY_CONFIG_truck) != 0) return;
+    std::string id, brand, name, brandId;
+    for (const scs_named_value_t* a = cfg->attributes; a && a->name; ++a) {
+        if (a->value.type != SCS_VALUE_TYPE_string || !a->value.value_string.value) continue;
+        if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_id)) id = a->value.value_string.value;
+        else if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_brand)) brand = a->value.value_string.value;
+        else if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_name)) name = a->value.value_string.value;
+        else if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_brand_id)) brandId = a->value.value_string.value;
+    }
+    if (id.empty()) return;
+    std::lock_guard<std::mutex> l(g_truckMtx);
+    if (id == g_truckId) return;
+    g_truckId = id;
+    g_truckName = brand.empty() ? name : (name.rfind(brand, 0) == 0 ? name : brand + " " + name);
+    g_truckBrandId = brandId; g_truckBrand = brand;
+    g_truckModel = (!brand.empty() && name.rfind(brand, 0) == 0) ? name.substr(brand.size()) : name;
+    g_truckModel.erase(0, g_truckModel.find_first_not_of(' '));
+    ++g_truckVersion;
+}
+
+SCSAPI_VOID OnSpeed(const scs_string_t, const scs_u32_t, const scs_value_t* const value, const scs_context_t) {
+    g_speed = (value && value->type == SCS_VALUE_TYPE_float) ? value->value_float.value : 0.f;
+}
+
+SCSAPI_VOID OnBool(const scs_string_t, const scs_u32_t, const scs_value_t* const value, const scs_context_t ctx) {
+    bool v = value && value->type == SCS_VALUE_TYPE_bool && value->value_bool.value != 0;
+    (ctx ? g_engine : g_electric) = v;
+}
+std::atomic<bool> g_quit{false};
+HANDLE g_thread = nullptr;
+HANDLE g_instance = nullptr;   // per-process single-instance mutex
+std::string g_game = "ets2";
+
+SCSAPI_VOID OnPlacement(const scs_string_t, const scs_u32_t, const scs_value_t* const value, const scs_context_t) {
+    if (!value || value->type != SCS_VALUE_TYPE_dplacement) return;
+    g_x = value->value_dplacement.position.x;
+    g_z = value->value_dplacement.position.z;
+    g_havePos = true;
+}
+
+DWORD WINAPI RadioThread(LPVOID) {
+    std::wstring dir = PluginDataDir();
+    CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    RadioManager radio; InputManager input;
+    if (!radio.Init(dir, g_game)) {
+        Log::Write("Initialisation failed - radio disabled. Check the files in %s", WideToUtf8(dir).c_str());
+        CoUninitialize();
+        return 1;
+    }
+    { Config c; c.Load(dir + L"realistic-radio.json"); input.Init(c); }
+    Log::Write("Radio thread running");
+    int truckVersion = 0;
+    while (!g_quit) {
+        if (radio.MenuOpen()) {   // key menu: keys go to the menu, no radio actions
+            if (radio.MenuTick(input)) { input.Init(radio.Settings()); input.Resync(); }
+        } else input.Poll([&](Action a, bool hold) { Log::Write("Action: %s%s", ActionName(a), hold ? " (held)" : ""); radio.OnAction(a, hold); });
+        if (int v = g_truckVersion.load(); v != truckVersion) {
+            truckVersion = v;
+            std::string id, name, brandId, brand, model;
+            { std::lock_guard<std::mutex> l(g_truckMtx); id = g_truckId; name = g_truckName; brandId = g_truckBrandId; brand = g_truckBrand; model = g_truckModel; }
+            radio.SetTruck(id, name, brandId, brand, model);
+        }
+        radio.Tick(g_x, g_z, g_havePos, g_electric, g_engine, g_speed);
+        Sleep(radio.MenuOpen() ? 15 : 50);   // the menu reacts faster to the mouse
+    }
+    radio.Shutdown();
+    CoUninitialize();
+    return 0;
+}
+}
+
+// Earlier releases were called "ETS2 Local Radio Native" and kept their files in "<plugins>\\local-radio\\".
+// Copy the user's own files over once (never overwrites anything that already exists in the new folder).
+static void MigrateFromLocalRadio(const std::wstring& dir) {
+    std::wstring base = dir.substr(0, dir.size() - 1);
+    base = base.substr(0, base.find_last_of(L"\\/") + 1);
+    std::wstring old = base + L"local-radio\\";
+    if (GetFileAttributesW(old.c_str()) == INVALID_FILE_ATTRIBUTES) return;
+    auto copy = [&](const std::wstring& from, const std::wstring& to) {
+        if (GetFileAttributesW(from.c_str()) == INVALID_FILE_ATTRIBUTES) return;
+        if (CopyFileW(from.c_str(), to.c_str(), TRUE)) Log::Write("Migrated %s", WideToUtf8(to).c_str());
+    };
+    copy(old + L"local-radio.json", dir + L"realistic-radio.json");
+    for (const wchar_t* g : {L"ets2", L"ats"}) {
+        copy(old + L"favourites-" + g + L".json", dir + L"favourites-" + g + L".json");
+        copy(old + L"custom-stations-" + g + L".json", dir + L"custom-stations-" + g + L".json");
+    }
+    CreateDirectoryW((dir + L"logos").c_str(), nullptr);
+    WIN32_FIND_DATAW fd; HANDLE h = FindFirstFileW((old + L"logos\\*").c_str(), &fd);
+    int n = 0;
+    if (h != INVALID_HANDLE_VALUE) {
+        do { if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && CopyFileW((old + L"logos\\" + fd.cFileName).c_str(), (dir + L"logos\\" + fd.cFileName).c_str(), TRUE)) ++n; }
+        while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    if (n) Log::Write("Migrated %d cached logos", n);
+    Log::Write("Old folder %s found - after checking your settings you can delete it and the old local-radio-native.dll", WideToUtf8(old).c_str());
+}
+
+SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_init_params_t* const params) {
+    if (version != SCS_TELEMETRY_VERSION_1_00 && version != SCS_TELEMETRY_VERSION_1_01) return SCS_RESULT_unsupported;
+    const auto* p = static_cast<const scs_telemetry_init_params_v100_t*>(params);
+    // Only one copy may run per game process: a second DLL (e.g. "realistic-radio (1).dll") would play a second
+    // radio with its own volume. The copy that comes second stays inactive and does not touch the shared log file.
+    wchar_t mtxName[80]; swprintf(mtxName, 80, L"Local\\ETS2LocalRadioNative-%lu", GetCurrentProcessId());   // name kept from the previous release, so old and new DLL exclude each other
+    g_instance = CreateMutexW(nullptr, FALSE, mtxName);
+    if (g_instance && GetLastError() == ERROR_ALREADY_EXISTS) {
+        CloseHandle(g_instance); g_instance = nullptr;
+        p->common.log(SCS_LOG_TYPE_warning, "[realistic-radio] another copy of the Realistic Radio plugin is already loaded - this copy stays inactive. Remove duplicate DLLs from the plugins folder.");
+        return SCS_RESULT_ok;
+    }
+    std::wstring dir = PluginDataDir();
+    CreateDirectoryW(dir.c_str(), nullptr);
+    Log::Init(dir + L"realistic-radio.log");
+    ExtractEmbeddedData(dir);   // only the DLL is needed: station data and sounds are unpacked from it
+    MigrateFromLocalRadio(dir);
+    std::string gid = p->common.game_id ? p->common.game_id : "";
+    g_game = (gid == SCS_GAME_ID_ATS) ? "ats" : "ets2";
+    Log::Write("Realistic Radio " REALISTIC_RADIO_VERSION " loaded by %s (game id '%s', telemetry 0x%x)", p->common.game_name ? p->common.game_name : "?", gid.c_str(), version);
+    {   // warn about other radio plugin DLLs in the same folder
+        HMODULE self = nullptr; wchar_t me[MAX_PATH] = {0};
+        GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)&scs_telemetry_init, &self);
+        GetModuleFileNameW(self, me, MAX_PATH);
+        std::wstring mine = me, folder = mine.substr(0, mine.find_last_of(L"\\/") + 1);
+        Log::Write("Plugin file: %s", WideToUtf8(mine).c_str());
+        WIN32_FIND_DATAW fd; HANDLE h = FindFirstFileW((folder + L"*.dll").c_str(), &fd);
+        if (h != INVALID_HANDLE_VALUE) {
+            do {
+                std::wstring n = fd.cFileName, l = n; for (auto& ch : l) ch = towlower(ch);
+                if (folder + n != mine && (l.find(L"local-radio") != std::wstring::npos || l.find(L"realistic-radio") != std::wstring::npos ||
+                                           l.find(L"realisticradio") != std::wstring::npos))
+                    Log::Write("WARNING: another radio plugin DLL is in the plugins folder: %s - remove it, otherwise two radios may play", WideToUtf8(n).c_str());
+            } while (FindNextFileW(h, &fd));
+            FindClose(h);
+        }
+    }
+    if (p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_world_placement, SCS_U32_NIL, SCS_VALUE_TYPE_dplacement,
+                                SCS_TELEMETRY_CHANNEL_FLAG_none, OnPlacement, nullptr) != SCS_RESULT_ok) {
+        p->common.log(SCS_LOG_TYPE_error, "[realistic-radio] cannot register truck.world.placement");
+        return SCS_RESULT_generic_error;
+    }
+    // ignition / engine state (radio only plays while the truck is powered, see "powerSource")
+    p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_electric_enabled, SCS_U32_NIL, SCS_VALUE_TYPE_bool,
+                            SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnBool, nullptr);
+    p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_engine_enabled, SCS_U32_NIL, SCS_VALUE_TYPE_bool,
+                            SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnBool, (scs_context_t)1);
+    // truck model (for the truck presets of the in-cab screen)
+    if (p->register_for_event(SCS_TELEMETRY_EVENT_configuration, OnConfiguration, nullptr) != SCS_RESULT_ok)
+        Log::Write("Truck presets: configuration event not available");
+    // speed for the speed-dependent volume ("autoVolume")
+    p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_speed, SCS_U32_NIL, SCS_VALUE_TYPE_float,
+                            SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnSpeed, nullptr);
+    p->common.log(SCS_LOG_TYPE_message, "[realistic-radio] Realistic Radio plugin initialised");
+    g_quit = false;
+    g_thread = CreateThread(nullptr, 0, RadioThread, nullptr, 0, nullptr);
+    return g_thread ? SCS_RESULT_ok : SCS_RESULT_generic_error;
+}
+
+SCSAPI_VOID scs_telemetry_shutdown(void) {
+    if (!g_instance) return;   // inactive duplicate copy
+    g_quit = true;
+    if (g_thread) { WaitForSingleObject(g_thread, 10000); CloseHandle(g_thread); g_thread = nullptr; }
+    g_havePos = false; g_electric = false; g_engine = false;
+    Log::Write("Plugin shut down");
+    Log::Shutdown();
+    CloseHandle(g_instance); g_instance = nullptr;
+}
+
+BOOL APIENTRY DllMain(HMODULE, DWORD, LPVOID) { return TRUE; }
