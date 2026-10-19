@@ -4,6 +4,7 @@
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 // Station selection, reception and favourite logic derived from MPL-2.0 licensed code (see NOTICE.md).
 #include "RadioManager.h"
+#include "EmbeddedData.h"
 #include "Logger.h"
 #include "json.hpp"
 #include <fstream>
@@ -22,6 +23,7 @@ bool RadioManager::Init(const std::wstring& dir, const std::string& game) {
     db_.LoadCustom(dir + L"custom-stations-" + Utf8ToWide(game) + L".json");
     BuildFamilies();
     db_.AssignFrequencies();
+    tunnels_.Init(dir, game);
     tuned_ = cfg_.tunedFreq;
     fav_.Load(dir + L"favourites-" + Utf8ToWide(game) + L".json");
     memPath_ = dir + L"trucks-" + Utf8ToWide(game) + L".json";
@@ -37,11 +39,13 @@ bool RadioManager::Init(const std::wstring& dir, const std::string& game) {
         std::vector<const char*> brands = game == "ats" ? std::vector<const char*>{"freightliner", "international", "kenworth", "mack", "peterbilt", "volvo", "westernstar"}
                                                          : std::vector<const char*>{"daf", "iveco", "man", "mercedes", "renault", "scania", "volvo"};
         for (const char* id : brands) CreateDirectoryW((b + Utf8ToWide(id)).c_str(), nullptr);
+        ExtractTruckLogos(b, std::vector<std::string>(brands.begin(), brands.end()));   // logos delivered with the plugin
         if (fresh) {
             std::ofstream r{std::filesystem::path(b + L"LIES MICH - READ ME.txt")};
             r << "Realistic Radio - Truck-Logos fuer den Startbildschirm / truck logos for the start screen\r\n\r\n"
                  "DE: Beim Einschalten der Zuendung zeigt das Navi kurz das Logo des Herstellers. Die Bilder legst du hier ab\r\n"
-                 "(PNG, JPG oder BMP). Ein dunkler Hintergrund wird automatisch durchsichtig und das Bild auf das Logo zugeschnitten,\r\n"
+                 "(PNG, JPG oder BMP). Logos fuer DAF, Iveco, MAN, Mercedes-Benz (8 Farben), Scania und Volvo liefert das\r\n"
+                 "Plugin schon mit; geloeschte oder ersetzte Logos werden nicht wiederhergestellt. Ein dunkler Hintergrund wird automatisch durchsichtig und das Bild auf das Logo zugeschnitten,\r\n"
                  "Handy-Hintergrundbilder gehen also auch.\r\n"
                  "  - ein Ordner pro Hersteller-ID: man\\, scania\\, volvo\\, daf\\, mercedes\\, iveco\\, renault\\\r\n"
                  "    (darin beliebig viele Bilder, z. B. mercedes\\blau.png, mercedes\\gold.png)\r\n"
@@ -51,7 +55,8 @@ bool RadioManager::Init(const std::wstring& dir, const std::string& game) {
                  "Gibt es mehrere Bilder, waehlst du im Einstellungsmenue (Strg + 0) auf der Seite LKW unter \"Start-Logo\", welches\r\n"
                  "gezeigt wird; die Wahl wird im LKW-Preset gespeichert. Ohne Bild wird der Herstellername gezeigt.\r\n\r\n"
                  "EN: When the ignition is switched on, the navigation screen briefly shows the manufacturer's logo. Put the\r\n"
-                 "pictures here (PNG, JPG or BMP). A dark background becomes transparent and the picture is cut to the logo\r\n"
+                 "pictures here (PNG, JPG or BMP). Logos for DAF, Iveco, MAN, Mercedes-Benz (8 colours), Scania and Volvo come\r\n"
+                 "with the plugin; logos you delete or replace are not restored. A dark background becomes transparent and the picture is cut to the logo\r\n"
                  "automatically, so phone wallpapers work too.\r\n"
                  "  - one folder per brand id: man\\, scania\\, volvo\\, daf\\, mercedes\\, iveco\\, renault\\ (any number of pictures)\r\n"
                  "  - or files right here: scania.png, scania-neon.png\r\n"
@@ -481,7 +486,7 @@ OverlayInfo RadioManager::CurrentInfo(const std::wstring& sub) {
     i.headline = playing_ ? Utf8ToWide(cfg_.overlay.textNowPlaying) : Utf8ToWide(cfg_.overlay.textStopped);
     i.title = Utf8ToWide(s.name);
     auto it = last_.available.find(currentCountry_);
-    i.bars = playing_ ? (it == last_.available.end() ? 0 : ReceptionBars(it->second.whitenoise)) : -1;
+    i.bars = playing_ ? (it == last_.available.end() || inTunnel_ ? 0 : ReceptionBars(it->second.whitenoise)) : -1;
     i.favourite = FavGet(currentCountry_) == s.name;
     for (size_t k = 0; k < list_.size(); ++k)   // "Sender 3 / 12" (position in the Next/Previous order)
         if (list_[k].country == currentCountry_ && (int)list_[k].index == currentIndex_) {
@@ -552,6 +557,8 @@ void RadioManager::UpdateSpeedVolume(float speed, ULONGLONG now) {
 void RadioManager::Tick(double x, double z, bool valid, bool electric, bool engine, float speed) {
     ULONGLONG now = GetTickCount64();
     UpdateSpeedVolume(speed, now);
+    if (valid) { lastX_ = x; lastZ_ = z; }
+    UpdateTunnel(x, z, valid, now);
     if (electric && !lastElectric_) startLogoAt_ = now;   // ignition on (also with the radio off)
     if (!electric) startLogoAt_ = 0;
     lastElectric_ = electric;
@@ -778,6 +785,33 @@ void RadioManager::RefreshFreq(const ReceptionResult& r) {
         return;
     }
     SetWhitenoise(shared ? std::min(1.0, best.w + 0.35) : best.w);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Tunnels: inside, FM fades into static, DAB+ stutters for a moment and then goes silent; USB / CD keeps playing.
+void RadioManager::UpdateTunnel(double x, double z, bool valid, ULONGLONG now) {
+    if (now >= tunCheckAt_) {   // position check 5x per second, map mods every 20 s
+        tunCheckAt_ = now + 200;
+        tunnels_.Tick();
+        bool raw = cfg_.tunnelSignal && valid && tunnels_.Inside(x, z);
+        // a short moment inside / outside does not count (portals, GPS jitter)
+        if (raw) { tunExitAt_ = 0; if (!tunEnterAt_) tunEnterAt_ = now; if (!inTunnel_ && now - tunEnterAt_ >= 400) { inTunnel_ = true; Log::Write("Tunnel: in"); if (source_ == Source::Radio) overlay_.Update(CurrentInfo()); } }
+        else { tunEnterAt_ = 0; if (!tunExitAt_) tunExitAt_ = now; if (inTunnel_ && now - tunExitAt_ >= 600) { inTunnel_ = false; Log::Write("Tunnel: out"); if (source_ == Source::Radio) overlay_.Update(CurrentInfo()); } }
+    }
+    if (now < tunStepAt_) return;
+    tunStepAt_ = now + 100;
+    tunnelDepth_ = inTunnel_ ? std::min(1.f, tunnelDepth_ + 0.05f) : std::max(0.f, tunnelDepth_ - 0.08f);   // ~2 s in, ~1.2 s out
+    float mul = 1.f, add = 0.f, secs = 0.15f;
+    if (source_ == Source::Radio && playing_ && tunnelDepth_ > 0.f) {
+        if (Dab()) {   // digital: a moment of drop-outs, then silence (and a stutter when the signal comes back)
+            mul = tunnelDepth_ >= 0.6f ? 0.f : (rand() % 100 < (int)(tunnelDepth_ * 140) ? 0.f : 1.f);
+            secs = 0.03f;
+        } else {
+            mul = 1.f - tunnelDepth_;
+            add = cfg_.whitenoise ? 0.8f * tunnelDepth_ : 0.f;
+        }
+    }
+    if (mul != tunMul_ || add != tunAdd_) { tunMul_ = mul; tunAdd_ = add; audio_.SetTunnel(mul, add, secs); }
 }
 
 void RadioManager::PickStation(const std::string& region, double whitenoise) {
@@ -1053,6 +1087,7 @@ void RadioManager::NextStation(int amount) {
 }
 
 void RadioManager::OnAction(Action a, bool hold) {
+    if (a == Action::MenuAlt) a = Action::Menu;   // second key for the settings menu
     if (a == Action::Menu) {
         overlay_.PrepareMenu();
         menu_.Open(cfg_);
@@ -1083,6 +1118,7 @@ void RadioManager::OnAction(Action a, bool hold) {
     }
     if (a == Action::Source) { ToggleSource(); return; }
     if (a == Action::Band) { ToggleBand(); return; }
+    if (a == Action::TunnelMark) { ShowCurrent(tunnels_.Mark(lastX_, lastZ_, cfg_.menuLanguage == "en")); return; }
     if (IsMemoryAction(a)) { if (cfg_.memoryButtons) StationButton((int)a - (int)Action::Memory1 + 1, hold); return; }
     if (a == Action::TuneUp || a == Action::TuneDown) {   // FM dial, 0.1 MHz
         if (!FreqMode()) {

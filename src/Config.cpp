@@ -15,7 +15,7 @@ using nlohmann::json;
 
 static const char* kActionNames[] = {"next", "previous", "stop", "volumeUp", "volumeDown", "makeFavourite", "goToFavourite", "mute", "showOverlay", "source", "nextDisc", "previousDisc", "screenPage", "menu",
                                      "band", "memory1", "memory2", "memory3", "memory4", "memory5", "memory6", "memory7", "memory8", "memory9",
-                                     "tuneUp", "tuneDown"};
+                                     "tuneUp", "tuneDown", "menu2", "tunnelMark"};
 static_assert(sizeof(kActionNames) / sizeof(kActionNames[0]) == (size_t)Action::Count, "every action needs a name");
 const char* ActionName(Action a) { return kActionNames[(int)a]; }
 
@@ -35,6 +35,7 @@ Config::Config() {
     for (int i = 0; i < 9; ++i) keys[(int)Action::Memory1 + i] = ParseKeyBinding("NumPad" + std::to_string(i + 1));   // station buttons
     keys[(int)Action::TuneUp] = ParseKeyBinding("Shift+Right");   // frequency radio: 0.1 MHz steps
     keys[(int)Action::TuneDown] = ParseKeyBinding("Shift+Left");
+    keys[(int)Action::MenuAlt] = ParseKeyBinding("Ctrl+F1");   // second menu key: Ctrl+0 can be taken by the free camera (developer mode)
 }
 
 int ParseKeyName(const std::string& in) {
@@ -214,6 +215,7 @@ bool Config::Load(const std::wstring& path) {
         memoryButtons = j.value("memoryButtons", memoryButtons);
         tuning = j.value("tuning", tuning); if (tuning != "frequency") tuning = "list";
         rdsAf = j.value("rdsAf", rdsAf);
+        tunnelSignal = j.value("tunnelSignal", tunnelSignal);
         tunedFreq = j.value("tunedFreq", tunedFreq);
         memoryHoldSeconds = std::clamp(j.value("memoryHoldSeconds", memoryHoldSeconds), 0.5, 3.0);
         if (j.contains("stationButtons") && j["stationButtons"].is_object())
@@ -340,7 +342,7 @@ bool Config::Load(const std::wstring& path) {
         std::vector<std::string> missingKeys;
         if (j.contains("keys") && j["keys"].is_object())
             for (const char* n : {"source", "nextDisc", "previousDisc", "screenPage", "menu", "band", "memory1", "memory2", "memory3", "memory4",
-                                  "memory5", "memory6", "memory7", "memory8", "memory9", "tuneUp", "tuneDown"}) if (!j["keys"].contains(n)) missingKeys.push_back(n);
+                                  "memory5", "memory6", "memory7", "memory8", "memory9", "tuneUp", "tuneDown", "menu2", "tunnelMark"}) if (!j["keys"].contains(n)) missingKeys.push_back(n);
         bool addSource = !missingKeys.empty();
         bool addMedia = !j.contains("media");
         bool addFolderPerDisc = !addMedia && j["media"].is_object() && !j["media"].contains("folderPerDisc");
@@ -424,7 +426,7 @@ static json MenuJsonObj(const Config& c) {
     j["activePreset"] = c.activePreset; j["presetAuto"] = c.presetAuto; j["truckMemory"] = c.truckMemory;
     j["band"] = c.band; j["dabRange"] = c.dabRange; j["switchMode"] = c.switchMode;
     j["memoryButtons"] = c.memoryButtons; j["memoryHoldSeconds"] = c.memoryHoldSeconds;
-    j["tuning"] = c.tuning; j["rdsAf"] = c.rdsAf;
+    j["tuning"] = c.tuning; j["rdsAf"] = c.rdsAf; j["tunnelSignal"] = c.tunnelSignal;
     j["presets"] = json::array();
     for (auto& p : c.presets) {
         json o; o["name"] = p.name; o["trucks"] = p.trucks;
@@ -472,7 +474,7 @@ void CopyMenuSettings(Config& d, const Config& s) {
     d.menuLanguage = s.menuLanguage; d.screenPage = s.screenPage;
     d.presets = s.presets; d.activePreset = s.activePreset; d.presetAuto = s.presetAuto; d.truckMemory = s.truckMemory;
     d.band = s.band; d.dabRange = s.dabRange; d.switchMode = s.switchMode; d.memoryButtons = s.memoryButtons; d.memoryHoldSeconds = s.memoryHoldSeconds;
-    d.tuning = s.tuning; d.rdsAf = s.rdsAf;
+    d.tuning = s.tuning; d.rdsAf = s.rdsAf; d.tunnelSignal = s.tunnelSignal;
     d.screen.width = s.screen.width; d.screen.height = s.screen.height; d.screen.format = s.screen.format;
     d.screen.enabled = s.screen.enabled; d.screen.durationSeconds = s.screen.durationSeconds;
     d.screen.areaX = s.screen.areaX; d.screen.areaY = s.screen.areaY; d.screen.areaW = s.screen.areaW; d.screen.areaH = s.screen.areaH;

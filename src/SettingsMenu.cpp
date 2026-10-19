@@ -114,6 +114,10 @@ const std::vector<Page>& Pages() {
             Slider("DAB+-Reichweite", "DAB+ range", "Im Vergleich zu FM", "Compared to FM", [](Config& c) -> double& { return c.dabRange; }, 1, 3, 0.1,
                    [](double v, bool en) { return Num(v, 1, en) + L" \u00d7"; }),
             Toggle("Rauschen bei schwachem Empfang", "Static on weak reception", "", "", [](Config& c) -> bool& { return c.whitenoise; }),
+            Toggle("Kein Empfang im Tunnel", "No reception in tunnels", "Tunnel-Daten: ETS2 Tunnel Radio (bohbotoly) \u2022 USB / CD spielt weiter",
+                   "Tunnel data: ETS2 Tunnel Radio (bohbotoly) \u2022 USB / CD keeps playing", [](Config& c) -> bool& { return c.tunnelSignal; }),
+            KeyRow("Taste: eigenen Tunnel markieren", "Key: mark an own tunnel", "Am Anfang und am Ende dr\u00fccken (Map-Mods)",
+                   "Press at the entry and at the exit (map mods)", Action::TunnelMark),
             Toggle("Umschaltgeräusch", "Tuning sound", "Beim Senderwechsel", "When the station changes", [](Config& c) -> bool& { return c.transitionWhitenoise; }),
         }, false});
         D page = Toggle("Radio-Seite dauerhaft zeigen", "Keep the radio page on", "Statt der Navigation", "Instead of the navigation",
@@ -219,7 +223,7 @@ const Action kRows[] = {Action::Next, Action::Previous, Action::VolumeUp, Action
                         Action::Source, Action::NextDisc, Action::PreviousDisc, Action::ScreenPage, Action::MakeFavourite,
                         Action::GoToFavourite, Action::ShowOverlay, Action::Menu, Action::Band,
                         Action::Memory1, Action::Memory2, Action::Memory3, Action::Memory4, Action::Memory5,
-                        Action::Memory6, Action::Memory7, Action::Memory8, Action::Memory9, Action::TuneUp, Action::TuneDown};
+                        Action::Memory6, Action::Memory7, Action::Memory8, Action::Memory9, Action::TuneUp, Action::TuneDown, Action::MenuAlt, Action::TunnelMark};
 constexpr int kRowCount = (int)(sizeof(kRows) / sizeof(kRows[0]));
 static_assert(kRowCount == (int)Action::Count, "every action needs a row in the key menu");
 
@@ -239,6 +243,8 @@ const char* LabelDe(Action a) {
     case Action::GoToFavourite: return "Zum Favoriten";
     case Action::ShowOverlay: return "Overlay einblenden";
     case Action::Menu: return "Dieses Menü";
+    case Action::MenuAlt: return "Dieses Menü (zweite Taste)";
+    case Action::TunnelMark: return "Eigenen Tunnel markieren";
     case Action::Band: return "Band: FM / DAB+";
     case Action::Memory1: return "Stationstaste 1"; case Action::Memory2: return "Stationstaste 2"; case Action::Memory3: return "Stationstaste 3";
     case Action::Memory4: return "Stationstaste 4"; case Action::Memory5: return "Stationstaste 5"; case Action::Memory6: return "Stationstaste 6";
@@ -263,6 +269,8 @@ const char* LabelEn(Action a) {
     case Action::GoToFavourite: return "Go to favourite";
     case Action::ShowOverlay: return "Show overlay";
     case Action::Menu: return "This menu";
+    case Action::MenuAlt: return "This menu (second key)";
+    case Action::TunnelMark: return "Mark an own tunnel";
     case Action::Band: return "Band: FM / DAB+";
     case Action::Memory1: return "Station button 1"; case Action::Memory2: return "Station button 2"; case Action::Memory3: return "Station button 3";
     case Action::Memory4: return "Station button 4"; case Action::Memory5: return "Station button 5"; case Action::Memory6: return "Station button 6";

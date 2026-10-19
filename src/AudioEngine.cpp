@@ -20,6 +20,7 @@ std::vector<float> AudioEngine::LoadClip(const std::wstring& path) {
 
 bool AudioEngine::Init(const std::wstring& dataDir, int reconnectMaxSeconds) {
     reconnectMax_ = reconnectMaxSeconds;
+    gTunMul_.target = 1.f; gTunMul_.cur = 1.f; gTunMul_.now = 1.f;   // no tunnel
     static_ = LoadClip(dataDir + L"audio\\whitestatic.mp3");
     switch_ = LoadClip(dataDir + L"audio\\radio_switch.mp3");
     tmp_.resize(kRate * kChannels);
@@ -95,7 +96,7 @@ void AudioEngine::Mix(float* out, ma_uint32 frames) {
         if (masterCur_ < masterTarget) masterCur_ = std::min(masterTarget, masterCur_ + masterStep);
         else if (masterCur_ > masterTarget) masterCur_ = std::max(masterTarget, masterCur_ - masterStep);
         const float master = masterCur_;
-        float gs = gStream_.Next(), gn = gStatic_.Next(), gw = gSwitch_.Next();
+        float gs = gStream_.Next() * gTunMul_.Next(), gn = std::min(1.f, gStatic_.Next() + gTunStatic_.Next()), gw = gSwitch_.Next();
         for (ma_uint32 c = 0; c < kChannels; ++c) {
             float v = 0;
             if (i < got) v += tmp_[i * kChannels + c] * gs;

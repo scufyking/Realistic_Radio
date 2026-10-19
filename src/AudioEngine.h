@@ -21,6 +21,8 @@ public:
     void SetStreamGain(float g, float seconds);
     void SetStaticGain(float g, float seconds);
     void SetSwitchGain(float g, float seconds);
+    // tunnel: the programme fades (streamMul 1 -> 0) and extra static comes in (FM); on top of the other gains
+    void SetTunnel(float streamMul, float staticAdd, float seconds) { SetRamp(gTunMul_, streamMul, seconds); SetRamp(gTunStatic_, staticAdd, seconds); }
     float StreamGain() const;
     bool NoiseActive() const { return gStatic_.target.load() > 0.f || gSwitch_.target.load() > 0.f || gStatic_.now.load() > 0.f || gSwitch_.now.load() > 0.f; }
     void SetMaster(float v) { float c = std::clamp(v, 0.f, 1.f); master_ = c * c; }   // perceptual: 50 % slider = -12 dB, 10 % = -40 dB
@@ -49,7 +51,7 @@ private:
     bool device_ok_ = false;
     std::vector<float> static_, switch_;
     size_t staticPos_ = 0, switchPos_ = 0;
-    Ramp gStream_, gStatic_, gSwitch_;
+    Ramp gStream_, gStatic_, gSwitch_, gTunMul_, gTunStatic_;
     std::atomic<float> master_{0.f};
     float masterCur_ = 0.f;   // audio thread only: smoothed master (no sudden jumps)
     std::atomic<bool> muted_{false}, paused_{false};

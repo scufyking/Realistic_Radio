@@ -11,6 +11,7 @@
 #include "Overlay.h"
 #include "MediaLibrary.h"
 #include "SettingsMenu.h"
+#include "TunnelMap.h"
 #include <set>
 #include <unordered_map>
 
@@ -124,6 +125,13 @@ private:
     int AutoStore(bool overwrite);   // station buttons from the best received stations here; returns how many were set
     bool autoStoreChecked_ = false;  // empty station buttons are filled once after the first reception
     ULONGLONG switchHoldMs_ = 2200;
+    // tunnels: no reception inside (TunnelMap)
+    TunnelMap tunnels_;
+    void UpdateTunnel(double x, double z, bool valid, ULONGLONG now);
+    bool inTunnel_ = false;
+    float tunnelDepth_ = 0.f, tunMul_ = 1.f, tunAdd_ = 0.f;
+    ULONGLONG tunEnterAt_ = 0, tunExitAt_ = 0, tunStepAt_ = 0, tunCheckAt_ = 0;
+    double lastX_ = 0, lastZ_ = 0;
     MediaLibrary lib_;
     std::vector<int> order_;    // play order (shuffled or folder order), indices into lib_.Tracks()
     int orderPos_ = -1, track_ = -1, disc_ = -1;

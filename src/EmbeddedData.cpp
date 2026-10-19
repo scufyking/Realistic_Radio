@@ -5,6 +5,7 @@
 #include "EmbeddedData.h"
 #include "Common.h"
 #include "Logger.h"
+#include <algorithm>
 #include <cstdio>
 
 namespace {
@@ -15,6 +16,23 @@ const Item kItems[] = {
     {103, L"audio\\whitestatic.mp3", true},
     {104, L"audio\\radio_switch.mp3", true},
     {105, L"custom-stations-ets2.example.json", true},
+};
+// Truck logos for the start screen: "<brand id>\\<file>" below truck-logos\\.
+struct Logo { int id; const wchar_t* path; };
+const Logo kLogos[] = {
+    {110, L"daf\\daf.png"},
+    {111, L"iveco\\iveco.png"},
+    {112, L"man\\man.png"},
+    {113, L"mercedes\\blau.png"},
+    {114, L"mercedes\\gold.png"},
+    {115, L"mercedes\\gruen.png"},
+    {116, L"mercedes\\kupfer.png"},
+    {117, L"mercedes\\lila.png"},
+    {118, L"mercedes\\perlmutt.png"},
+    {119, L"mercedes\\rosa.png"},
+    {120, L"mercedes\\silber.png"},
+    {121, L"scania\\scania.png"},
+    {122, L"volvo\\volvo.png"},
 };
 
 HMODULE SelfModule() {
@@ -53,6 +71,13 @@ std::string ReadSmall(const std::wstring& path) {
 }
 }
 
+bool EmbeddedResource(int id, const char*& data, size_t& size) {
+    const void* d = nullptr; DWORD n = 0;
+    if (!Resource(id, d, n)) return false;
+    data = (const char*)d; size = n;
+    return true;
+}
+
 bool ExtractEmbeddedData(const std::wstring& dir) {
     CreateDirectoryW(dir.c_str(), nullptr);
     CreateDirectoryW((dir + L"audio").c_str(), nullptr);
@@ -77,4 +102,35 @@ bool ExtractEmbeddedData(const std::wstring& dir) {
     if (!upToDate) WriteFileAtomic(verFile, ver, (DWORD)strlen(ver));
     if (written) Log::Write("Data files written from the DLL: %d (data version %s)", written, ver);
     return true;
+}
+
+int ExtractTruckLogos(const std::wstring& logoDir, const std::vector<std::string>& brands) {
+    // Every delivered logo is written once. Its name is then kept in delivered-logos.txt, so a logo the player
+    // deleted or replaced stays the way the player left it; a picture of the player with the same name is never overwritten.
+    std::wstring listFile = logoDir + L"delivered-logos.txt";
+    std::string done;
+    if (FILE* f = _wfopen(listFile.c_str(), L"rb")) {
+        char buf[4096]; size_t n;
+        while ((n = fread(buf, 1, sizeof(buf), f)) > 0) done.append(buf, n);
+        fclose(f);
+    }
+    int written = 0; bool listChanged = false;
+    for (const Logo& l : kLogos) {
+        std::string rel = WideToUtf8(l.path);
+        std::string brand = rel.substr(0, rel.find('\\'));
+        if (std::find(brands.begin(), brands.end(), brand) == brands.end()) continue;   // brand not in this game
+        if (done.find("\n" + rel + "\r") != std::string::npos || done.rfind(rel + "\r", 0) == 0) continue;
+        std::wstring path = logoDir + l.path;
+        CreateDirectoryW((logoDir + Utf8ToWide(brand)).c_str(), nullptr);
+        if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
+            const void* d; DWORD n;
+            if (!Resource(l.id, d, n)) { Log::Write("Embedded truck logo %d missing in DLL", l.id); continue; }
+            if (WriteFileAtomic(path, d, n)) ++written;
+            else { Log::Write("Could not write %s (error %lu)", WideToUtf8(path).c_str(), GetLastError()); continue; }
+        }
+        done += rel + "\r\n"; listChanged = true;
+    }
+    if (listChanged) WriteFileAtomic(listFile, done.data(), (DWORD)done.size());
+    if (written) Log::Write("Truck logos: %d delivered logo(s) written to truck-logos\\", written);
+    return written;
 }

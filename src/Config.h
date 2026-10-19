@@ -7,7 +7,7 @@
 #include "DisplayWindow.h"
 
 enum class Action { Next, Previous, Stop, VolumeUp, VolumeDown, MakeFavourite, GoToFavourite, Mute, ShowOverlay, Source, NextDisc, PreviousDisc, ScreenPage, Menu,
-                    Band, Memory1, Memory2, Memory3, Memory4, Memory5, Memory6, Memory7, Memory8, Memory9, TuneUp, TuneDown, Count };
+                    Band, Memory1, Memory2, Memory3, Memory4, Memory5, Memory6, Memory7, Memory8, Memory9, TuneUp, TuneDown, MenuAlt, TunnelMark, Count };
 inline bool IsMemoryAction(Action a) { return a >= Action::Memory1 && a <= Action::Memory9; }
 
 struct KeyBinding { int vk = 0; bool ctrl = false, shift = false, alt = false; };
@@ -118,7 +118,8 @@ struct Config {
     double memoryHoldSeconds = 1.5;
     std::map<std::string, std::string> stationButtons;   // "1".."9" -> "<region>|<station name>" or "f:<0.1 MHz>" (remembered)
     std::string tuning = "list";       // list: stations in range one after another | frequency: FM dial like an old radio
-    bool rdsAf = false;                // frequency radio: follow the programme to another frequency (RDS AF); off = like in the old days
+    bool rdsAf = false;
+    bool tunnelSignal = true;          // no reception in tunnels (FM: static, DAB+: drop-outs then silence); USB / CD keeps playing                // frequency radio: follow the programme to another frequency (RDS AF); off = like in the old days
     int tunedFreq = 0;                 // last FM frequency in 0.1 MHz (remembered)
     // Reception (original web/config.js)
     double radius = 7500.0;
