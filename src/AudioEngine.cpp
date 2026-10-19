@@ -70,6 +70,7 @@ void AudioEngine::SetStaticGain(float g, float s) { SetRamp(gStatic_, g, s); }
 void AudioEngine::SetSwitchGain(float g, float s) { SetRamp(gSwitch_, g, s); }
 bool AudioEngine::IsBuffering() { std::lock_guard<std::mutex> l(sessMtx_); return session_ && session_->Buffering(); }
 int AudioEngine::StreamFailures() { std::lock_guard<std::mutex> l(sessMtx_); return session_ ? session_->Failures() : 0; }
+bool AudioEngine::SongTitle(std::string& out) { std::lock_guard<std::mutex> l(sessMtx_); out.clear(); return session_ && session_->Title(out); }
 AudioEngine::TrackState AudioEngine::Track() {
     std::lock_guard<std::mutex> l(sessMtx_);
     TrackState t;
