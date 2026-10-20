@@ -11,6 +11,7 @@
 // redirect Present/Present1 to our function, which renders a textured quad and then calls the original.
 namespace D3D11Overlay {
 bool Install();                  // call from the radio thread (never from DllMain / game callbacks)
+void Watchdog();                 // radio thread, ~20x per second: fallback code hooks for graphics tools (see D3D11Overlay.cpp)
 void Uninstall();
 void SetImage(std::shared_ptr<const OverlayImage> img);
 void SetAlpha(float a);

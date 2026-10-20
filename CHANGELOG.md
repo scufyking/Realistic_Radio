@@ -2,6 +2,34 @@
 
 **English** · [Deutsch](#changelog-deutsch)
 
+## 1.4.7 – Works with Snowymoon
+
+### Fixed
+- **Menu and navigation display with Snowymoon.** Snowymoon calls Windows' picture output directly, past the function table Realistic Radio hooks – so the plugin never saw a frame: the settings menu stayed invisible and the radio display on the navigation screen was missing. Now, when a graphics tool is detected and no frame arrives within 5 s, Realistic Radio hooks the code of Present and of the render-target functions itself (MinHook, BSD license, see NOTICE.md) and draws after Snowymoon's effects. Without a graphics tool nothing changes. Log: `code hooks on Present/Present1 are on`, `code hooks on the render-target functions are on`.
+
+### Upgrade notes
+- Replace `realistic-radio.dll` only.
+
+## 1.4.6 – Crash fix
+
+### Fixed
+- **Crash of 1.4.5 fixed.** The game could crash right after loading. 1.4.5 created a test swap chain at start to find graphics tools; tools such as Snowymoon take over such a swap chain, and when Realistic Radio released it again, the game crashed. This fallback is removed again; drawing works as in 1.4.4.
+- **Log:** lists the DLLs loaded from the game folder (`Overlay: DLLs from the game folder: …`), so graphics tools such as Snowymoon can be recognised – also when they load through `dinput8.dll`.
+
+### Upgrade notes
+- Replace `realistic-radio.dll` only. Everyone on 1.4.5 should update.
+
+## 1.4.5 – Snowymoon: second way to draw, more details in the log
+
+> **Note:** This fix was not tested with Snowymoon.
+
+### Fixed
+- **Snowymoon (second attempt).** Snowymoon puts its own `dxgi.dll` next to the game. Since 1.4.4 Realistic Radio draws at Windows' own swap chain; if no frames arrive there, it now also draws at Snowymoon's swap chain (`Overlay: the graphics tool's swap chain … is hooked as a fallback`). The menu and the navigation display should then appear again – possibly with Snowymoon's effects (e.g. anti-aliasing) over them.
+- **More details in the log** to find the cause if it still does not work: which swap chain the first frame came from (`Overlay: first frame …`, with size, format and swap effect) and after 20 s how many frames arrived at Windows' swap chain and at the graphics tool's (`Overlay: status after 20 s …`).
+
+### Upgrade notes
+- Replace `realistic-radio.dll` only.
+
 ## 1.4.4 – Live song title, modern volume bar, works with Snowymoon and other graphics tools
 
 > **Note:** The fix for Snowymoon was not tested with Snowymoon.
@@ -202,6 +230,34 @@
 
 <a id="changelog-deutsch"></a>
 # Changelog (Deutsch)
+
+## 1.4.7 – Läuft mit Snowymoon
+
+### Behoben
+- **Menü und Navi-Anzeige mit Snowymoon.** Snowymoon ruft die Bildausgabe von Windows direkt auf, an der Funktionstabelle vorbei, in die sich Realistic Radio einklinkt – das Plugin bekam deshalb kein einziges Bild: Das Einstellungsmenü blieb unsichtbar und die Radioanzeige auf dem Navi fehlte. Wird jetzt ein Grafik-Tool erkannt und kommt 5 s lang kein Bild an, hängt sich Realistic Radio direkt in den Code der Bildausgabe und der Zeichenflächen-Funktionen (MinHook, BSD-Lizenz, siehe NOTICE.md) und zeichnet nach den Effekten von Snowymoon. Ohne Grafik-Tool ändert sich nichts. Log: `code hooks on Present/Present1 are on`, `code hooks on the render-target functions are on`.
+
+### Hinweise zum Update
+- Nur `realistic-radio.dll` ersetzen.
+
+## 1.4.6 – Absturz behoben
+
+### Behoben
+- **Absturz von 1.4.5 behoben.** Das Spiel konnte direkt nach dem Laden abstürzen. 1.4.5 hat beim Start eine Test-Bildausgabe angelegt, um Grafik-Tools zu finden; Tools wie Snowymoon übernehmen so eine Bildausgabe, und als Realistic Radio sie wieder freigab, stürzte das Spiel ab. Dieser Rückfallweg ist wieder entfernt; gezeichnet wird wie in 1.4.4.
+- **Log:** nennt die DLLs, die aus dem Spielordner geladen sind (`Overlay: DLLs from the game folder: …`), damit Grafik-Tools wie Snowymoon erkannt werden – auch wenn sie über `dinput8.dll` laden.
+
+### Hinweise zum Update
+- Nur `realistic-radio.dll` ersetzen. Wer 1.4.5 hat, sollte aktualisieren.
+
+## 1.4.5 – Snowymoon: zweiter Zeichenweg, mehr Angaben im Log
+
+> **Hinweis:** Dieser Fix wurde nicht mit Snowymoon getestet.
+
+### Behoben
+- **Snowymoon (zweiter Anlauf).** Snowymoon legt eine eigene `dxgi.dll` neben das Spiel. Seit 1.4.4 zeichnet Realistic Radio an der Bildausgabe von Windows selbst; kommen dort keine Bilder an, zeichnet es jetzt zusätzlich an der Bildausgabe von Snowymoon (`Overlay: the graphics tool's swap chain … is hooked as a fallback`). Menü und Navi-Anzeige sollten dann wieder erscheinen – eventuell mit den Effekten von Snowymoon (z. B. Kantenglättung) darüber.
+- **Mehr Angaben im Log**, um die Ursache zu finden, falls es weiter nicht geht: über welche Bildausgabe das erste Bild kam (`Overlay: first frame …`, mit Größe, Format und Swap-Effekt) und nach 20 s, wie viele Bilder bei Windows und beim Grafik-Tool ankamen (`Overlay: status after 20 s …`).
+
+### Hinweise zum Update
+- Nur `realistic-radio.dll` ersetzen.
 
 ## 1.4.4 – Songtitel live, moderne Lautstärke-Leiste, läuft mit Snowymoon und anderen Grafik-Tools
 

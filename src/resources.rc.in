@@ -23,8 +23,8 @@
 
 // Version shown in the file properties (Details tab). Keep in sync with REALISTIC_RADIO_VERSION in src/Common.h.
 1 VERSIONINFO
-FILEVERSION 1,4,4,0
-PRODUCTVERSION 1,4,4,0
+FILEVERSION 1,4,7,0
+PRODUCTVERSION 1,4,7,0
 FILEOS 0x40004
 FILETYPE 0x2
 BEGIN
@@ -34,12 +34,12 @@ BEGIN
     BEGIN
       VALUE "CompanyName", "ScufyKing"
       VALUE "FileDescription", "Realistic Radio - ETS2/ATS telemetry plugin"
-      VALUE "FileVersion", "1.4.4"
+      VALUE "FileVersion", "1.4.7"
       VALUE "InternalName", "realistic-radio"
       VALUE "LegalCopyright", "Copyright (c) 2026 ScufyKing, MPL-2.0"
       VALUE "OriginalFilename", "realistic-radio.dll"
       VALUE "ProductName", "Realistic Radio"
-      VALUE "ProductVersion", "1.4.4"
+      VALUE "ProductVersion", "1.4.7"
     END
   END
   BLOCK "VarFileInfo"

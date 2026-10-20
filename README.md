@@ -14,7 +14,7 @@ By **ScufyKing**. The whole radio runs inside the game:
 
 Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ETS2, and the radio plays. Station data and sounds are built into the DLL.
 
-> **Version 1.4.4** · [Changes](CHANGELOG.md)
+> **Version 1.4.7** · [Changes](CHANGELOG.md)
 >
 > **Status:** Tested in ETS2 1.61 (Windows x64) with several MAN and Scania models and mod trucks: the plugin loads, reads the truck position, switches stations by region, plays audio and shows station and volume on the navigation screen. American Truck Simulator data is included but ATS is untested.
 
@@ -439,7 +439,7 @@ Almost every problem can be diagnosed from `realistic-radio\realistic-radio.log`
 | "Media Foundation cannot open …" | Windows cannot play this format (e.g. some HLS or Ogg streams). Switch to another station or replace the URL. |
 | Overlay says "Station unavailable" | The stream cannot be reached right now. The plugin keeps retrying in the background; usually it is quicker to switch stations. |
 | No pop-up overlay | It is off by default: set `"overlay": { "mode": "auto" }`. If it is on but not visible, look for `Overlay:` in the log; `Present hook installed` and `D3D11 renderer ready` mean it is active. If another overlay tool conflicts, try `"mode": "window"`. |
-| Menu invisible or navigation-screen display missing with Snowymoon, ReShade or another graphics tool | From 1.4.4 Realistic Radio draws after the tool's effects (log: `graphics tool detected`); a menu that cannot be drawn closes again after 2.5 s. If the tool uses **End** for its own menu, move Realistic Radio's Stop key (`keys.stop`) to another key. Still a problem? Send the log (lines starting with `Overlay:`). |
+| Menu invisible or navigation-screen display missing with Snowymoon, ReShade or another graphics tool | Realistic Radio draws after the tool's effects (log: `graphics tool detected`). If the tool calls Windows' picture output directly (Snowymoon), Realistic Radio switches to code hooks after 5 s (log: `code hooks on Present … are on`) – from 1.4.7. A menu that cannot be drawn closes again after 2.5 s. If the tool uses **End** for its own menu, move Realistic Radio's Stop key (`keys.stop`) to another key. Still a problem? Send the log (lines starting with `Overlay:`). |
 | Overlay hides part of the HUD | Change `position`, `offsetY` or `scale`. |
 | No station logo | Logos are downloaded from `radio.scufystudio.de` on first use; without internet, or if the server is down, the panel is shown without a logo and the download is retried after 10 minutes. |
 | Keys do nothing | Is the game the active window? Another program may be using the key; pick a different one. |
@@ -529,6 +529,7 @@ node tools/convert_data.js <path>/web data
 | Library | Version | License | Purpose |
 |---|---|---|---|
 | [miniaudio](https://github.com/mackron/miniaudio) | 0.11.25 | Public domain or MIT-0 | Audio output, MP3 decoding, resampling |
+| [MinHook](https://github.com/TsudaKageyu/minhook) | git 8af6b4a (Sept. 2026) | BSD 2-Clause | Fallback code hooks for graphics tools such as Snowymoon |
 | [nlohmann/json](https://github.com/nlohmann/json) | 3.11.3 | MIT | Reading the JSON files |
 | [Adafruit GFX Library](https://github.com/adafruit/Adafruit-GFX-Library) (5×7 font only) | – | BSD | Dot-matrix characters of the car-radio display |
 | SCS Telemetry SDK | 1.x | MIT-style, see `sdk/sdk_license.txt` | Interface to the game |
@@ -570,7 +571,7 @@ The folder `server/logo/` contains all logos (downscaled to 200 px) in exactly t
 ├── data/                      station/city data and sounds (embedded into the DLL)
 ├── server/logo/               station logos for the logo server (radio.scufystudio.de/logo/)
 ├── sdk/                       SCS Telemetry SDK headers
-├── third_party/               miniaudio, nlohmann/json, 5x7 font (Adafruit GFX)
+├── third_party/               miniaudio, nlohmann/json, 5x7 font (Adafruit GFX), MinHook
 └── tools/                     data converter, equivalence test
 ```
 

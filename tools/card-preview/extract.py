@@ -6,7 +6,10 @@ src = open(os.path.join(root, 'OverlayImage.cpp'), encoding='utf-8').read()
 hdr = open(os.path.join(root, 'OverlayImage.h'), encoding='utf-8').read()
 structs = hdr[hdr.index('struct OverlayImage {'):hdr.index('// Draws the panel with GDI')]
 menu_struct = hdr[hdr.index('enum class MenuItemKind'):hdr.index('std::shared_ptr<OverlayImage> RenderMenu(')]
-decls = '''std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const OverlayImage* logo, int W, int H, const std::string& design = "modern", float scale = 1.f, float logoSize = 1.f);
+decls = '''struct SongLine { int x = 0, y = 0, w = 0, h = 0; std::shared_ptr<OverlayImage> strip; };
+std::shared_ptr<OverlayImage> RenderScreenCard(const OverlayInfo& info, const OverlayImage* logo, int W, int H, const std::string& design = "modern", float scale = 1.f, float logoSize = 1.f, SongLine* song = nullptr);
+std::shared_ptr<OverlayImage> ComposeSongLine(const OverlayImage& card, const SongLine& song, int offset);
+std::shared_ptr<OverlayImage> RenderScreenVolumeBar(const OverlayInfo& info, int W, int H, const std::string& design, float scale, const OverlayImage* under);
 std::shared_ptr<OverlayImage> RenderScreenGrid(int W, int H, bool flipX = false, bool flipY = false);
 '''
 a = src[src.index('namespace {'):src.index('std::shared_ptr<OverlayImage> RenderOverlay(')]

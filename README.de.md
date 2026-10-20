@@ -14,7 +14,7 @@ Von **ScufyKing**. Das ganze Radio läuft im Spiel:
 
 Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels kopieren, ETS2 starten, das Radio läuft. Senderdaten und Sounds stecken in der DLL.
 
-> **Version 1.4.4** · [Änderungen](CHANGELOG.md#changelog-deutsch)
+> **Version 1.4.7** · [Änderungen](CHANGELOG.md#changelog-deutsch)
 >
 > **Stand:** Getestet in ETS2 1.61 (Windows x64) mit mehreren MAN- und Scania-Modellen sowie Mod-LKW: Das Plugin wird geladen, liest die LKW-Position, wechselt Sender nach Region, spielt Ton ab und zeigt Sender und Lautstärke auf dem Navi-Bildschirm. Daten für American Truck Simulator sind enthalten, ATS ist aber ungetestet.
 
@@ -431,7 +431,7 @@ Fast jedes Problem lässt sich an `realistic-radio\realistic-radio.log` erkennen
 
 | Problem | Ursache und Lösung |
 |---|---|
-| Menü unsichtbar oder Radioanzeige auf dem Navi fehlt mit Snowymoon, ReShade oder anderen Grafik-Tools | Ab 1.4.4 zeichnet Realistic Radio erst nach den Effekten des Tools (Log: `graphics tool detected`); ein Menü, das nicht gezeichnet werden kann, schließt sich nach 2,5 s wieder. Nutzt das Tool **Ende** für sein eigenes Menü, die Stopp-Taste von Realistic Radio (`keys.stop`) auf eine andere Taste legen. Klappt es trotzdem nicht: Log schicken (Zeilen mit `Overlay:`). |
+| Menü unsichtbar oder Radioanzeige auf dem Navi fehlt mit Snowymoon, ReShade oder anderen Grafik-Tools | Realistic Radio zeichnet erst nach den Effekten des Tools (Log: `graphics tool detected`). Ruft das Tool die Bildausgabe von Windows direkt auf (Snowymoon), wechselt Realistic Radio nach 5 s auf Code-Hooks (Log: `code hooks on Present … are on`) – ab 1.4.7. Ein Menü, das nicht gezeichnet werden kann, schließt sich nach 2,5 s wieder. Nutzt das Tool **Ende** für sein eigenes Menü, die Stopp-Taste von Realistic Radio (`keys.stop`) auf eine andere Taste legen. Klappt es trotzdem nicht: Log schicken (Zeilen mit `Overlay:`). |
 | Es wird keine `realistic-radio.log` angelegt | Die DLL wurde nicht geladen. Ordner prüfen: Er muss `bin\win_x64\plugins\` heißen. Wurde die Meldung zu den „erweiterten SDK-Funktionen“ mit OK bestätigt? |
 | Radio bei Lautstärke 0 noch hörbar oder zwei Sender gleichzeitig | Das Plugin ist doppelt installiert (z. B. `realistic-radio (1).dll`). Im Log steht dann `WARNING: another radio plugin DLL is in the plugins folder`; nur eine DLL behalten. Eine zweite Kopie dieser Version bleibt von selbst inaktiv. |
 | „Data file not found“ im Log | Das Plugin konnte seinen Ordner neben der DLL nicht schreiben (z. B. keine Schreibrechte im Spielordner). Im Log nach „Could not write“ suchen. |
@@ -529,6 +529,7 @@ node tools/convert_data.js <Pfad>/web data
 | Bibliothek | Version | Lizenz | Zweck |
 |---|---|---|---|
 | [miniaudio](https://github.com/mackron/miniaudio) | 0.11.25 | Public Domain oder MIT-0 | Audioausgabe, MP3-Decoding, Resampling |
+| [MinHook](https://github.com/TsudaKageyu/minhook) | git 8af6b4a (Sept. 2026) | BSD 2-Clause | Rückfall-Code-Hooks für Grafik-Tools wie Snowymoon |
 | [nlohmann/json](https://github.com/nlohmann/json) | 3.11.3 | MIT | Lesen der JSON-Dateien |
 | [Adafruit GFX Library](https://github.com/adafruit/Adafruit-GFX-Library) (nur 5×7-Schrift) | – | BSD | Punktmatrix-Zeichen des Autoradio-Displays |
 | SCS-Telemetrie-SDK | 1.x | MIT-ähnlich, siehe `sdk/sdk_license.txt` | Schnittstelle zum Spiel |
@@ -570,7 +571,7 @@ Der Ordner `server/logo/` enthält alle Logos (verkleinert auf 200 px) in genau 
 ├── data/                      Sender-/Städtedaten und Sounds (in die DLL eingebettet)
 ├── server/logo/               Senderlogos für den Logo-Server (radio.scufystudio.de/logo/)
 ├── sdk/                       Header des SCS-Telemetrie-SDK
-├── third_party/               miniaudio, nlohmann/json, 5×7-Schrift (Adafruit GFX)
+├── third_party/               miniaudio, nlohmann/json, 5×7-Schrift (Adafruit GFX), MinHook
 └── tools/                     Datenkonverter, Vergleichstest
 ```
 

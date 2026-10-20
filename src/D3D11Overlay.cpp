@@ -5,6 +5,8 @@
 #include "D3D11Overlay.h"
 #include "Logger.h"
 #include <d3d11_1.h>
+#include <psapi.h>
+#include "MinHook.h"
 #include <dxgi1_2.h>
 #include <d3dcommon.h>
 #include <map>
@@ -31,6 +33,13 @@ std::mutex g_imgMtx;
 std::shared_ptr<const OverlayImage> g_img;
 std::atomic<unsigned> g_imgVersion{0};
 thread_local bool t_inHook = false;
+// Code hooks (MinHook) as a fallback for graphics tools that call Windows' Present / OMSetRenderTargets directly instead of
+// through the function tables (e.g. Snowymoon: the table hook then never sees a frame). t_chain*: this call already went
+// through a table hook, so the code hook further down does not handle it a second time.
+thread_local bool t_chainPresent = false, t_chainRt = false;
+std::atomic<bool> g_detours{false};
+std::atomic<ULONGLONG> g_installAt{0};
+bool g_toolDetected = false;
 
 // --- screen (render target) layer
 typedef void(STDMETHODCALLTYPE* OMSetRTFn)(ID3D11DeviceContext*, UINT, ID3D11RenderTargetView* const*, ID3D11DepthStencilView*);
@@ -417,15 +426,41 @@ void OnRenderTargetChange(ID3D11DeviceContext* ctx, UINT num, ID3D11RenderTarget
 }
 
 void STDMETHODCALLTYPE HookOMSetRT(ID3D11DeviceContext* ctx, UINT num, ID3D11RenderTargetView* const* views, ID3D11DepthStencilView* dsv) {
-    if (!t_inHook && ctx->GetType() == D3D11_DEVICE_CONTEXT_IMMEDIATE) { t_inHook = true; OnRenderTargetChange(ctx, num, views); t_inHook = false; }
+    if (!t_inHook && !t_chainRt && ctx->GetType() == D3D11_DEVICE_CONTEXT_IMMEDIATE) { t_inHook = true; OnRenderTargetChange(ctx, num, views); t_inHook = false; }
+    bool was = t_chainRt; t_chainRt = true;
     FindVt(ctx)->rt(ctx, num, views, dsv);
+    t_chainRt = was;
 }
 void STDMETHODCALLTYPE HookOMSetRTUAV(ID3D11DeviceContext* ctx, UINT num, ID3D11RenderTargetView* const* views, ID3D11DepthStencilView* dsv,
                                       UINT uavStart, UINT numUav, ID3D11UnorderedAccessView* const* uavs, const UINT* counts) {
-    if (num != D3D11_KEEP_RENDER_TARGETS_AND_DEPTH_STENCIL && !t_inHook && ctx->GetType() == D3D11_DEVICE_CONTEXT_IMMEDIATE) {
+    if (num != D3D11_KEEP_RENDER_TARGETS_AND_DEPTH_STENCIL && !t_inHook && !t_chainRt && ctx->GetType() == D3D11_DEVICE_CONTEXT_IMMEDIATE) {
         t_inHook = true; OnRenderTargetChange(ctx, num, views); t_inHook = false;
     }
+    bool was = t_chainRt; t_chainRt = true;
     FindVt(ctx)->rtuav(ctx, num, views, dsv, uavStart, numUav, uavs, counts);
+    t_chainRt = was;
+}
+// code hooks on the render-target functions of the game's immediate context (fallback, see g_detours)
+OMSetRTFn g_trampRt = nullptr;
+OMSetRTUAVFn g_trampRtUav = nullptr;
+void* g_detRtTarget = nullptr;
+void STDMETHODCALLTYPE DetOMSetRT(ID3D11DeviceContext* ctx, UINT num, ID3D11RenderTargetView* const* views, ID3D11DepthStencilView* dsv) {
+    if (!t_inHook && !t_chainRt && ctx->GetType() == D3D11_DEVICE_CONTEXT_IMMEDIATE) { t_inHook = true; OnRenderTargetChange(ctx, num, views); t_inHook = false; }
+    g_trampRt(ctx, num, views, dsv);
+}
+void STDMETHODCALLTYPE DetOMSetRTUAV(ID3D11DeviceContext* ctx, UINT num, ID3D11RenderTargetView* const* views, ID3D11DepthStencilView* dsv,
+                                     UINT uavStart, UINT numUav, ID3D11UnorderedAccessView* const* uavs, const UINT* counts) {
+    if (num != D3D11_KEEP_RENDER_TARGETS_AND_DEPTH_STENCIL && !t_inHook && !t_chainRt && ctx->GetType() == D3D11_DEVICE_CONTEXT_IMMEDIATE) {
+        t_inHook = true; OnRenderTargetChange(ctx, num, views); t_inHook = false;
+    }
+    g_trampRtUav(ctx, num, views, dsv, uavStart, numUav, uavs, counts);
+}
+// one code hook (MinHook); false if the function cannot be hooked
+template <class F> bool Detour(void* target, void* det, F& tramp, const char* what) {
+    MH_STATUS st = MH_CreateHook(target, det, (LPVOID*)&tramp);
+    if (st == MH_OK) st = MH_EnableHook(target);
+    if (st != MH_OK) { Log::Write("Overlay: code hook on %s failed (%s)", what, MH_StatusToString(st)); tramp = nullptr; return false; }
+    return true;
 }
 
 DXGI_FORMAT RtvFormat(DXGI_FORMAT f) {
@@ -470,13 +505,30 @@ std::string Narrow(const std::wstring& w) {
 // Logs graphics DLLs that do not come from Windows (post-processing tools)
 void LogGraphicsProxies() {
     std::wstring sys = SystemDll(L"");
-    for (const wchar_t* n : {L"d3d11.dll", L"dxgi.dll", L"d3d9.dll", L"d3d12.dll", L"opengl32.dll"}) {
+    {   // every DLL loaded from the game's folder (bin\\win_x64, not the plugins): graphics tools, loaders, ...
+        wchar_t exe[MAX_PATH] = {0}; GetModuleFileNameW(nullptr, exe, MAX_PATH);
+        std::wstring dir = exe; dir = dir.substr(0, dir.find_last_of(L"\\/") + 1);
+        std::wstring ld = dir; for (auto& c : ld) c = towlower(c);
+        HMODULE mods[1024]; DWORD need = 0;
+        if (EnumProcessModules(GetCurrentProcess(), mods, sizeof(mods), &need)) {
+            std::string list;
+            for (DWORD k = 0; k < std::min<DWORD>(need / sizeof(HMODULE), 1024); ++k) {
+                wchar_t p[MAX_PATH] = {0}; GetModuleFileNameW(mods[k], p, MAX_PATH);
+                std::wstring lp = p; for (auto& c : lp) c = towlower(c);
+                if (lp.rfind(ld, 0) != 0 || lp.find(L"\\plugins\\") != std::wstring::npos || lp.find(L".exe") != std::wstring::npos) continue;
+                list += (list.empty() ? "" : ", ") + Narrow(lp.substr(ld.size()));
+            }
+            Log::Write("Overlay: DLLs from the game folder: %s", list.empty() ? "none" : list.c_str());
+        }
+    }
+    for (const wchar_t* n : {L"d3d11.dll", L"dxgi.dll", L"dinput8.dll", L"d3d9.dll", L"d3d12.dll", L"opengl32.dll"}) {
         HMODULE m = GetModuleHandleW(n);
         if (!m) continue;
         wchar_t p[MAX_PATH] = {0}; GetModuleFileNameW(m, p, MAX_PATH);
         std::wstring path = p, lp = path, ls = sys;
         for (auto& c : lp) c = towlower(c);
         for (auto& c : ls) c = towlower(c);
+        if (lp.rfind(ls, 0) != 0) g_toolDetected = true;
         if (lp.rfind(ls, 0) != 0) Log::Write("Overlay: graphics tool detected - %s is loaded from %s (e.g. ReShade / Snowymoon); drawing after its post-processing",
                                              Narrow(n).c_str(), Narrow(path).c_str());
     }
@@ -532,6 +584,12 @@ void HookGameContext(IDXGISwapChain* sc) {
             if (PatchSlot(cvt, 33, (void*)&HookOMSetRT, (void**)&h.rt) && PatchSlot(cvt, 34, (void*)&HookOMSetRTUAV, (void**)&h.rtuav)) {
                 g_vts[g_nVts.load()] = h; ++g_nVts; g_screenHooked = true;
                 Log::Write("Screen: hooked the game's render context #%d (device flags 0x%x)", g_nVts.load(), d->GetCreationFlags());
+                if (g_detours && !g_detRtTarget && h.rt && h.rtuav) {   // the graphics tool may call these directly, too
+                    g_detRtTarget = (void*)h.rt;
+                    if (Detour((void*)h.rt, (void*)&DetOMSetRT, g_trampRt, "OMSetRenderTargets") &&
+                        Detour((void*)h.rtuav, (void*)&DetOMSetRTUAV, g_trampRtUav, "OMSetRenderTargetsAndUnorderedAccessViews"))
+                        Log::Write("Screen: code hooks on the render-target functions are on");
+                }
             }
         }
         c->Release();
@@ -548,8 +606,12 @@ void Diagnose(IDXGISwapChain* sc) {   // log once what presents the game's pictu
         ID3D11Device* d = nullptr;
         bool d3d11 = SUCCEEDED(sc->GetDevice(__uuidof(ID3D11Device), (void**)&d)) && d;
         if (d) d->Release();
-        Log::Write("Overlay: first frame - swap chain of %s, %s", Narrow(ModulePathOf((*(void***)sc)[8])).c_str(),
-                   d3d11 ? "Direct3D 11 device" : "NOT a Direct3D 11 device (overlay and screen cannot be drawn)");
+        DXGI_SWAP_CHAIN_DESC sd{};
+        sc->GetDesc(&sd);
+        Log::Write("Overlay: first frame - swap chain implemented in %s, %s, %ux%u format %d, swap effect %d, %u buffer(s)",
+                   Narrow(ModulePathOf((*(void***)sc)[2])).c_str(),
+                   d3d11 ? "Direct3D 11 device" : "NOT a Direct3D 11 device (overlay and screen cannot be drawn)",
+                   sd.BufferDesc.Width, sd.BufferDesc.Height, (int)sd.BufferDesc.Format, (int)sd.SwapEffect, sd.BufferCount);
     } else if (statusAt && now >= statusAt) {
         statusAt = 0;
         Log::Write("Overlay: status after 20 s - %lld D3D11 frames, %lld other frames, screen hook %s, %lld render-target changes seen",
@@ -633,14 +695,30 @@ void Draw(IDXGISwapChain* sc) {
 }
 
 HRESULT STDMETHODCALLTYPE HookPresent(IDXGISwapChain* sc, UINT sync, UINT flags) {
-    if (!t_inHook && !(flags & DXGI_PRESENT_TEST)) { t_inHook = true; Draw(sc); t_inHook = false; }
-    return g_origPresent(sc, sync, flags);
+    if (!t_inHook && !t_chainPresent && !(flags & DXGI_PRESENT_TEST)) { t_inHook = true; Draw(sc); t_inHook = false; }
+    bool was = t_chainPresent; t_chainPresent = true;
+    HRESULT r = g_origPresent(sc, sync, flags);
+    t_chainPresent = was;
+    return r;
 }
 HRESULT STDMETHODCALLTYPE HookPresent1(IDXGISwapChain1* sc, UINT sync, UINT flags, const DXGI_PRESENT_PARAMETERS* p) {
-    if (!t_inHook && !(flags & DXGI_PRESENT_TEST)) { t_inHook = true; Draw(sc); t_inHook = false; }
-    return g_origPresent1(sc, sync, flags, p);
+    if (!t_inHook && !t_chainPresent && !(flags & DXGI_PRESENT_TEST)) { t_inHook = true; Draw(sc); t_inHook = false; }
+    bool was = t_chainPresent; t_chainPresent = true;
+    HRESULT r = g_origPresent1(sc, sync, flags, p);
+    t_chainPresent = was;
+    return r;
 }
-
+// --- code hooks (fallback, see g_detours) ---
+PresentFn g_trampPresent = nullptr;
+Present1Fn g_trampPresent1 = nullptr;
+HRESULT STDMETHODCALLTYPE DetPresent(IDXGISwapChain* sc, UINT sync, UINT flags) {
+    if (!t_inHook && !t_chainPresent && !(flags & DXGI_PRESENT_TEST)) { t_inHook = true; Draw(sc); t_inHook = false; }
+    return g_trampPresent(sc, sync, flags);
+}
+HRESULT STDMETHODCALLTYPE DetPresent1(IDXGISwapChain1* sc, UINT sync, UINT flags, const DXGI_PRESENT_PARAMETERS* p) {
+    if (!t_inHook && !t_chainPresent && !(flags & DXGI_PRESENT_TEST)) { t_inHook = true; Draw(sc); t_inHook = false; }
+    return g_trampPresent1(sc, sync, flags, p);
+}
 
 bool PatchSlot(void** vt, int idx, void* fn, void** orig) {
     DWORD old;
@@ -703,6 +781,7 @@ bool Install() {
     UnregisterClassW(wc.lpszClassName, wc.hInstance);
     g_enabled = ok;
     Log::Write(ok ? "Overlay: Present hook installed%s" : "Overlay: Present hook NOT installed%s", g_hasPresent1 ? " (incl. Present1)" : "");
+    if (ok) g_installAt = GetTickCount64();
     return ok;
 }
 void Uninstall() {
@@ -741,6 +820,21 @@ std::vector<RenderTargetStat> TakeTargetStats() {
     for (auto& [k, e] : g_stats) v.push_back({e.w, e.h, e.fmt, e.binds});
     g_stats.clear();
     return v;
+}
+void Watchdog() {
+    // Fallback for graphics tools (e.g. Snowymoon) that call Windows' Present directly: if a tool was detected and the
+    // table hook got no frame for a few seconds, hook the code of Present / Present1 itself.
+    if (g_detours || !g_vtable || !g_toolDetected || !g_origPresent) return;
+    if (g_d3d11Frames.load() > 0 || g_otherFrames.load() > 0) { g_toolDetected = false; return; }   // frames arrive: nothing to do
+    ULONGLONG at = g_installAt.load();
+    if (!at || GetTickCount64() - at < 5000) return;
+    g_detours = true;
+    MH_STATUS st = MH_Initialize();
+    if (st != MH_OK && st != MH_ERROR_ALREADY_INITIALIZED) { Log::Write("Overlay: code hooks not available (%s)", MH_StatusToString(st)); return; }
+    bool ok = Detour((void*)g_origPresent, (void*)&DetPresent, g_trampPresent, "Present");
+    if (ok && g_origPresent1) Detour((void*)g_origPresent1, (void*)&DetPresent1, g_trampPresent1, "Present1");
+    Log::Write(ok ? "Overlay: no frame reached the table hook - the graphics tool calls Present directly; code hooks on Present%s are on"
+                  : "Overlay: no frame reached the table hook and Present could not be hooked%s", g_origPresent1 ? "/Present1" : "");
 }
 bool ScreenHookActive() { return g_wantScreenHook && g_vtable != nullptr; }
 long long RenderTargetCalls() { return g_rtCalls; }

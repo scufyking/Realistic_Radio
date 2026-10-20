@@ -16,8 +16,8 @@
 #include <mutex>
 #include <atomic>
 
-#define REALISTIC_RADIO_VERSION "1.4.4"
-#define REALISTIC_RADIO_VERSION_W L"1.4.4"
+#define REALISTIC_RADIO_VERSION "1.4.7"
+#define REALISTIC_RADIO_VERSION_W L"1.4.7"
 
 std::wstring Utf8ToWide(const std::string& s);
 std::string WideToUtf8(const std::wstring& s);

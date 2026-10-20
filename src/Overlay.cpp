@@ -340,6 +340,7 @@ void Overlay::UpdateWindow(float alpha) {
 
 void Overlay::Tick() {
     ULONGLONG now = GetTickCount64();
+    D3D11Overlay::Watchdog();
     if (screenOn_) TickScreen(now);
     // pump messages for the overlay window (it lives on this thread)
     MSG m; while (PeekMessageW(&m, nullptr, 0, 0, PM_REMOVE)) { TranslateMessage(&m); DispatchMessageW(&m); }
