@@ -31,7 +31,17 @@ public:
     bool Running() const { return device_ok_; }
     bool IsBuffering();
     int StreamFailures();
-    bool SongTitle(std::string& out);   // live title of the current stream (false = none sent)
+    bool SongTitle(std::string& out);
+    // outside the truck: gain, low-pass cut-off (Hz) and how much the stereo picture collapses to mono (0..1); ramps smoothly
+    void SetOutside(float gain, float cutoffHz, float mono) { outGain_ = std::clamp(gain, 0.f, 1.f); outCut_ = std::clamp(cutoffHz, 80.f, 20000.f); outMono_ = std::clamp(mono, 0.f, 1.f); }
+    void SetExternal(bool on) { external_ = on; }
+    // virtual phone: its own sound channel (own volume, plays also with the radio off or muted)
+    using Clip = std::shared_ptr<const std::vector<float>>;   // 48 kHz mono
+    void PlayChime(int kind);                                  // 0 = connected, 1 = message
+    void PlayPhone(Clip clip, bool loop, float gain);          // ringtone (loop) or a voice
+    void StopPhone();
+    bool PhonePlaying() const { return phoneBusy_; }   // the game's sound system plays the mix (cab output): the device stays silent
+    void PullMix(float* out, unsigned frames);       // called by the game's sound system (FMOD stream thread)   // live title of the current stream (false = none sent)
 private:
     // Gain that moves towards `target` by `step` per sample (audio thread). `now` mirrors the current value for SetRamp.
     struct Ramp {
@@ -62,4 +72,13 @@ private:
     std::vector<std::shared_ptr<StreamSession>> retired_;
     int reconnectMax_ = 30;
     std::vector<float> tmp_;
+    std::mutex mixMtx_;
+    std::atomic<bool> external_{false};
+    Clip chime_[2];
+    std::mutex phoneMtx_;
+    struct PhoneReq { Clip clip; bool loop = false; float gain = 0; bool stop = false; bool pending = false; } phoneReq_;
+    Clip phoneCur_; bool phoneLoop_ = false; float phoneGain_ = 0; size_t phonePos_ = 0;   // audio thread only
+    std::atomic<bool> phoneBusy_{false};
+    std::atomic<float> outGain_{1.f}, outCut_{20000.f}, outMono_{0.f};
+    float outGainCur_ = 1.f, outCoefCur_ = 1.f, outMonoCur_ = 0.f, lp1_[2] = {0, 0}, lp2_[2] = {0, 0};   // audio thread only
 };

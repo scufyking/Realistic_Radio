@@ -14,7 +14,8 @@ class Overlay {
 public:
     void Init(const OverlayConfig& cfg, const ScreenConfig& screen, const std::wstring& dataDir);
     void Shutdown();
-    void Show(const OverlayInfo& info, const std::string& logoPath);   // shows for durationSeconds
+    void Show(const OverlayInfo& info, const std::string& logoPath, double seconds = 0);   // shows for durationSeconds (or `seconds`)
+    static bool Transient(const OverlayInfo& i) { return i.volume >= 0 || i.notice; }   // volume card / phone notification: then back to the page
     void Update(const OverlayInfo& info);                               // changes content without extending display time
     void Tick();                                                        // ~20x per second
     // Radio page: keep the card on the in-cab screen permanently (instead of the navigation) until switched off
@@ -28,6 +29,7 @@ public:
     // Key menu: shown in the middle of the upper half of the game picture while open
     void PrepareMenu();                                   // makes sure the D3D11 hook is installed
     void ShowMenu(std::shared_ptr<OverlayImage> img);
+    void ShowPhone(std::shared_ptr<OverlayImage> img);   // the virtual phone: bottom right, uses the menu's picture (hidden with HideMenu)
     void SetMenuPosition(float x, float y);
     // auto-detection of the visible screen area (beta)
     void StartScreenDetect();
@@ -49,6 +51,11 @@ private:
     static void TouchFile(const std::wstring& file);
     ULONGLONG lastPruneAt_ = 0;
     void RequestLogo(const std::string& logoPath);
+    void StartLogoDownload(const std::string& logoPath, const std::wstring& file);
+    std::shared_ptr<OverlayImage> CachedLogo(const std::string& logoPath);
+    void ResolveTiles(OverlayInfo& i);
+    void PrefetchTileLogos();
+    bool IsTileLogo(const std::wstring& file) const;
     void UseWindow(bool on);
     void UpdateWindow(float alpha);
     HWND FindGameWindow();
@@ -75,6 +82,8 @@ private:
     SongLine scrSong_;
     ULONGLONG songScrollAt_ = 0;              // time the song line started (scrolls after a short pause)
     int songOff_ = -1;
+    std::shared_ptr<const CardTheme> styleTheme_;   // own style: notice when its file changed
+    ULONGLONG styleCheckAt_ = 0;
     OverlayInfo pageInfo_;              // latest station/track info: content of the radio page
     bool pinned_ = false;
     ULONGLONG splashAt_ = 0, splashUntil_ = 0;

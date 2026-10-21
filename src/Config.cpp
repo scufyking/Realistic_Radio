@@ -13,9 +13,21 @@
 
 using nlohmann::json;
 
+static void LoadPhone(const json& p, PhoneConfig& c) {
+    if (!p.is_object()) return;
+    c.enabled = p.value("enabled", c.enabled); c.name = p.value("name", c.name); c.messages = p.value("messages", c.messages);
+    c.sender = p.value("sender", c.sender); c.text = p.value("text", c.text);
+    c.minutes = std::clamp(p.value("minutes", c.minutes), 5.0, 600.0); c.sound = p.value("sound", c.sound);
+    c.calls = p.value("calls", c.calls); c.voice = p.value("voice", c.voice); c.fines = p.value("fines", c.fines); c.dispatcher = p.value("dispatcher", c.dispatcher);
+}
+static json PhoneJson(const PhoneConfig& c) {
+    return {{"enabled", c.enabled}, {"name", c.name}, {"messages", c.messages}, {"sender", c.sender}, {"text", c.text}, {"minutes", c.minutes}, {"sound", c.sound},
+            {"calls", c.calls}, {"voice", c.voice}, {"fines", c.fines}, {"dispatcher", c.dispatcher}};
+}
+
 static const char* kActionNames[] = {"next", "previous", "stop", "volumeUp", "volumeDown", "makeFavourite", "goToFavourite", "mute", "showOverlay", "source", "nextDisc", "previousDisc", "screenPage", "menu",
                                      "band", "memory1", "memory2", "memory3", "memory4", "memory5", "memory6", "memory7", "memory8", "memory9",
-                                     "tuneUp", "tuneDown", "menu2", "tunnelMark"};
+                                     "tuneUp", "tuneDown", "menu2", "tunnelMark", "phone"};
 static_assert(sizeof(kActionNames) / sizeof(kActionNames[0]) == (size_t)Action::Count, "every action needs a name");
 const char* ActionName(Action a) { return kActionNames[(int)a]; }
 
@@ -35,7 +47,8 @@ Config::Config() {
     for (int i = 0; i < 9; ++i) keys[(int)Action::Memory1 + i] = ParseKeyBinding("NumPad" + std::to_string(i + 1));   // station buttons
     keys[(int)Action::TuneUp] = ParseKeyBinding("Shift+Right");   // frequency radio: 0.1 MHz steps
     keys[(int)Action::TuneDown] = ParseKeyBinding("Shift+Left");
-    keys[(int)Action::MenuAlt] = ParseKeyBinding("Ctrl+F1");   // second menu key: Ctrl+0 can be taken by the free camera (developer mode)
+    keys[(int)Action::MenuAlt] = ParseKeyBinding("Ctrl+F1");
+    keys[(int)Action::Phone] = ParseKeyBinding("Shift+Insert");   // virtual phone   // second menu key: Ctrl+0 can be taken by the free camera (developer mode)
 }
 
 int ParseKeyName(const std::string& in) {
@@ -217,6 +230,11 @@ bool Config::Load(const std::wstring& path) {
         rdsAf = j.value("rdsAf", rdsAf);
         tunnelSignal = j.value("tunnelSignal", tunnelSignal);
         songTitle = j.value("songTitle", songTitle);
+        audioOutput = j.value("audioOutput", audioOutput); if (audioOutput != "cabin") audioOutput = "device";
+        muteGameRadio = j.value("muteGameRadio", muteGameRadio);
+        gameBus = j.value("gameBus", gameBus);
+        outsideFade = j.value("outsideFade", outsideFade);
+        outsideDistance = std::clamp(j.value("outsideDistance", outsideDistance), 5.0, 2000.0);
         tunedFreq = j.value("tunedFreq", tunedFreq);
         memoryHoldSeconds = std::clamp(j.value("memoryHoldSeconds", memoryHoldSeconds), 0.5, 3.0);
         if (j.contains("stationButtons") && j["stationButtons"].is_object())
@@ -241,13 +259,14 @@ bool Config::Load(const std::wstring& path) {
                     t.logoSize = std::clamp(s.value("logoSize", t.logoSize), 0.5, 1.3);
                     t.durationSeconds = s.value("durationSeconds", t.durationSeconds);
                 }
+                if (p.contains("phone")) LoadPhone(p["phone"], t.phone);
                 // an unchanged copy of a standard preset is dropped, so it keeps following the standard values of new versions
                 bool standardCopy = false;
                 auto approx = [](double a, double b) { return std::fabs(a - b) < 1e-6; };
                 for (auto& b : BuiltinPresets())
                     if (b.name == t.name && b.trucks == t.trucks && b.width == t.width && b.height == t.height && b.format == t.format &&
                         approx(b.areaX, t.areaX) && approx(b.areaY, t.areaY) && approx(b.areaW, t.areaW) && approx(b.areaH, t.areaH) &&
-                        b.flipX == t.flipX && b.flipY == t.flipY && b.design == t.design && b.logo == t.logo && b.target == t.target && approx(b.scale, t.scale) && approx(b.logoScale, t.logoScale) && approx(b.logoSize, t.logoSize) && approx(b.durationSeconds, t.durationSeconds))
+                        b.flipX == t.flipX && b.flipY == t.flipY && b.design == t.design && b.logo == t.logo && b.target == t.target && approx(b.scale, t.scale) && approx(b.logoScale, t.logoScale) && approx(b.logoSize, t.logoSize) && approx(b.durationSeconds, t.durationSeconds) && b.phone == t.phone)
                         standardCopy = true;
                 if (!standardCopy) presets.push_back(t);
             }
@@ -273,6 +292,7 @@ bool Config::Load(const std::wstring& path) {
             c.areaW = sc.value("areaW", c.areaW); c.areaH = sc.value("areaH", c.areaH);
             c.flipY = sc.value("flipY", c.flipY); c.flipX = sc.value("flipX", c.flipX); c.grid = sc.value("grid", c.grid);
             c.design = sc.value("design", c.design);
+            c.dimWithLights = sc.value("dimWithLights", c.dimWithLights);
             c.volumeStyle = sc.value("volumeStyle", c.volumeStyle); if (c.volumeStyle != "bar") c.volumeStyle = "card";
             c.startLogo = sc.value("startLogo", c.startLogo);
             c.startLogoSeconds = std::clamp(sc.value("startLogoSeconds", c.startLogoSeconds), 1.5, 10.0);
@@ -282,6 +302,7 @@ bool Config::Load(const std::wstring& path) {
             c.scale = std::clamp(sc.value("scale", c.scale), 0.6, 1.6);
             c.logoSize = std::clamp(sc.value("logoSize", c.logoSize), 0.5, 1.3);
         }
+        if (j.contains("phone")) LoadPhone(j["phone"], screen.phone);
         if (j.contains("display")) {
             auto& d = j["display"];
             display.enabled = d.value("enabled", display.enabled);
@@ -432,18 +453,20 @@ static json MenuJsonObj(const Config& c) {
     j["activePreset"] = c.activePreset; j["presetAuto"] = c.presetAuto; j["truckMemory"] = c.truckMemory;
     j["band"] = c.band; j["dabRange"] = c.dabRange; j["switchMode"] = c.switchMode;
     j["memoryButtons"] = c.memoryButtons; j["memoryHoldSeconds"] = c.memoryHoldSeconds;
-    j["tuning"] = c.tuning; j["rdsAf"] = c.rdsAf; j["tunnelSignal"] = c.tunnelSignal; j["songTitle"] = c.songTitle;
+    j["tuning"] = c.tuning; j["rdsAf"] = c.rdsAf; j["tunnelSignal"] = c.tunnelSignal; j["songTitle"] = c.songTitle; j["audioOutput"] = c.audioOutput; j["muteGameRadio"] = c.muteGameRadio; j["outsideFade"] = c.outsideFade; j["outsideDistance"] = c.outsideDistance;
     j["presets"] = json::array();
     for (auto& p : c.presets) {
         json o; o["name"] = p.name; o["trucks"] = p.trucks;
         o["screen"] = {{"width", p.width}, {"height", p.height}, {"format", p.format}, {"areaX", R6(p.areaX)}, {"areaY", R6(p.areaY)}, {"areaW", R6(p.areaW)},
                        {"areaH", R6(p.areaH)}, {"flipX", p.flipX}, {"flipY", p.flipY}, {"design", p.design}, {"durationSeconds", p.durationSeconds},
                        {"logo", p.logo}, {"target", p.target}, {"scale", R6(p.scale)}, {"logoScale", R6(p.logoScale)}, {"logoSize", R6(p.logoSize)}};
+        o["phone"] = PhoneJson(p.phone);
         j["presets"].push_back(o);
     }
+    j["phone"] = PhoneJson(c.screen.phone);
     j["screen"]["enabled"] = c.screen.enabled; j["screen"]["durationSeconds"] = c.screen.durationSeconds;
     j["screen"]["areaX"] = R6(c.screen.areaX); j["screen"]["areaY"] = R6(c.screen.areaY); j["screen"]["areaW"] = R6(c.screen.areaW); j["screen"]["areaH"] = R6(c.screen.areaH);
-    j["screen"]["flipX"] = c.screen.flipX; j["screen"]["flipY"] = c.screen.flipY; j["screen"]["design"] = c.screen.design; j["screen"]["volumeStyle"] = c.screen.volumeStyle;
+    j["screen"]["flipX"] = c.screen.flipX; j["screen"]["flipY"] = c.screen.flipY; j["screen"]["design"] = c.screen.design; j["screen"]["volumeStyle"] = c.screen.volumeStyle; j["screen"]["dimWithLights"] = c.screen.dimWithLights;
     j["screen"]["startLogo"] = c.screen.startLogo; j["screen"]["startLogoSeconds"] = c.screen.startLogoSeconds;
     j["screen"]["startLogoFile"] = c.screen.startLogoFile; j["screen"]["startLogoScale"] = R6(c.screen.startLogoScale);
     j["screen"]["target"] = c.screen.target; j["screen"]["scale"] = R6(c.screen.scale); j["screen"]["logoSize"] = R6(c.screen.logoSize);
@@ -484,12 +507,13 @@ void CopyMenuSettings(Config& d, const Config& s) {
     d.menuLanguage = s.menuLanguage; d.screenPage = s.screenPage;
     d.presets = s.presets; d.activePreset = s.activePreset; d.presetAuto = s.presetAuto; d.truckMemory = s.truckMemory;
     d.band = s.band; d.dabRange = s.dabRange; d.switchMode = s.switchMode; d.memoryButtons = s.memoryButtons; d.memoryHoldSeconds = s.memoryHoldSeconds;
-    d.tuning = s.tuning; d.rdsAf = s.rdsAf; d.tunnelSignal = s.tunnelSignal; d.songTitle = s.songTitle;
+    d.tuning = s.tuning; d.rdsAf = s.rdsAf; d.tunnelSignal = s.tunnelSignal; d.songTitle = s.songTitle; d.audioOutput = s.audioOutput; d.muteGameRadio = s.muteGameRadio; d.outsideFade = s.outsideFade; d.outsideDistance = s.outsideDistance;
     d.screen.width = s.screen.width; d.screen.height = s.screen.height; d.screen.format = s.screen.format;
     d.screen.enabled = s.screen.enabled; d.screen.durationSeconds = s.screen.durationSeconds;
     d.screen.areaX = s.screen.areaX; d.screen.areaY = s.screen.areaY; d.screen.areaW = s.screen.areaW; d.screen.areaH = s.screen.areaH;
-    d.screen.flipX = s.screen.flipX; d.screen.flipY = s.screen.flipY; d.screen.design = s.screen.design; d.screen.volumeStyle = s.screen.volumeStyle;
+    d.screen.flipX = s.screen.flipX; d.screen.flipY = s.screen.flipY; d.screen.design = s.screen.design; d.screen.volumeStyle = s.screen.volumeStyle; d.screen.dimWithLights = s.screen.dimWithLights;
     d.screen.startLogo = s.screen.startLogo; d.screen.startLogoSeconds = s.screen.startLogoSeconds;
+    d.screen.phone = s.screen.phone;
     d.screen.startLogoFile = s.screen.startLogoFile; d.screen.startLogoScale = s.screen.startLogoScale;
     d.screen.target = s.screen.target; d.screen.scale = s.screen.scale; d.screen.logoSize = s.screen.logoSize;
     d.screen.grid = s.screen.grid;   // test mode: applied live, not part of MenuJson (not saved)
@@ -508,6 +532,7 @@ TruckPreset PresetFromScreen(const std::string& name, const ScreenConfig& s) {
     p.areaX = s.areaX; p.areaY = s.areaY; p.areaW = s.areaW; p.areaH = s.areaH;
     p.flipX = s.flipX; p.flipY = s.flipY; p.design = s.design; p.durationSeconds = s.durationSeconds;
     p.logo = s.startLogoFile; p.target = s.target; p.scale = s.scale; p.logoScale = s.startLogoScale; p.logoSize = s.logoSize;
+    p.phone = s.phone;
     return p;
 }
 void ApplyPreset(ScreenConfig& s, const TruckPreset& p) {
@@ -515,6 +540,7 @@ void ApplyPreset(ScreenConfig& s, const TruckPreset& p) {
     s.areaX = p.areaX; s.areaY = p.areaY; s.areaW = p.areaW; s.areaH = p.areaH;
     s.flipX = p.flipX; s.flipY = p.flipY; s.design = p.design; s.durationSeconds = p.durationSeconds;
     s.startLogoFile = p.logo; s.target = p.target; s.scale = p.scale; s.startLogoScale = p.logoScale; s.logoSize = p.logoSize;
+    s.phone = p.phone;
 }
 namespace {
 TruckPreset Std(const char* name, std::vector<std::string> trucks, double x, double y, double w, double h, bool flipY, int target = 1) {
@@ -576,7 +602,7 @@ namespace {
 bool SameScreen(const TruckPreset& a, const TruckPreset& b) {
     return a.width == b.width && a.height == b.height && a.format == b.format && a.areaX == b.areaX && a.areaY == b.areaY &&
            a.areaW == b.areaW && a.areaH == b.areaH && a.flipX == b.flipX && a.flipY == b.flipY && a.design == b.design && a.logo == b.logo && a.target == b.target && a.scale == b.scale && a.logoScale == b.logoScale && a.logoSize == b.logoSize &&
-           a.durationSeconds == b.durationSeconds;
+           a.durationSeconds == b.durationSeconds && a.phone == b.phone;
 }
 }
 bool AutoSelectPreset(Config& c, const std::string& id) {

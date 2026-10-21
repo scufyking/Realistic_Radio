@@ -7,7 +7,7 @@
 #include "DisplayWindow.h"
 
 enum class Action { Next, Previous, Stop, VolumeUp, VolumeDown, MakeFavourite, GoToFavourite, Mute, ShowOverlay, Source, NextDisc, PreviousDisc, ScreenPage, Menu,
-                    Band, Memory1, Memory2, Memory3, Memory4, Memory5, Memory6, Memory7, Memory8, Memory9, TuneUp, TuneDown, MenuAlt, TunnelMark, Count };
+                    Band, Memory1, Memory2, Memory3, Memory4, Memory5, Memory6, Memory7, Memory8, Memory9, TuneUp, TuneDown, MenuAlt, TunnelMark, Phone, Count };
 inline bool IsMemoryAction(Action a) { return a >= Action::Memory1 && a <= Action::Memory9; }
 
 struct KeyBinding { int vk = 0; bool ctrl = false, shift = false, alt = false; };
@@ -19,6 +19,24 @@ struct RadioStyleConfig {
     int columns = 16;                   // characters on the display
     std::string color = "amber";        // amber | green | blue | white | red | #RRGGBB
     double scrollSeconds = 0.3;         // marquee: seconds per character
+};
+
+// Virtual phone (1.6.0): "connected" message on the navigation screen after the radio starts and messages from the
+// customer when the delivery is due soon - like notifications on a smartphone. Stored per truck preset as well.
+struct PhoneConfig {
+    bool enabled = false;               // virtual mobile device on
+    std::string name = "Phone";         // name of the phone: "Verbunden mit <name>"
+    bool messages = true;               // message from the customer when the delivery is due soon
+    std::string sender = "Kunde";       // who the message is from
+    std::string text = "Wo bleibt die Lieferung? Wir erwarten {cargo} bald in {city}.";   // {city} {company} {cargo} {time}
+    double minutes = 60.0;              // game minutes before the end of the delivery window
+    bool sound = true;                  // short notification tone
+    bool calls = true;                  // the dispatcher calls (new job, delivered)
+    bool voice = true;                  // calls are spoken by a Windows voice (else text only)
+    bool fines = true;                  // a message for every fine
+    std::string dispatcher = "Disposition";   // name of the caller
+    bool operator==(const PhoneConfig& o) const { return enabled == o.enabled && name == o.name && messages == o.messages && sender == o.sender && text == o.text && minutes == o.minutes && sound == o.sound &&
+                                                         calls == o.calls && voice == o.voice && fines == o.fines && dispatcher == o.dispatcher; }
 };
 
 struct ScreenConfig {
@@ -34,7 +52,8 @@ struct ScreenConfig {
     bool flipX = false;                 // flipX + flipY = rotated by 180 degrees
     bool grid = false;                  // test mode: coordinate grid + the card's area on the target (to find areaX/Y/W/H)
     std::string design = "modern";      // look of the card: modern | ocean | sport | light | retro
-    std::string volumeStyle = "card";   // volume on the screen: card (large card) | bar (slim bar at the top, modern infotainment)
+    std::string volumeStyle = "card";
+    bool dimWithLights = true;          // beta: with the lights on, the display dims with the dashboard backlight like a real one   // volume on the screen: card (large card) | bar (slim bar at the top, modern infotainment)
     bool startLogo = true;              // start screen with the manufacturer's logo (truck-logos\\) or name when the ignition is switched on
     double startLogoSeconds = 3.5;
     double startLogoScale = 0.55;       // height of the start logo, part of the display area (0.2 - 1)
@@ -42,6 +61,7 @@ struct ScreenConfig {
     double scale = 1.0;                 // size of text and pictures on the display (0.6 - 1.6, never taller than the area)
     double logoSize = 1.0;              // station logo / cover tile (0.5 - 1.3)
     std::string startLogoFile;          // picture in truck-logos\\ ("" = automatic: the first one for the truck, "text" = only the name)
+    PhoneConfig phone;                  // virtual phone (kept with the screen settings, so it follows the truck presets)
 };
 
 // USB / CD mode: own music files from realistic-radio\usb\ (or another folder)
@@ -70,6 +90,7 @@ struct TruckPreset {
     std::string logo;                   // start logo (ScreenConfig::startLogoFile)
     int target = 1;
     double scale = 1.0, logoScale = 0.55, logoSize = 1.0;
+    PhoneConfig phone;
 };
 
 struct OverlayConfig {
@@ -120,6 +141,11 @@ struct Config {
     std::map<std::string, std::string> stationButtons;   // "1".."9" -> "<region>|<station name>" or "f:<0.1 MHz>" (remembered)
     std::string tuning = "list";       // list: stations in range one after another | frequency: FM dial like an old radio
     bool rdsAf = false;
+    std::string audioOutput = "device";   // device: Windows audio device | cabin (beta): inside the game's sound mix (cab acoustics)
+    bool muteGameRadio = true;         // mute the game's own radio while Realistic Radio plays (through the game's sound system)
+    std::string gameBus = "bus:/radio";
+    bool outsideFade = true;           // quieter and muffled when you walk away from the truck (walk mods), open window lets more through
+    double outsideDistance = 40.0;     // metres until it is silent (twice with an open window)   // cab output: FMOD Studio bus of the game the radio is played on
     bool songTitle = true;             // live song title of the station (from the stream, in time with the audio) on the screen card
     bool tunnelSignal = true;          // no reception in tunnels (FM: static, DAB+: drop-outs then silence); USB / CD keeps playing                // frequency radio: follow the programme to another frequency (RDS AF); off = like in the old days
     int tunedFreq = 0;                 // last FM frequency in 0.1 MHz (remembered)

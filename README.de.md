@@ -14,7 +14,7 @@ Von **ScufyKing**. Das ganze Radio läuft im Spiel:
 
 Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels kopieren, ETS2 starten, das Radio läuft. Senderdaten und Sounds stecken in der DLL.
 
-> **Version 1.4.7** · [Änderungen](CHANGELOG.md#changelog-deutsch)
+> **Version 1.6.0** · [Änderungen](CHANGELOG.md#changelog-deutsch)
 >
 > **Stand:** Getestet in ETS2 1.61 (Windows x64) mit mehreren MAN- und Scania-Modellen sowie Mod-LKW: Das Plugin wird geladen, liest die LKW-Position, wechselt Sender nach Region, spielt Ton ab und zeigt Sender und Lautstärke auf dem Navi-Bildschirm. Daten für American Truck Simulator sind enthalten, ATS ist aber ungetestet.
 
@@ -50,6 +50,13 @@ Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels ko
 - **Radio-Seite auf dem Navi-Bildschirm.** Mit **Einfg** zwischen Navigation und einer dauerhaften Radio-Seite umschalten, die Sender bzw. Titel live anzeigt.
 - **Anzeige auf dem Navi-Bildschirm im LKW.** Bei jedem Senderwechsel erscheinen Logo, Sendername, Land, Empfang und „Sender 3 / 12“ für ein paar Sekunden auf dem Navi-Bildschirm im Cockpit, bei Lautstärkeänderungen ein Lautsprechersymbol, eine große Prozentzahl und ein Balken aus 20 Segmenten; danach ist die Navigation wieder da. Funktioniert in LKW mit modernem Infotainment-/Navi-Bildschirm (getestet: mehrere MAN- und Scania-Modelle sowie Mod-LKW; siehe „Anzeige auf dem Cockpit-Bildschirm“).
 - **Songtitel live.** Interpret und Titel des Songs, den der Sender gerade spielt, erscheinen auf dem Navi – genau dann, wenn der Song in dem, was du hörst, wechselt, und laufen bei langen Titeln durch (Einstellungsmenü → Radio → **Songtitel live**).
+- **Acht Designs für den Navi-Bildschirm** – darunter ein **klassisches LKW-Radio** (Blende mit CD-Schacht, Drehknöpfen, Stationstasten und grünem LCD mit Punktmatrix-Schrift), ein **Smart-Dashboard** (Symbolleiste, großes Logo, Songtitel in der Akzentfarbe) und eine **Senderliste** (die Stationstasten als Logo-Kacheln, wie bei einem modernen Infotainment-System).
+- **Eigene Styles:** Eine JSON-Datei im Ordner `realistic-radio\styles\` legt Aufbau, Farben, Schrift und auf Wunsch ein Hintergrundbild fest – sie erscheint im Einstellungsmenü neben den eingebauten Designs (siehe [Eigene Styles](#eigene-styles-styles)).
+- **Ton aus der Kabine (Beta).** Das Radio kann im Soundsystem des Spiels laufen statt direkt über das Windows-Gerät: Es klingt dann wie das Spielradio – mit Kabinen-Akustik, lauter bei offenem Fenster, leiser außerhalb des LKWs, und die Radio-Lautstärke des Spiels gilt (Einstellungsmenü → Radio → **Ton ausgeben** → *Kabine des Spiels*).
+- **Leiser außerhalb des LKWs:** Gehst du vom LKW weg (z. B. mit einem Lauf-Mod), klingt das Radio gedämpft durch die Kabine und wird mit der Entfernung leiser; bei offenem Fenster kommt mehr durch und es ist weiter zu hören.
+- **Zusammenspiel mit dem Radio des Spiels:** Solange Realistic Radio spielt, ist das eingebaute Radio des Spiels stumm – es laufen nie zwei Radios gleichzeitig; ist Realistic Radio aus oder pausiert, ist das Spielradio wieder da.
+- **Die Anzeige dimmt nachts (Beta):** Mit eingeschaltetem Licht folgt die Radioanzeige auf dem Navi der Helligkeit des Armaturenbretts, statt mit voller Helligkeit zu blenden.
+- **Virtuelles Handy:** ein Smartphone in der Bildschirmecke (**Umschalt + Einfg**, wie bei GTA) mit Nachrichten, Anrufen vom Disponenten (gesprochen von einer Windows-Stimme, mit Klingelton), dem aktuellen Auftrag mit kleiner Karte und Musik aus deinen Ordnern, die als Bluetooth eingestellt sind. Auf dem Navi erscheinen „Verbunden“, Nachrichten und eingehende Anrufe wie Benachrichtigungen auf dem Smartphone; der Kunde meldet sich, wenn die Lieferzeit knapp wird, die Polizei bei jedem Bußgeld. Jedes LKW-Preset kann eigene Handy-Einstellungen haben (Einstellungsmenü → **Handy**).
 - **Radio-Speicher je LKW** (optional): Jeder LKW merkt sich eigene Sender, Favoriten, Lautstärke, Quelle und USB-Titel.
 - **LKW-Presets:** Position und Design der Navi-Anzeige lassen sich pro LKW speichern; das passende Preset lädt automatisch über die LKW-ID aus der Telemetrie.
 - **Startbildschirm** beim Einschalten der Zündung: Der Hersteller des LKWs wird auf Schwarz eingeblendet, wie bei modernen Infotainment-Systemen (eigene Logo-Bilder möglich).
@@ -135,6 +142,7 @@ plugins\
 | Stationstasten 1–9: kurz = wählen, halten = speichern | Num 1–9 | `keys.memory1` … `keys.memory9` |
 | Frequenz-Radio: 0,1 MHz höher / tiefer | Umschalt + → / Umschalt + ← | `keys.tuneUp`, `keys.tuneDown` |
 | Eigenen Tunnel markieren (am Anfang und am Ende drücken) | – | `keys.tunnelMark` |
+| Handy öffnen / schließen | Umschalt + Einfg | `keys.phone` |
 
 „Nächster“ und „Vorheriger“ schalten durch alle Sender aller Regionen, die du gerade empfängst; dasselbe Programm aus mehreren Regionen kommt nur einmal vor. Im USB/CD-Modus haben die Tasten eine andere Bedeutung, siehe [USB / CD](#usb--cd-eigene-musik).
 
@@ -181,7 +189,8 @@ Die wichtigsten Einstellungen lassen sich direkt im Spiel ändern. **Strg + 0** 
 |---|---|
 | Radio | Lautstärke, Stumm, Radio an bei (Zündung / Motor läuft / immer), automatisch starten, Sprache des Menüs, **Band FM / DAB+** und seine Taste, **Stationstasten** an/aus und Haltezeit, **Senderwahl: Senderliste oder Frequenz**, **RDS-AF** |
 | Empfang | Sendereichweite, Wechselschwelle, **Region wechseln** (erst wenn der Sender weg ist / bei besserem Empfang), **DAB+-Reichweite**, Auto-Lautstärke, Rauschen, Umschaltgeräusch, **kein Empfang im Tunnel**, Taste zum Markieren eigener Tunnel |
-| Navi-Bildschirm | Anzeige an/aus, Anzeigedauer, **Design**, **Start-Logo** an/aus, Dauer und Größe, **Größe von Schrift und Bildern**, **Größe des Senderlogos**, **Zeichenfläche** (falls die Anzeige doppelt erscheint), Radio-Seite dauerhaft, Taste für Navi ↔ Radio-Seite, **Testmodus**, **automatische Erkennung (Beta)** und Position der Anzeige (Bereich X / Y / Breite / Höhe, umdrehen, spiegeln) |
+| Navi-Bildschirm | Anzeige an/aus, Anzeigedauer, **Design** (eingebaute und eigene Styles, Knopf zum Öffnen des Style-Ordners), **Start-Logo** an/aus, Dauer und Größe, **Größe von Schrift und Bildern**, **Größe des Senderlogos**, **Zeichenfläche** (falls die Anzeige doppelt erscheint), Radio-Seite dauerhaft, Taste für Navi ↔ Radio-Seite, **Testmodus**, **automatische Erkennung (Beta)** und Position der Anzeige (Bereich X / Y / Breite / Höhe, umdrehen, spiegeln) |
+| Handy | **Virtuelles Handy** an/aus, Name des Handys, Ton, Handy-Taste, **Anrufe vom Disponenten** an/aus, Name des Anrufers, Sprachausgabe an/aus, Bußgelder als Nachricht, Testanruf, **Nachrichten vom Kunden** an/aus, wann (Spielminuten vor Ende der Lieferzeit), Absender, Nachrichtentext, Testnachricht. Textfelder: anklicken oder Enter, tippen, Enter übernimmt (Strg + V fügt ein) |
 | LKW | Aktueller LKW (aus der Telemetrie), **Radio-Speicher je LKW**, **Start-Logo** (Auswahl, Vorschau, Logo-Ordner), neues Preset, aktives Preset, automatisch je LKW wechseln, verknüpfen / lösen, löschen, gespeichertes Preset laden |
 | Popup-Overlay | Modus, Stil, Position, Größe, Anzeigedauer, Senderlogos |
 | USB / CD | Modus an/aus, jeder Ordner ein eigener USB, Standard-Typ, Zufall, Wiederholen, Musikordner öffnen, Typ jedes Musikordners (USB, CD, SD-Karte, Kassette, Bluetooth, AUX) |
@@ -228,6 +237,11 @@ Alle Einstellungen stehen in `realistic-radio\realistic-radio.json`. Die Datei w
 | `tuning` | `"list"` | FM: `"list"` = Weiter / Zurück schaltet durch die Sender in Reichweite; `"frequency"` = Frequenz-Radio wie früher (siehe unten) |
 | `rdsAf` | `false` | Frequenz-Radio: dem Programm auf seine andere Frequenz folgen, wenn es weg ist (RDS-AF). `false` = wie früher: die Frequenz bleibt stehen |
 | `tunedFreq` | – | Zuletzt eingestellte Frequenz in 0,1 MHz, z. B. `947` (wird automatisch gespeichert) |
+| `audioOutput` | `"device"` | Wohin der Ton geht: `"device"` = Windows-Audiogerät (wie bisher), `"cabin"` = ins Soundsystem des Spiels auf dessen Radio-Bus (Beta): Kabinen-Akustik, Fenster, leiser außerhalb, die **Radio-Lautstärke** des Spiels gilt (steht sie in den Audio-Einstellungen des Spiels auf 0 %, ist das Radio stumm). Lässt sich das Soundsystem des Spiels nicht nutzen, bleibt der Ton auf dem Windows-Gerät (Log: `Game audio: …`). Einstellungsmenü → Radio → **Ton ausgeben** |
+| `muteGameRadio` | `true` | Das eingebaute Radio des Spiels stummschalten, solange Realistic Radio spielt (Radio oder USB / CD). Ist Realistic Radio aus, stumm oder pausiert, ist das Spielradio wieder zu hören. Einstellungsmenü → Radio → **Spielradio stummschalten** |
+| `outsideFade` | `true` | Leiser außerhalb des LKWs: Verlässt die Kamera die Kabine (z. B. zu Fuß mit einem Lauf-Mod, Außenkamera im Stand), klingt das Radio gedämpft durch die Kabine, schmaler und wird mit der Entfernung leiser; ein offenes Fenster lässt mehr durch. Während der Fahrt ändert sich nichts. Das Soundsystem des Spiels meldet, ob die Kamera in der Kabine ist, wo sie ist und wie weit die Fenster offen sind; die Entfernung wird ab dem Fahrersitz gemessen (Log: `Outside: left the cab`, `Outside: 12.0 m from the cab, …`). Einstellungsmenü → Radio → **Leiser außerhalb des LKWs** |
+| `outsideDistance` | `40` | Meter ab der Kabine, bis das Radio draußen nicht mehr zu hören ist (bei offenem Fenster doppelt so weit). Einstellungsmenü → Radio → **Hörweite draußen** |
+| `gameBus` | `"bus:/radio"` | Nur bei `"cabin"`: der Sound-Bus des Spiels, auf dem das Radio läuft (nur in der JSON-Datei; das Log listet beim Start alle Busse: `Game audio: buses …`) |
 | `songTitle` | `true` | Songtitel des Senders live auf dem Navi (und im Punktmatrix-Display). Kommt aus dem Stream (ICY `StreamTitle`) und wechselt genau dann, wenn der Song im Ton wechselt; bei AAC-Streams wird er alle 20 s abgefragt. Sender ohne Titel zeigen keinen |
 | `tunnelSignal` | `true` | Kein Empfang im Tunnel (FM: Rauschen, DAB+: Aussetzer, dann Stille) |
 | `screenPage` | `"navi"` | `"radio"` = Radio-Seite dauerhaft auf dem Navi-Bildschirm (wird mit der Taste `screenPage` umgeschaltet und gespeichert) |
@@ -287,7 +301,8 @@ Weil jeder LKW und jede Mod andere Zeichenflächen nutzt, muss die richtige einm
 | `flipY` | `false` | Anzeige umdrehen – nötig bei Zeichenfläche 2 (`target` 2), nicht bei Fläche 1. Wählt man die Zeichenfläche im Einstellungsmenü, wird es passend gesetzt |
 | `flipX` | `false` | Waagerecht spiegeln (`flipX` + `flipY` = um 180° gedreht) |
 | `grid` | `false` | Testmodus (am einfachsten im Einstellungsmenü): ein 10×10-Koordinatengitter über der ganzen Zeichenfläche und ein orangefarbener Rahmen, der zeigt, wohin die Anzeige gezeichnet wird, mit den Werten in den Ecken. Den Rahmen mit den Bereichs-Reglern verschieben, bis er ganz im sichtbaren Teil des Bildschirms liegt. Wird nie als „an“ gespeichert |
-| `design` | `"modern"` | Aussehen der Anzeige: `"modern"` (dunkel, Amber), `"ocean"` (Ozean: Marineblau, Hellblau), `"sport"` (Schwarz, Rot), `"light"` (Hell: Weiß, Blau), `"retro"` (grüne LCD-Optik) |
+| `design` | `"modern"` | Aussehen der Anzeige: `"modern"` (dunkel, Bernstein), `"ocean"` (Marineblau, Hellblau), `"sport"` (Schwarz, Rot), `"light"` (Weiß, Blau), `"retro"` (grüner LCD-Look), `"classic"` (altes LKW-Radio mit LCD und Stationstasten), `"smart"` (modernes Dashboard mit Symbolleiste), `"presets"` (Senderliste: die Stationstasten als Logo-Kacheln), `"style:<Dateiname>"` (eigener Style aus dem Ordner `styles`, siehe [Eigene Styles](#eigene-styles-styles)) |
+| `dimWithLights` | `true` | Mit eingeschaltetem Licht (Standlicht oder Abblendlicht) dimmt die Anzeige mit der Helligkeit des Armaturenbretts, wie ein echter Bildschirm nachts (Beta). Einstellungsmenü → Navi-Bildschirm → **Dimmt mit dem Licht (Beta)** |
 | `volumeStyle` | `"card"` | Wie die Lautstärke auf dem Navi erscheint: `"card"` = große Karte, `"bar"` = schmale Leiste oben wie bei modernen Infotainment-Systemen („20%“ und eine dünne Pegellinie; die Navigation bleibt sichtbar). Einstellungsmenü → Navi-Bildschirm → **Lautstärke-Anzeige** |
 | `startLogo` | `true` | Startbildschirm beim Einschalten der Zündung (auch bei ausgeschaltetem Radio): Das Logo des Herstellers wird auf Schwarz eingeblendet, wie bei modernen Infotainment-Systemen. Die Logos kommen aus `realistic-radio\truck-logos\` (mitgeliefert für DAF, Iveco, MAN, Mercedes-Benz, Scania, Volvo) (siehe [Truck-Logos](#truck-logos-startbildschirm)); ohne Bild werden Herstellername und Modell gezeigt |
 | `startLogoFile` | `""` | Gezeigtes Bild, relativ zu `truck-logos\` (z. B. `"mercedes\\gold.png"`); `""` = das erste Bild für den LKW, `"text"` = nur der Name. Wird im LKW-Preset gespeichert (`"logo"`) – am einfachsten im Einstellungsmenü, Seite LKW |
@@ -300,6 +315,58 @@ Weil jeder LKW und jede Mod andere Zeichenflächen nutzt, muss die richtige einm
 Beispiel (MAN TGX, ETS2 1.61, Navi-Bildschirm): `"width": 1024, "height": 1024, "format": 29, "flipY": false, "target": 1, "areaX": 0.11, "areaY": 0.24, "areaW": 0.78, "areaH": 0.58`. Andere LKW nutzen andere Zeichenflächen.
 
 Unabhängig vom Popup-Overlay, das standardmäßig aus ist (`"overlay": { "mode": "auto" }` schaltet es zusätzlich ein). Dieser Modus hängt sich in die Direct3D-11-Ausgabe des Spiels; im Suchmodus kann das Testbild kurz auch auf anderen Flächen auftauchen. Unverträglichkeiten mit anderen Grafik-Mods sind möglich.
+
+### Eigene Styles (`styles\`)
+
+Jede JSON-Datei im Ordner `realistic-radio\styles\` ist ein eigener Style und erscheint im Einstellungsmenü unter **Navi-Bildschirm → Design** mit „(eigener Style)“. Das Plugin legt dort eine kommentierte Vorlage ab: `_vorlage-template.json`. Kopieren, der Kopie einen Namen ohne `_` am Anfang geben (z. B. `nachtblau.json`), anpassen und im Menü wählen. Dateien mit `_` am Anfang werden nicht aufgelistet. Änderungen an einer Datei sind nach ein paar Sekunden auf dem Bildschirm zu sehen; Fehler stehen im Log (`Styles: …`).
+
+| Schlüssel | Bedeutung |
+|---|---|
+| `name` | Name im Menü (sonst der Dateiname) |
+| `layout` | `"standard"` (Logo links, Text rechts), `"classic"` (altes LKW-Radio), `"smart"` (Dashboard mit Symbolleiste), `"presets"` (Senderliste mit den Stationstasten) |
+| `basedOn` | Eingebautes Design, dessen Farben der Ausgangspunkt sind: `modern`, `ocean`, `sport`, `light`, `retro`, `classic`, `smart`, `presets` |
+| `font` | Jede in Windows installierte Schrift, z. B. `"Segoe UI"`, `"Bahnschrift"`, `"Consolas"` |
+| `glow` | Leuchten in der Akzentfarbe, `0` … `1` |
+| `colors` | Nur die Farben, die sich ändern sollen, als `"#RRGGBB"`: `background`, `backgroundBottom` (Verlauf), `accent`, `onAccent` (Schrift auf der Akzentfarbe), `text`, `subtext`, `muted`, `tile` (Flächen und Tasten), `logoTile` (hinter Senderlogos), `inactive` (leere Balken), `icon`, und für `classic` `lcd`, `lcdGlow`, `lcdText` |
+| `backgroundImage` | Bild im Ordner `styles` (PNG, JPG, BMP), das die Anzeige hinter allem ausfüllt; `backgroundOpacity` `0` … `1` |
+
+Gespeichert wird das Design als `"design": "style:<Dateiname>"` (auch in den LKW-Presets). Fehlt die Datei, zeigt die Anzeige *Modern*.
+
+### Virtuelles Handy (`"phone": { … }`)
+
+Nach dem Start des Radios erscheint oben auf dem Navi die Benachrichtigung „Verbunden“ mit dem Namen des Handys. Läuft die Lieferzeit des aktuellen Auftrags bald ab, schreibt der Kunde eine Nachricht. Beides sieht aus wie eine Benachrichtigung auf dem Smartphone (Banner oben, die Navigation bzw. die Radio-Seite bleibt darunter sichtbar) und kommt mit einem kurzen Hinweiston; ist das Popup-Overlay an, erscheint es auch dort. Wann sich der Kunde meldet, wird aus der Telemetrie berechnet (Ende der Lieferzeit minus Spielzeit), einmal pro Auftrag.
+
+| Schlüssel | Standard | Bedeutung |
+|---|---|---|
+| `enabled` | `false` | Virtuelles Handy an |
+| `name` | `"Phone"` | Name des Handys in der Meldung „Verbunden“ |
+| `sound` | `true` | Kurzer Hinweiston (eigene Lautstärke, auch bei stummem Radio) |
+| `messages` | `true` | Nachricht vom Kunden, wenn die Lieferzeit knapp wird |
+| `minutes` | `60` | Spielminuten vor Ende der Lieferzeit |
+| `sender` | `"Kunde"` | Absender der Nachricht |
+| `text` | `"Wo bleibt die Lieferung? Wir erwarten {cargo} bald in {city}."` | Nachricht; `{city}`, `{company}`, `{cargo}` und `{time}` (Restzeit) werden ersetzt |
+
+**Das Handy (Umschalt + Einfg):** Unten rechts im Bild erscheint ein Smartphone; solange es offen ist, bedienen Maus und Tastatur das Handy (das Spiel wartet). Esc oder die Handy-Taste schließt es.
+
+| App | Was sie zeigt |
+|---|---|
+| Nachrichten | Unterhaltungen: der Kunde, die Disposition, die Polizei (Bußgelder) und die Mailbox nicht angenommener Anrufe |
+| Telefon | Anrufliste (verpasste in Rot); ein Anruf zeigt, was gesagt wurde, und lässt sich nochmal anhören |
+| Auftrag | Fracht, von → nach mit Firmen, Restzeit (rot, wenn zu spät), Entfernung, Ankunftszeit und Lohn, dazu eine kleine Karte mit den Städten ringsum, deinem LKW als Pfeil und dem Ziel |
+| Musik | Die Musikordner, die auf **Bluetooth** stehen (Einstellungsmenü → USB / CD): Ordner wählen, Wiedergabe / Pause, nächster / vorheriger Titel |
+
+**Anrufe:** Nimmst du einen neuen Auftrag an und nach einer Lieferung ruft die Disposition an: Das Handy klingelt (auch bei ausgeschaltetem Radio), auf dem Navi steht „Eingehender Anruf“, Handy-Taste drücken und annehmen (Enter oder Klick). Eine Windows-Stimme liest den Text vor, klingt dabei wie am Telefon; ohne Stimme erscheint er als Text. Nicht angenommen nach 25 s: verpasster Anruf, der Text landet auf der Mailbox. Tasten im Handy: ↑ ↓ wählen, Enter öffnen / annehmen, Rücktaste zurück / ablehnen, 1–4 öffnen eine App, Rechtsklick zurück.
+
+| Schlüssel in `"phone"` | Standard | Bedeutung |
+|---|---|---|
+| `calls` | `true` | Die Disposition ruft bei einem neuen Auftrag und nach der Lieferung an |
+| `dispatcher` | `"Disposition"` | Name des Anrufers |
+| `voice` | `true` | Eine Windows-Stimme spricht die Anrufe (deutsche bzw. englische Stimme bevorzugt, sonst die Standardstimme von Windows) |
+| `fines` | `true` | Eine Nachricht von der Polizei bei jedem Bußgeld (Grund und Betrag) |
+
+Nachrichten und Anrufe werden in `realistic-radio\phone-ets2.json` (`phone-ats.json`) gespeichert.
+
+Die Handy-Einstellungen gehören zu den Navi-Einstellungen und werden deshalb **je LKW-Preset** gespeichert: Wechselst du in einen LKW mit eigenem Preset, werden dessen Handy-Einstellungen geladen (Log: `Phone: …`).
 
 ### LKW-Presets (`"presets"`, `"activePreset"`, `"presetAuto"`)
 
@@ -431,6 +498,9 @@ Fast jedes Problem lässt sich an `realistic-radio\realistic-radio.log` erkennen
 
 | Problem | Ursache und Lösung |
 |---|---|
+| Kein Ton mit **Ton ausgeben → Kabine des Spiels** | Die **Radio-Lautstärke** des Spiels (Optionen → Audio) gilt in der Kabine auch für Realistic Radio – hochdrehen. Im Log steht, ob die Kabine genutzt wird: `Game audio: the radio plays in the cab`; steht dort `not possible` oder `cannot …`, bleibt der Ton auf dem Windows-Gerät. |
+| Außerhalb des LKWs bleibt das Radio so laut wie drinnen | Einstellungsmenü → Radio → **Leiser außerhalb des LKWs** einschalten; der Hinweis darunter zeigt, was das Plugin sieht. Im Log stehen `Outside: left the cab` und alle 5 s die Entfernung – diese Zeilen (und die mit `Game audio:`) bitte schicken. |
+| Das Radio des Spiels spielt gleichzeitig | Einstellungsmenü → Radio → **Spielradio stummschalten** einschalten. Log: `Game audio: the game's own radio is muted while Realistic Radio plays`. |
 | Menü unsichtbar oder Radioanzeige auf dem Navi fehlt mit Snowymoon, ReShade oder anderen Grafik-Tools | Realistic Radio zeichnet erst nach den Effekten des Tools (Log: `graphics tool detected`). Ruft das Tool die Bildausgabe von Windows direkt auf (Snowymoon), wechselt Realistic Radio nach 5 s auf Code-Hooks (Log: `code hooks on Present … are on`) – ab 1.4.7. Ein Menü, das nicht gezeichnet werden kann, schließt sich nach 2,5 s wieder. Nutzt das Tool **Ende** für sein eigenes Menü, die Stopp-Taste von Realistic Radio (`keys.stop`) auf eine andere Taste legen. Klappt es trotzdem nicht: Log schicken (Zeilen mit `Overlay:`). |
 | Es wird keine `realistic-radio.log` angelegt | Die DLL wurde nicht geladen. Ordner prüfen: Er muss `bin\win_x64\plugins\` heißen. Wurde die Meldung zu den „erweiterten SDK-Funktionen“ mit OK bestätigt? |
 | Radio bei Lautstärke 0 noch hörbar oder zwei Sender gleichzeitig | Das Plugin ist doppelt installiert (z. B. `realistic-radio (1).dll`). Im Log steht dann `WARNING: another radio plugin DLL is in the plugins folder`; nur eine DLL behalten. Eine zweite Kopie dieser Version bleibt von selbst inaktiv. |
@@ -559,6 +629,9 @@ Der Ordner `server/logo/` enthält alle Logos (verkleinert auf 200 px) in genau 
 │   ├── StreamSource.*         Netzwerk-Streams, Decoding, Wiederverbindung
 │   ├── NetReader.h            macht den Anfang eines Live-Streams zurückspulbar
 │   ├── Overlay.*, OverlayImage.*, D3D11Overlay.*   Ingame-Overlay
+│   ├── CardStyles.*           eigene Styles aus dem Ordner styles
+│   ├── GameAudio.*            Ton über das Spiel (Kabine, Spielradio stumm)
+│   ├── Phone.*, Speech.*      virtuelles Handy (Apps, Anrufe, Windows-Stimmen)
 │   ├── DisplayWindow.*        optionales Display-Fenster
 │   ├── InputManager.*         Tastatur und Controller
 │   ├── InputBlock.*           hält die Maus vom Spiel fern, solange das Menü offen ist

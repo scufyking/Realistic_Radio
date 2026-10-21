@@ -12,6 +12,7 @@ namespace MenuInput {
 struct Event {
     enum Type { Key, MouseDown, MouseUp, Wheel } type = Key;
     int vk = 0; bool ctrl = false, shift = false, alt = false;   // Key
+    wchar_t ch = 0;                                              // Key: the character it types (keyboard layout of the game), 0 = none
     int button = 0;                                              // MouseDown/Up: 0 = left, 1 = right, 2 = middle
     int wheel = 0;                                               // Wheel: +1 up, -1 down
 };

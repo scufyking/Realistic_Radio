@@ -26,16 +26,21 @@ struct MenuDef {
     std::wstring wlabel, whint;                                 // generated rows: text instead of de/en
     std::vector<std::wstring> names;                            // generated choice: one text per value (both languages)
     int index = -1;
+    std::function<std::wstring(const Config&)> textGet;          // text row (MenuItemKind::Text)
+    std::function<void(Config&, const std::wstring&)> textSet;
+    size_t maxLen = 80;
     std::function<std::wstring(bool)> hintFn;                   // hint computed when shown (e.g. what the game reports)                                             // generated button: preset index
 };
 
 // In-game settings menu (default Ctrl+0) with mouse and keyboard: pages for radio, reception, navigation screen,
 // pop-up overlay, USB/CD and keys. Changes take effect immediately (RadioManager applies Edited() whenever
 // TakeChanged() is true); "Save" and closing the menu write them to realistic-radio.json.
+extern std::function<std::wstring(bool)> g_outsideStatus;   // "quieter outside the truck": state for the menu (set by the radio)
+
 class SettingsMenu {
 public:
     enum class Result { Open, Closed };
-    enum Command { None = 0, OpenMusicFolder, ClearLogos, OpenLogoFolder, DetectScreen, AutoStoreButtons, OpenTruckLogoFolder, PreviewStartLogo,
+    enum Command { None = 0, OpenMusicFolder, ClearLogos, OpenLogoFolder, DetectScreen, AutoStoreButtons, OpenTruckLogoFolder, PreviewStartLogo, OpenStylesFolder, PhoneTest, PhoneTestCall,
                    PresetNew, PresetLink, PresetUnlink, PresetDelete, PresetLoad };   // preset commands are handled by the menu itself
     struct Folder { std::wstring name; int tracks; };   // music folder = one USB / CD (name empty = main folder)
     void Open(const Config& cfg);
@@ -83,6 +88,8 @@ private:
     std::string savedJson_;
     int page_ = 0, sel_ = 0, hover_ = -1, hoverCtl_ = -1, capture_ = 0, drag_ = -1;
     std::wstring status_;
+    std::wstring editBuf_;                  // text row being typed (capture_ == 3)
+    void CommitText();
     std::vector<Def> defs_;                  // rows of the current page (static + generated)
     std::vector<Folder> folders_;
     uint64_t cacheBytes_ = 0; int cacheFiles_ = 0;

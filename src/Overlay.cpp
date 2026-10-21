@@ -3,6 +3,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "Overlay.h"
+#include "CardStyles.h"
 #include "D3D11Overlay.h"
 #include "Logger.h"
 #include <urlmon.h>
@@ -60,7 +61,7 @@ void Overlay::Reconfigure(const OverlayConfig& cfg, const ScreenConfig& screen) 
             if (ScreenUsable()) {   // show the card right away in its new place / design
                 ULONGLONG t = GetTickCount64();
                 if (!pinned_) { if (t >= scrUntil_) scrShownAt_ = t; scrUntil_ = t + (ULONGLONG)(scfg_.durationSeconds * 1000); }
-                if (scrInfo_.volume >= 0 || scrInfo_.title.empty()) scrInfo_ = pageInfo_;
+                if (Transient(scrInfo_) || scrInfo_.title.empty()) scrInfo_ = pageInfo_;
                 RenderScreen();
             }
         }
@@ -91,6 +92,7 @@ void Overlay::ApplyStyle() {
 void Overlay::Init(const OverlayConfig& cfg, const ScreenConfig& screen, const std::wstring& dataDir) {
     cfg_ = cfg; scfg_ = screen; start_ = GetTickCount64();
     logoDir_ = dataDir + L"logos\\";
+    InitCardStyles(dataDir + L"styles\\");
     dataDir_ = dataDir;
     CreateDirectoryW(logoDir_.c_str(), nullptr);
     ApplyStyle();
@@ -124,14 +126,16 @@ void Overlay::Shutdown() {
     if (job_) { for (int i = 0; i < 30 && !job_->done; ++i) Sleep(100); }
 }
 
-void Overlay::Show(const OverlayInfo& info, const std::string& logoPath) {
-    if (cfg_.showLogos && !logoPath.empty()) { if (logoPath != logoKey_) RequestLogo(logoPath); }
-    else { logoKey_.clear(); logo_.reset(); }   // no logo (USB track without cover, message without station)
-    if (info.volume < 0) pageInfo_ = info;
+void Overlay::Show(const OverlayInfo& info, const std::string& logoPath, double seconds) {
+    if (!info.notice) {   // a phone notification keeps the station's logo for the page behind it
+        if (cfg_.showLogos && !logoPath.empty()) { if (logoPath != logoKey_) RequestLogo(logoPath); }
+        else { logoKey_.clear(); logo_.reset(); }   // no logo (USB track without cover, message without station)
+    }
+    if (!Transient(info)) pageInfo_ = info;
     if (ScreenUsable()) {
         ULONGLONG t = GetTickCount64();
         if (t >= scrUntil_) scrShownAt_ = t;
-        scrUntil_ = t + (ULONGLONG)(scfg_.durationSeconds * 1000);
+        scrUntil_ = t + (ULONGLONG)((seconds > 0 ? seconds : scfg_.durationSeconds) * 1000);
         scrInfo_ = info;
         RenderScreen();
     }
@@ -139,7 +143,7 @@ void Overlay::Show(const OverlayInfo& info, const std::string& logoPath) {
     ULONGLONG now = GetTickCount64();
     if (!Visible()) shownAt_ = now;
     info_ = info;
-    double secs = cfg_.durationSeconds;
+    double secs = seconds > 0 ? seconds : cfg_.durationSeconds;
     if (radioStyle_) {   // restart the marquee and keep the display on for at least one full pass
         scroll_ = 0; nextScrollAt_ = now + 1200;
         int len = (int)LcdText().size();
@@ -151,8 +155,8 @@ void Overlay::Show(const OverlayInfo& info, const std::string& logoPath) {
 
 void Overlay::Update(const OverlayInfo& info) {
     // in-cab card: refresh while it is visible (status, track time) - but never replace a volume card
-    if (info.volume < 0) pageInfo_ = info;
-    if (ScreenUsable() && (pinned_ || GetTickCount64() < scrUntil_) && scrInfo_.volume < 0 && !(info == scrInfo_)) {
+    if (!Transient(info)) pageInfo_ = info;
+    if (ScreenUsable() && (pinned_ || GetTickCount64() < scrUntil_) && !Transient(scrInfo_) && !(info == scrInfo_)) {
         scrInfo_ = info;
         RenderScreen();
     }
@@ -221,6 +225,41 @@ void Overlay::ClearLogoCache() {
     Log::Write("Logo cache cleared (%d file(s))", n);
 }
 
+// a logo that is already here (memory or disk), without downloading
+std::shared_ptr<OverlayImage> Overlay::CachedLogo(const std::string& logoPath) {
+    auto it = logoCache_.find(logoPath);
+    if (it != logoCache_.end()) return it->second;
+    std::wstring file = logoDir_ + SafeFileName(logoPath);
+    if (GetFileAttributesW(file.c_str()) == INVALID_FILE_ATTRIBUTES) return nullptr;
+    auto img = ShrinkImage(LoadImageFile(file), 256);
+    if (img) RememberLogo(logoPath, img);
+    return img;
+}
+// station-list design: the logos of the station buttons; missing ones are downloaded one after another
+void Overlay::ResolveTiles(OverlayInfo& i) {
+    i.tileLogos.clear();
+    if (i.tiles.empty() || !cfg_.showLogos || !StyleUsesTiles(scfg_.design)) return;
+    for (auto& t : i.tiles) i.tileLogos.push_back(t.logo.empty() ? nullptr : CachedLogo(t.logo));
+}
+void Overlay::PrefetchTileLogos() {
+    if ((job_ && !job_->done) || !cfg_.showLogos || pageInfo_.tiles.empty() || !StyleUsesTiles(scfg_.design)) return;
+    ULONGLONG now = GetTickCount64();
+    for (auto& t : pageInfo_.tiles) {
+        if (t.logo.empty() || logoCache_.count(t.logo)) continue;
+        std::wstring file = logoDir_ + SafeFileName(t.logo);
+        if (GetFileAttributesW(file.c_str()) != INVALID_FILE_ATTRIBUTES) continue;
+        auto f = logoFailedAt_.find(t.logo);
+        if (f != logoFailedAt_.end() && now - f->second < 600000) continue;
+        if (t.logo.rfind("http", 0) != 0 && cfg_.urlPrefix.empty()) continue;
+        StartLogoDownload(t.logo, file);
+        return;
+    }
+}
+bool Overlay::IsTileLogo(const std::wstring& file) const {
+    for (auto& t : pageInfo_.tiles) if (!t.logo.empty() && SafeFileName(t.logo) == file.substr(logoDir_.size())) return true;
+    return false;
+}
+
 void Overlay::RequestLogo(const std::string& logoPath) {
     logoKey_ = logoPath; logo_.reset();
     auto it = logoCache_.find(logoPath);
@@ -237,6 +276,10 @@ void Overlay::RequestLogo(const std::string& logoPath) {
     }
     if (logoPath.rfind("http", 0) != 0 && cfg_.urlPrefix.empty()) return;   // bundled logos only, no network
     { auto f = logoFailedAt_.find(logoPath); if (f != logoFailedAt_.end() && GetTickCount64() - f->second < 600000) return; }
+    StartLogoDownload(logoPath, file);
+}
+
+void Overlay::StartLogoDownload(const std::string& logoPath, const std::wstring& file) {
     if (job_ && !job_->done) return;   // a download is running; this logo is fetched next time it is shown
     std::string lower = logoPath; std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
     if (lower.size() > 4 && lower.compare(lower.size() - 4, 4, ".svg") == 0) return;   // SVG logos are not supported
@@ -357,8 +400,10 @@ void Overlay::Tick() {
                 logo_ = LoadImageFile(j->file);
                 if (logo_) { RememberLogo(logoKey_, logo_); if (ScreenUsable() && (pinned_ || now < scrUntil_)) RenderScreen(); }   // logo arrived: show it now
             }
+            else if (j->ok && IsTileLogo(j->file) && ScreenUsable() && (pinned_ || now < scrUntil_)) RenderScreen();
             if (j->ok) PruneLogoCache(false);
         }
+        PrefetchTileLogos();
         return;
     }
 
@@ -373,9 +418,10 @@ void Overlay::Tick() {
         if (j->ok && SafeFileName(logoKey_) == j->file.substr(logoDir_.size())) {
             logo_ = LoadImageFile(j->file);
             if (logo_) { RememberLogo(logoKey_, logo_); if (Visible()) Rerender(); if (ScreenUsable() && (pinned_ || now < scrUntil_)) RenderScreen(); }
-        }
+        } else if (j->ok && IsTileLogo(j->file) && ScreenUsable() && (pinned_ || now < scrUntil_)) RenderScreen();
         if (j->ok) PruneLogoCache(false);
     }
+    PrefetchTileLogos();
     int h = D3D11Overlay::ScreenHeight();
     if (image_ && h >= 200 && std::abs(h - renderedH_) > 2) Rerender();   // resolution changed -> crisp text again
     if (radioStyle_ && Visible() && (int)LcdText().size() > cfg_.radio.columns && now >= nextScrollAt_) {   // marquee step
@@ -403,15 +449,29 @@ std::wstring Overlay::LcdText() const {
 // In-cab screen (experimental)
 void Overlay::RenderScreen() {
     if (Splashing(GetTickCount64())) return;   // the start logo is on the screen: the card follows afterwards
-    std::shared_ptr<OverlayImage> logo = (cfg_.showLogos && scrInfo_.volume < 0) ? logo_ : nullptr;
+    std::shared_ptr<OverlayImage> logo = (cfg_.showLogos && !Transient(scrInfo_)) ? logo_ : nullptr;
     // render at the pixel size of the visible area, so the card is not stretched
     int w = std::max(64, (int)std::lround(scfg_.width * std::clamp(scfg_.areaW, 0.01, 1.0)));
     int h = std::max(64, (int)std::lround(scfg_.height * std::clamp(scfg_.areaH, 0.01, 1.0)));
+    if (scrInfo_.notice) {   // phone notification: a banner at the top, over the navigation or the pinned radio page
+        std::shared_ptr<OverlayImage> under;
+        if (pinned_ && !Transient(pageInfo_)) {
+            OverlayInfo pi = pageInfo_; ResolveTiles(pi);
+            SongLine song;
+            auto page = RenderScreenCard(pi, cfg_.showLogos ? logo_.get() : nullptr, w, h, scfg_.design, (float)scfg_.scale, (float)scfg_.logoSize, &song);
+            under = song.strip ? ComposeSongLine(*page, song, 0) : page;
+        }
+        scrCard_.reset(); scrSong_ = SongLine{};
+        D3D11Overlay::SetScreenImage(RenderScreenNotice(scrInfo_, w, h, scfg_.design, (float)scfg_.scale, under.get()));
+        D3D11Overlay::SetScreenTarget(scfg_.width, scfg_.height, scfg_.format);
+        return;
+    }
     if (scrInfo_.volume >= 0 && scfg_.volumeStyle == "bar") {   // slim bar at the top: over the navigation, or over the pinned radio page
         std::shared_ptr<OverlayImage> under;
         if (pinned_ && pageInfo_.volume < 0) {
             SongLine song;
-            auto page = RenderScreenCard(pageInfo_, cfg_.showLogos ? logo_.get() : nullptr, w, h, scfg_.design, (float)scfg_.scale, (float)scfg_.logoSize, &song);
+            OverlayInfo pi = pageInfo_; ResolveTiles(pi);
+            auto page = RenderScreenCard(pi, cfg_.showLogos ? logo_.get() : nullptr, w, h, scfg_.design, (float)scfg_.scale, (float)scfg_.logoSize, &song);
             under = song.strip ? ComposeSongLine(*page, song, 0) : page;
         }
         D3D11Overlay::SetScreenImage(RenderScreenVolumeBar(scrInfo_, w, h, scfg_.design, (float)scfg_.scale, under.get()));
@@ -419,7 +479,8 @@ void Overlay::RenderScreen() {
         return;
     }
     SongLine song;
-    scrCard_ = RenderScreenCard(scrInfo_, logo.get(), w, h, scfg_.design, (float)scfg_.scale, (float)scfg_.logoSize, &song);
+    OverlayInfo si = scrInfo_; ResolveTiles(si);
+    scrCard_ = RenderScreenCard(si, logo.get(), w, h, scfg_.design, (float)scfg_.scale, (float)scfg_.logoSize, &song);
     bool sameSong = scrSong_.strip && song.strip && scrSong_.strip->width == song.strip->width && scrSong_.x == song.x && scrSong_.y == song.y &&
                     scrSong_.strip->pixels == song.strip->pixels;
     scrSong_ = song;
@@ -445,6 +506,15 @@ int Overlay::PollScreenDetect(float rect[4]) {
 }
 
 void Overlay::TickScreen(ULONGLONG now) {
+    if (scfg_.design.rfind("style:", 0) == 0 && now >= styleCheckAt_) {   // own style edited while it is shown: draw it again
+        styleCheckAt_ = now + 2000;
+        auto t = CardThemeFor(scfg_.design);
+        if (t != styleTheme_) {
+            bool first = !styleTheme_;
+            styleTheme_ = t;
+            if (!first && ScreenUsable() && (pinned_ || now < scrUntil_) && !Splashing(now)) RenderScreen();
+        }
+    }
     if (detectPhase_) {
         D3D11Overlay::SetScreenAlpha(0.f);
         D3D11Overlay::SetScreenTarget(scfg_.width, scfg_.height, scfg_.format);
@@ -511,17 +581,17 @@ void Overlay::TickScreen(ULONGLONG now) {
         if (pinned_ || now < scrUntil_) {
             scrShownAt_ = now; pinShownAt_ = now;
             scrUntil_ = std::max(scrUntil_, now + (ULONGLONG)(scfg_.durationSeconds * 1000));
-            if (pinned_ && scrInfo_.volume >= 0) scrInfo_ = pageInfo_;
+            if (pinned_ && Transient(scrInfo_)) scrInfo_ = pageInfo_;
             RenderScreen();
         }
     }
     if (pinned_ && ScreenUsable()) {
-        if (now >= scrUntil_ && scrInfo_.volume >= 0) { scrInfo_ = pageInfo_; RenderScreen(); }   // volume card over: back to the page
+        if (now >= scrUntil_ && Transient(scrInfo_)) { scrInfo_ = pageInfo_; RenderScreen(); }   // volume card over: back to the page
         a = std::min(1.f, (now - pinShownAt_) / 250.f);
     } else if (now < scrUntil_) a = std::min({1.f, (now - scrShownAt_) / 200.f, (scrUntil_ - now) / 400.f});
     D3D11Overlay::SetScreenAlpha(a);
     // live song title wider than its line: let it scroll (only the strip moves, the card is not rendered again)
-    if (a > 0.f && scrCard_ && scrSong_.strip && scrSong_.strip->width > scrSong_.w && scrInfo_.volume < 0 && !Splashing(now)) {
+    if (a > 0.f && scrCard_ && scrSong_.strip && scrSong_.strip->width > scrSong_.w && !Transient(scrInfo_) && !Splashing(now)) {
         const ULONGLONG pause = 2000;
         int off = now < songScrollAt_ + pause ? 0 : (int)((now - songScrollAt_ - pause) * (scrSong_.h * 1.6) / 1000.0);
         if (off != songOff_) { songOff_ = off; D3D11Overlay::SetScreenImage(ComposeSongLine(*scrCard_, scrSong_, off)); }
@@ -539,6 +609,16 @@ void Overlay::ShowMenu(std::shared_ptr<OverlayImage> img) {
     int sh = D3D11Overlay::ScreenHeight() >= 200 ? D3D11Overlay::ScreenHeight() : img->renderedForScreenHeight;
     if (menuX_ >= 0) D3D11Overlay::SetPlacement(0, menuX_ / sh, menuY_ / sh);   // where it was dragged to
     else D3D11Overlay::SetPlacement(1, 0.f, std::max(0.f, (sh - img->height) / 2.f / sh));   // centred
+    D3D11Overlay::SetImage(menuImg_);
+    if (window_) { image_ = menuImg_; lastImg_ = nullptr; }
+    D3D11Overlay::SetAlpha(d3d_ && !window_ ? 1.f : 0.f);
+}
+
+void Overlay::ShowPhone(std::shared_ptr<OverlayImage> img) {
+    if (!img) return;
+    menuImg_ = img;
+    menu_ = true;
+    D3D11Overlay::SetPlacement(5, 0.03f, 0.04f);   // bottom right, a small margin (fractions of the screen height)
     D3D11Overlay::SetImage(menuImg_);
     if (window_) { image_ = menuImg_; lastImg_ = nullptr; }
     D3D11Overlay::SetAlpha(d3d_ && !window_ ? 1.f : 0.f);
@@ -627,7 +707,7 @@ void Overlay::SetScreenPinned(bool p) {
     if (!ScreenUsable()) return;
     if (p) {
         pinShownAt_ = now < scrUntil_ ? now - 1000 : now;   // already visible: no fade
-        if (now >= scrUntil_ || scrInfo_.volume < 0) scrInfo_ = pageInfo_;
+        if (now >= scrUntil_ || !Transient(scrInfo_)) scrInfo_ = pageInfo_;
         RenderScreen();
     } else {   // fade out, the navigation comes back
         scrShownAt_ = now - 1000;

@@ -7,6 +7,7 @@
 // scs_telemetry_init on a separate "radio thread", so the game callbacks never block on audio or network.
 #include "Common.h"
 #include <objbase.h>
+#include <cmath>
 #include "Logger.h"
 #include "RadioManager.h"
 #include "InputManager.h"
@@ -20,23 +21,86 @@
 #include <common/scssdk_telemetry_truck_common_channels.h>
 #include <common/scssdk_telemetry_common_configs.h>
 #include <scssdk_telemetry_event.h>
+#include <common/scssdk_telemetry_common_gameplay_events.h>
 
 
 namespace {
-std::atomic<double> g_x{0}, g_z{0};
+std::atomic<double> g_x{0}, g_y{0}, g_z{0}, g_heading{0};
+std::atomic<float> g_cabX{0}, g_cabY{0}, g_cabZ{0}, g_headX{0}, g_headY{0}, g_headZ{0};   // config: cabin in the truck, head in the cabin
 std::atomic<bool> g_havePos{false};
 std::atomic<bool> g_electric{false}, g_engine{false};
 std::atomic<float> g_speed{0.f};   // m/s, negative when reversing
+std::atomic<float> g_backlight{1.f};                 // dashboard backlight 0..1
+std::atomic<bool> g_lightParking{false}, g_lightLow{false};
 
 // Truck identity (configuration event "truck"): used to pick the truck preset of the in-cab screen
 std::mutex g_truckMtx;
 std::string g_truckId, g_truckName, g_truckBrandId, g_truckBrand, g_truckModel;
 std::atomic<int> g_truckVersion{0};
+// current job (configuration event "job") and the game time: for the virtual phone's message from the customer
+std::mutex g_jobMtx;
+JobInfo g_job;
+std::atomic<int> g_jobVersion{0};
+std::atomic<unsigned> g_gameTime{0};
+std::atomic<float> g_navDist{0}, g_navTime{0};   // route advisor: metres / seconds to the destination
+SCSAPI_VOID OnNav(const scs_string_t, const scs_u32_t, const scs_value_t* const v, const scs_context_t ctx) {
+    float f = (v && v->type == SCS_VALUE_TYPE_float) ? v->value_float.value : 0.f;
+    (ctx ? g_navTime : g_navDist) = f;
+}
+std::mutex g_eventMtx;
+std::vector<GameEvent> g_events;
+SCSAPI_VOID OnGameplay(const scs_event_t, const void* const info, const scs_context_t) {
+    const auto* e = static_cast<const scs_telemetry_gameplay_event_t*>(info);
+    if (!e || !e->id) return;
+    GameEvent g; g.id = e->id;
+    for (const scs_named_value_t* a = e->attributes; a && a->name; ++a) {
+        const scs_value_t& v = a->value;
+        long long n = v.type == SCS_VALUE_TYPE_s64 ? v.value_s64.value : v.type == SCS_VALUE_TYPE_u64 ? (long long)v.value_u64.value :
+                      v.type == SCS_VALUE_TYPE_s32 ? v.value_s32.value : v.type == SCS_VALUE_TYPE_u32 ? v.value_u32.value : 0;
+        if (!strcmp(a->name, SCS_TELEMETRY_GAMEPLAY_EVENT_ATTRIBUTE_revenue) || !strcmp(a->name, SCS_TELEMETRY_GAMEPLAY_EVENT_ATTRIBUTE_cancel_penalty) ||
+            !strcmp(a->name, SCS_TELEMETRY_GAMEPLAY_EVENT_ATTRIBUTE_fine_amount)) g.amount = n;
+        else if (!strcmp(a->name, SCS_TELEMETRY_GAMEPLAY_EVENT_ATTRIBUTE_fine_offence) && v.type == SCS_VALUE_TYPE_string && v.value_string.value) g.text = v.value_string.value;
+    }
+    std::lock_guard<std::mutex> l(g_eventMtx);
+    if (g_events.size() < 32) g_events.push_back(g);
+}
+SCSAPI_VOID OnGameTime(const scs_string_t, const scs_u32_t, const scs_value_t* const v, const scs_context_t) {
+    if (v && v->type == SCS_VALUE_TYPE_u32) g_gameTime = v->value_u32.value;
+}
+void OnJob(const scs_telemetry_configuration_t* cfg) {
+    JobInfo j;
+    for (const scs_named_value_t* a = cfg->attributes; a && a->name; ++a) {
+        const scs_value_t& v = a->value;
+        auto str = [&]() { return v.type == SCS_VALUE_TYPE_string && v.value_string.value ? std::string(v.value_string.value) : std::string(); };
+        if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_delivery_time) && v.type == SCS_VALUE_TYPE_u32) j.deliveryTime = v.value_u32.value;
+        else if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_destination_city)) j.city = str();
+        else if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_destination_company)) j.company = str();
+        else if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_cargo)) j.cargo = str();
+        else if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_is_cargo_loaded) && v.type == SCS_VALUE_TYPE_bool) j.loaded = v.value_bool.value != 0;
+        else if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_special_job) && v.type == SCS_VALUE_TYPE_bool) j.special = v.value_bool.value != 0;
+        else if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_destination_city_id)) j.cityId = str();
+        else if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_source_city)) j.sourceCity = str();
+        else if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_source_city_id)) j.sourceCityId = str();
+        else if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_source_company)) j.sourceCompany = str();
+        else if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_income) && v.type == SCS_VALUE_TYPE_u64) j.income = (long long)v.value_u64.value;
+    }
+    j.active = j.deliveryTime != 0;
+    std::lock_guard<std::mutex> l(g_jobMtx);
+    if (j == g_job) return;
+    g_job = j; ++g_jobVersion;
+}
 SCSAPI_VOID OnConfiguration(const scs_event_t, const void* const info, const scs_context_t) {
     const auto* cfg = static_cast<const scs_telemetry_configuration_t*>(info);
+    if (cfg && cfg->id && !strcmp(cfg->id, SCS_TELEMETRY_CONFIG_job)) { OnJob(cfg); return; }
     if (!cfg || !cfg->id || strcmp(cfg->id, SCS_TELEMETRY_CONFIG_truck) != 0) return;
     std::string id, brand, name, brandId;
     for (const scs_named_value_t* a = cfg->attributes; a && a->name; ++a) {
+        if (a->value.type == SCS_VALUE_TYPE_fvector && !strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_cabin_position)) {
+            g_cabX = a->value.value_fvector.x; g_cabY = a->value.value_fvector.y; g_cabZ = a->value.value_fvector.z; continue;
+        }
+        if (a->value.type == SCS_VALUE_TYPE_fvector && !strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_head_position)) {
+            g_headX = a->value.value_fvector.x; g_headY = a->value.value_fvector.y; g_headZ = a->value.value_fvector.z; continue;
+        }
         if (a->value.type != SCS_VALUE_TYPE_string || !a->value.value_string.value) continue;
         if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_id)) id = a->value.value_string.value;
         else if (!strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_brand)) brand = a->value.value_string.value;
@@ -54,6 +118,13 @@ SCSAPI_VOID OnConfiguration(const scs_event_t, const void* const info, const scs
     ++g_truckVersion;
 }
 
+SCSAPI_VOID OnBacklight(const scs_string_t, const scs_u32_t, const scs_value_t* const value, const scs_context_t) {
+    g_backlight = (value && value->type == SCS_VALUE_TYPE_float) ? value->value_float.value : 1.f;
+}
+SCSAPI_VOID OnLight(const scs_string_t, const scs_u32_t, const scs_value_t* const value, const scs_context_t ctx) {
+    bool v = value && value->type == SCS_VALUE_TYPE_bool && value->value_bool.value != 0;
+    (ctx ? g_lightLow : g_lightParking) = v;
+}
 SCSAPI_VOID OnSpeed(const scs_string_t, const scs_u32_t, const scs_value_t* const value, const scs_context_t) {
     g_speed = (value && value->type == SCS_VALUE_TYPE_float) ? value->value_float.value : 0.f;
 }
@@ -70,7 +141,9 @@ std::string g_game = "ets2";
 SCSAPI_VOID OnPlacement(const scs_string_t, const scs_u32_t, const scs_value_t* const value, const scs_context_t) {
     if (!value || value->type != SCS_VALUE_TYPE_dplacement) return;
     g_x = value->value_dplacement.position.x;
+    g_y = value->value_dplacement.position.y;
     g_z = value->value_dplacement.position.z;
+    g_heading = value->value_dplacement.orientation.heading;
     g_havePos = true;
 }
 
@@ -85,10 +158,14 @@ DWORD WINAPI RadioThread(LPVOID) {
     }
     { Config c; c.Load(dir + L"realistic-radio.json"); input.Init(c); }
     Log::Write("Radio thread running");
-    int truckVersion = 0;
+    int truckVersion = 0, jobVersion = 0;
     while (!g_quit) {
         if (radio.MenuOpen()) {   // key menu: keys go to the menu, no radio actions
             if (radio.MenuTick(input)) { input.Init(radio.Settings()); input.Resync(); }
+        } else if (radio.PhoneOpen()) {   // the phone has keyboard and mouse; a controller button can still close it
+            radio.PhoneUiTick(input);
+            input.Poll([&](Action a, bool) { if (a == Action::Phone && radio.PhoneOpen()) radio.OnAction(a, false); });
+            if (!radio.PhoneOpen()) input.Resync();
         } else input.Poll([&](Action a, bool hold) { Log::Write("Action: %s%s", ActionName(a), hold ? " (held)" : ""); radio.OnAction(a, hold); });
         if (int v = g_truckVersion.load(); v != truckVersion) {
             truckVersion = v;
@@ -96,8 +173,28 @@ DWORD WINAPI RadioThread(LPVOID) {
             { std::lock_guard<std::mutex> l(g_truckMtx); id = g_truckId; name = g_truckName; brandId = g_truckBrandId; brand = g_truckBrand; model = g_truckModel; }
             radio.SetTruck(id, name, brandId, brand, model);
         }
+        if (int v = g_jobVersion.load(); v != jobVersion) {
+            jobVersion = v;
+            JobInfo j; { std::lock_guard<std::mutex> l(g_jobMtx); j = g_job; }
+            radio.SetJob(j);
+        }
+        radio.SetGameTime(g_gameTime);
+        radio.SetNavigation(g_navDist, g_navTime);
+        {
+            std::vector<GameEvent> ev;
+            { std::lock_guard<std::mutex> l(g_eventMtx); ev.swap(g_events); }
+            for (auto& e : ev) radio.OnGameEvent(e);
+        }
+        radio.SetLights(g_backlight, g_lightParking || g_lightLow);
+        {   // driver's head in world coordinates (truck position + cabin + head, turned by the heading) for "quieter outside"
+            const double a = g_heading * 6.283185307179586;
+            const double lx = g_cabX + g_headX, ly = g_cabY + g_headY, lz = g_cabZ + g_headZ;
+            double head[3] = {g_x + lx * std::cos(a) + lz * std::sin(a), g_y + ly, g_z - lx * std::sin(a) + lz * std::cos(a)};
+            double truck[3] = {g_x, g_y, g_z};
+            radio.SetPose(g_havePos, truck, head, g_speed, g_heading);
+        }
         radio.Tick(g_x, g_z, g_havePos, g_electric, g_engine, g_speed);
-        Sleep(radio.MenuOpen() ? 15 : 50);   // the menu reacts faster to the mouse
+        Sleep(radio.MenuOpen() || radio.PhoneOpen() ? 15 : 50);   // the menu reacts faster to the mouse
     }
     radio.Shutdown();
     CoUninitialize();
@@ -184,6 +281,17 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
     if (p->register_for_event(SCS_TELEMETRY_EVENT_configuration, OnConfiguration, nullptr) != SCS_RESULT_ok)
         Log::Write("Truck presets: configuration event not available");
     // speed for the speed-dependent volume ("autoVolume")
+    // lights and dashboard backlight: the cab screen dims at night (beta)
+    p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_dashboard_backlight, SCS_U32_NIL, SCS_VALUE_TYPE_float,
+                            SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnBacklight, nullptr);
+    p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_light_parking, SCS_U32_NIL, SCS_VALUE_TYPE_bool,
+                            SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnLight, nullptr);
+    p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_light_low_beam, SCS_U32_NIL, SCS_VALUE_TYPE_bool,
+                            SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnLight, (scs_context_t)1);
+    p->register_for_channel(SCS_TELEMETRY_CHANNEL_game_time, SCS_U32_NIL, SCS_VALUE_TYPE_u32, SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnGameTime, nullptr);
+    p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_navigation_distance, SCS_U32_NIL, SCS_VALUE_TYPE_float, SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnNav, nullptr);
+    p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_navigation_time, SCS_U32_NIL, SCS_VALUE_TYPE_float, SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnNav, (scs_context_t)1);
+    if (p->register_for_event(SCS_TELEMETRY_EVENT_gameplay, OnGameplay, nullptr) != SCS_RESULT_ok) Log::Write("Phone: gameplay events not available");
     p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_speed, SCS_U32_NIL, SCS_VALUE_TYPE_float,
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, OnSpeed, nullptr);
     p->common.log(SCS_LOG_TYPE_message, "[realistic-radio] Realistic Radio plugin initialised");

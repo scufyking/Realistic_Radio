@@ -3,6 +3,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "SettingsMenu.h"
+#include "GameAudio.h"
+#include "CardStyles.h"
 #include "MenuInput.h"
 #include "InputManager.h"
 #include "D3D11Overlay.h"
@@ -14,6 +16,8 @@
 // ------------------------------------------------------------------------------------------------
 // Settings
 
+
+std::function<std::wstring(bool)> g_outsideStatus;
 
 namespace {
 using D = SettingsMenu::Def;
@@ -56,6 +60,14 @@ D Slider(const char* de, const char* en, const char* hde, const char* hen, std::
     d.set = [ref, mn, mx, step](Config& c, double v) { ref(c) = std::clamp(std::round((mn + std::round((v - mn) / step) * step) * 1e6) / 1e6, mn, mx); };   // 0.58, not 0.5800000000000001
     return d;
 }
+D TextRow(const char* de, const char* en, const char* hde, const char* hen, std::function<std::string&(Config&)> ref, size_t maxLen = 80) {
+    D d; d.kind = MenuItemKind::Text; d.de = de; d.en = en; d.hde = hde; d.hen = hen; d.maxLen = maxLen;
+    d.get = [](const Config&) { return 0.0; };
+    d.set = [](Config&, double) {};
+    d.textGet = [ref](const Config& c) { return Utf8ToWide(ref(const_cast<Config&>(c))); };
+    d.textSet = [ref](Config& c, const std::wstring& v) { ref(c) = WideToUtf8(v); };
+    return d;
+}
 D Choice(const char* de, const char* en, const char* hde, const char* hen, std::function<std::string&(Config&)> ref,
          std::vector<const char*> values, std::vector<std::pair<const char*, const char*>> labels, bool restart = false) {
     D d; d.kind = MenuItemKind::Choice; d.de = de; d.en = en; d.hde = hde; d.hen = hen; d.labels = labels; d.restart = restart;
@@ -83,6 +95,30 @@ const std::vector<Page>& Pages() {
             Toggle("Automatisch starten", "Start automatically", "Beim Spielstart sofort spielen", "Play as soon as the game starts", [](Config& c) -> bool& { return c.autoPlay; }),
             Choice("Sprache des Menüs", "Menu language", "", "", [](Config& c) -> std::string& { return c.menuLanguage; },
                    {"de", "en"}, {{"Deutsch", "Deutsch"}, {"English", "English"}}),
+            Heading("Ton", "Sound"),
+            [] {
+                D d = Choice("Ton ausgeben", "Sound output", "", "", [](Config& c) -> std::string& { return c.audioOutput; },
+                             {"device", "cabin"}, {{"Windows-Ger\u00e4t", "Windows device"}, {"Kabine des Spiels (Beta)", "The game's cab (beta)"}});
+                d.hintFn = [](bool en) -> std::wstring {
+                    switch (GameAudio::State()) {
+                    case 2: return en ? L"Plays in the cab: windows, game volume, quieter outside" : L"Spielt in der Kabine: Fenster, Spiel-Lautst\u00e4rke, drau\u00dfen leiser";
+                    case 1: return en ? L"Waiting for the game's sound system \u2026" : L"Wartet auf den Sound des Spiels \u2026";
+                    case -1: return en ? L"Not possible here - plays on the Windows device (see log)" : L"Hier nicht m\u00f6glich \u2013 l\u00e4uft \u00fcber Windows (siehe Log)";
+                    default: return en ? L"Cab: sounds like the game's radio (cab acoustics, windows)" : L"Kabine: klingt wie das Spielradio (Kabinen-Akustik, Fenster)";
+                    }
+                };
+                return d;
+            }(),
+            Toggle("Spielradio stummschalten", "Mute the game's radio", "Solange Realistic Radio spielt (Radio und USB / CD)",
+                   "While Realistic Radio plays (radio and USB / CD)", [](Config& c) -> bool& { return c.muteGameRadio; }),
+            [] {
+                D d = Toggle("Leiser au\u00dferhalb des LKWs", "Quieter outside the truck", "", "", [](Config& c) -> bool& { return c.outsideFade; });
+                d.hintFn = [](bool en) { return g_outsideStatus ? g_outsideStatus(en) : std::wstring(); };
+                return d;
+            }(),
+            Slider("H\u00f6rweite drau\u00dfen", "Range outside", "Bis hier ist es drau\u00dfen noch zu h\u00f6ren (offenes Fenster: doppelt)",
+                   "Up to here it can still be heard outside (open window: twice)", [](Config& c) -> double& { return c.outsideDistance; }, 10, 200, 5,
+                   [](double v, bool) { return std::to_wstring((int)std::lround(v)) + L" m"; }),
             Heading("Band", "Band"),
             Choice("Band", "Band", "DAB+: weiter, ohne Rauschen, bricht bei schwachem Signal ab", "DAB+: further, no static, drops out on a weak signal",
                    [](Config& c) -> std::string& { return c.band; }, {"fm", "dab"}, {{"FM (UKW)", "FM"}, {"DAB+", "DAB+"}}),
@@ -133,7 +169,11 @@ const std::vector<Page>& Pages() {
                    [](Config& c) -> double& { return c.screen.durationSeconds; }, 1, 15, 0.5, secs),
             Choice("Design", "Design", "Aussehen der Anzeige im LKW", "Look of the display in the truck", [](Config& c) -> std::string& { return c.screen.design; },
                    {"modern", "ocean", "sport", "light", "retro"},
-                   {{"Modern", "Modern"}, {"Ozean", "Ocean"}, {"Sport", "Sport"}, {"Hell", "Light"}, {"Retro (LCD)", "Retro (LCD)"}}),
+                   {{"Modern", "Modern"}, {"Ozean", "Ocean"}, {"Sport", "Sport"}, {"Hell", "Light"}, {"Retro (LCD)", "Retro (LCD)"}}),   // replaced in BuildDefs (own styles)
+            Button("Eigene Styles", "Own styles", "Ordner styles: Vorlage kopieren, anpassen, hier w\u00e4hlen", "Folder styles: copy the template, edit it, choose it here",
+                   "Ordner \u00f6ffnen", "Open folder", SettingsMenu::OpenStylesFolder),
+            Toggle("Dimmt mit dem Licht (Beta)", "Dims with the lights (beta)", "Licht an: so hell wie die Instrumentenbeleuchtung, wie ein echtes Display",
+                   "Lights on: as bright as the dashboard backlight, like a real display", [](Config& c) -> bool& { return c.screen.dimWithLights; }),
             Choice("Lautst\u00e4rke-Anzeige", "Volume display", "Leiste: oben im Navi wie bei modernen Systemen, die Navigation bleibt sichtbar",
                    "Bar: at the top of the screen like modern systems, the navigation stays visible", [](Config& c) -> std::string& { return c.screen.volumeStyle; },
                    {"card", "bar"}, {{"Gro\u00dfe Karte", "Large card"}, {"Leiste oben (modern)", "Bar at the top (modern)"}}),
@@ -176,6 +216,35 @@ const std::vector<Page>& Pages() {
             Slider("H\u00f6he", "Height", "", "", [](Config& c) -> double& { return c.screen.areaH; }, 0.05, 1, 0.01, two),
             Toggle("Umdrehen (oben/unten)", "Flip (up/down)", "", "", [](Config& c) -> bool& { return c.screen.flipY; }),
             Toggle("Spiegeln (links/rechts)", "Mirror (left/right)", "", "", [](Config& c) -> bool& { return c.screen.flipX; }),
+        }, false});
+        p.push_back({"Handy", "Phone", "Virtuelles Handy im LKW", "Virtual phone in the truck", {
+            Toggle("Virtuelles Handy", "Virtual mobile device", "Nach dem Start des Radios: \u201eVerbunden\u201c auf dem Navi",
+                   "After the radio starts: \u201cConnected\u201d on the navigation screen", [](Config& c) -> bool& { return c.screen.phone.enabled; }),
+            TextRow("Name des Handys", "Name of the phone", "Steht in der Meldung \u201eVerbunden\u201c", "Shown in the \u201cconnected\u201d message",
+                    [](Config& c) -> std::string& { return c.screen.phone.name; }, 40),
+            Toggle("Ton", "Sound", "Kurzer Hinweiston wie beim Handy", "Short notification tone like a phone", [](Config& c) -> bool& { return c.screen.phone.sound; }),
+            KeyRow("Taste: Handy", "Key: phone", "", "", Action::Phone),
+            Heading("Anrufe", "Calls"),
+            Toggle("Disponent ruft an", "Dispatcher calls", "Bei neuem Auftrag und nach der Lieferung", "For a new job and after the delivery",
+                   [](Config& c) -> bool& { return c.screen.phone.calls; }),
+            TextRow("Name des Anrufers", "Name of the caller", "", "", [](Config& c) -> std::string& { return c.screen.phone.dispatcher; }, 40),
+            Toggle("Sprachausgabe", "Voice", "Windows-Stimme liest den Anruf vor (sonst nur Text)", "A Windows voice speaks the call (else text only)",
+                   [](Config& c) -> bool& { return c.screen.phone.voice; }),
+            Toggle("Bu\u00dfgelder als Nachricht", "Fines as a message", "Von der Polizei, mit Grund und Betrag", "From the police, with reason and amount",
+                   [](Config& c) -> bool& { return c.screen.phone.fines; }),
+            Button("Testanruf", "Test call", "Klingelt gleich \u2013 Handy-Taste dr\u00fccken und annehmen", "Rings in a moment - press the phone key and answer",
+                   "Anrufen", "Call", SettingsMenu::PhoneTestCall),
+            Heading("Nachrichten vom Kunden", "Messages from the customer"),
+            Toggle("Kunde meldet sich", "Customer gets in touch", "Wenn die Lieferzeit bald abl\u00e4uft", "When the delivery time is running out",
+                   [](Config& c) -> bool& { return c.screen.phone.messages; }),
+            Slider("Wann", "When", "Spielminuten vor Ende der Lieferzeit", "Game minutes before the delivery time ends",
+                   [](Config& c) -> double& { return c.screen.phone.minutes; }, 15, 240, 15,
+                   [](double v, bool) { return std::to_wstring((int)std::lround(v)) + L" min"; }),
+            TextRow("Absender", "Sender", "", "", [](Config& c) -> std::string& { return c.screen.phone.sender; }, 40),
+            TextRow("Nachricht", "Message", "{city} {company} {cargo} {time} werden ersetzt", "{city} {company} {cargo} {time} are filled in",
+                    [](Config& c) -> std::string& { return c.screen.phone.text; }, 160),
+            Button("Test", "Test", "Schickt die Nachricht jetzt aufs Navi", "Sends the message to the screen now", "Senden", "Send", SettingsMenu::PhoneTest),
+            [] { D d = Heading("Je LKW", "Per truck"); d.hde = "Gespeichert im aktiven LKW-Preset (Seite LKW)"; d.hen = "Kept in the active truck preset (page Trucks)"; return d; }(),
         }, false});
         p.push_back({"LKW", "Trucks", "Radio und Navi-Presets je LKW", "Radio and screen presets per truck", {}, false});   // rows: BuildPresetDefs
         D pos = Choice("Position", "Position", "", "", [](Config& c) -> std::string& { return c.overlay.style == "radio" ? c.overlay.radio.position : c.overlay.position; },
@@ -228,7 +297,7 @@ const Action kRows[] = {Action::Next, Action::Previous, Action::VolumeUp, Action
                         Action::Source, Action::NextDisc, Action::PreviousDisc, Action::ScreenPage, Action::MakeFavourite,
                         Action::GoToFavourite, Action::ShowOverlay, Action::Menu, Action::Band,
                         Action::Memory1, Action::Memory2, Action::Memory3, Action::Memory4, Action::Memory5,
-                        Action::Memory6, Action::Memory7, Action::Memory8, Action::Memory9, Action::TuneUp, Action::TuneDown, Action::MenuAlt, Action::TunnelMark};
+                        Action::Memory6, Action::Memory7, Action::Memory8, Action::Memory9, Action::TuneUp, Action::TuneDown, Action::MenuAlt, Action::TunnelMark, Action::Phone};
 constexpr int kRowCount = (int)(sizeof(kRows) / sizeof(kRows[0]));
 static_assert(kRowCount == (int)Action::Count, "every action needs a row in the key menu");
 
@@ -250,6 +319,7 @@ const char* LabelDe(Action a) {
     case Action::Menu: return "Dieses Menü";
     case Action::MenuAlt: return "Dieses Menü (zweite Taste)";
     case Action::TunnelMark: return "Eigenen Tunnel markieren";
+    case Action::Phone: return "Handy \u00f6ffnen / schlie\u00dfen";
     case Action::Band: return "Band: FM / DAB+";
     case Action::Memory1: return "Stationstaste 1"; case Action::Memory2: return "Stationstaste 2"; case Action::Memory3: return "Stationstaste 3";
     case Action::Memory4: return "Stationstaste 4"; case Action::Memory5: return "Stationstaste 5"; case Action::Memory6: return "Stationstaste 6";
@@ -276,6 +346,7 @@ const char* LabelEn(Action a) {
     case Action::Menu: return "This menu";
     case Action::MenuAlt: return "This menu (second key)";
     case Action::TunnelMark: return "Mark an own tunnel";
+    case Action::Phone: return "Open / close the phone";
     case Action::Band: return "Band: FM / DAB+";
     case Action::Memory1: return "Station button 1"; case Action::Memory2: return "Station button 2"; case Action::Memory3: return "Station button 3";
     case Action::Memory4: return "Station button 4"; case Action::Memory5: return "Station button 5"; case Action::Memory6: return "Station button 6";
@@ -503,8 +574,29 @@ void SettingsMenu::SetTruck(const std::string& id, const std::string& name) {
     dirty_ = true;
 }
 
+// Design: the built-in designs and the own styles from the styles folder (read again whenever the page is opened)
+static SettingsMenu::Def DesignChoice(bool en) {
+    struct B { const char* id; const wchar_t *de, *en; };
+    static const B builtin[] = {{"modern", L"Modern", L"Modern"}, {"ocean", L"Ozean", L"Ocean"}, {"sport", L"Sport", L"Sport"}, {"light", L"Hell", L"Light"},
+                                {"retro", L"Retro (LCD)", L"Retro (LCD)"}, {"classic", L"Klassisches LKW-Radio", L"Classic truck radio"},
+                                {"smart", L"Smart-Dashboard", L"Smart dashboard"}, {"presets", L"Senderliste", L"Station list"}};
+    std::vector<std::string> ids;
+    D d; d.kind = MenuItemKind::Choice; d.de = "Design"; d.en = "Design"; d.hde = "Aussehen der Anzeige im LKW"; d.hen = "Look of the display in the truck";
+    for (auto& b : builtin) { ids.push_back(b.id); d.names.push_back(en ? b.en : b.de); }
+    for (auto& s : ListCustomStyles()) { ids.push_back(s.id); d.names.push_back(s.name + (en ? L"  (own style)" : L"  (eigener Style)")); }
+    d.mx = (double)ids.size() - 1;
+    d.get = [ids](const Config& c) {
+        for (size_t i = 0; i < ids.size(); ++i) if (c.screen.design == ids[i]) return (double)i;
+        return 0.0;
+    };
+    d.set = [ids](Config& c, double v) { c.screen.design = ids[std::clamp((int)std::lround(v), 0, (int)ids.size() - 1)]; };
+    return d;
+}
+
 void SettingsMenu::BuildDefs() {
     defs_ = Pages()[page_].defs;
+    for (auto& d : defs_)
+        if (d.kind == MenuItemKind::Choice && std::string(d.de) == "Design") d = DesignChoice(edit_.menuLanguage == "en");
     if (PresetsPage()) { BuildPresetDefs(); return; }
     if (std::string(Pages()[page_].de) != "USB / CD" || folders_.empty()) return;
     D h = Heading("Musikordner und ihr Typ", "Music folders and their type");
@@ -632,6 +724,12 @@ void SettingsMenu::Activate(int row) {
         return;
     }
     const D& d = defs_[row];
+    if (d.kind == MenuItemKind::Text) {
+        capture_ = 3; editBuf_ = d.textGet(edit_);
+        status_ = T("Tippen \u2022 Enter = \u00fcbernehmen \u2022 Esc = abbrechen \u2022 Strg + V = einf\u00fcgen", "Type \u2022 Enter = apply \u2022 Esc = cancel \u2022 Ctrl + V = paste");
+        dirty_ = true;
+        return;
+    }
     if (d.kind == MenuItemKind::Toggle || d.kind == MenuItemKind::Choice) Adjust(row, 1);
     else if (d.kind == MenuItemKind::Button) {
         if (d.command >= PresetNew) PresetCommand(d.command, d.index);
@@ -680,6 +778,7 @@ void SettingsMenu::Defaults() {   // default values of the current page
     if (KeysPage()) for (int i = 0; i < (int)Action::Count; ++i) { edit_.keys[i] = def.keys[i]; edit_.buttons[i] = def.buttons[i]; }
     else for (const D& d : defs_) {
         if (d.kind == MenuItemKind::Key) { edit_.keys[(int)d.action] = def.keys[(int)d.action]; edit_.buttons[(int)d.action] = def.buttons[(int)d.action]; }
+        else if (d.kind == MenuItemKind::Text) d.textSet(edit_, d.textGet(def));
         else d.set(edit_, d.get(def));
     }
     status_ = T("Standardwerte dieser Seite gesetzt", "Defaults of this page restored");
@@ -699,7 +798,7 @@ void SettingsMenu::UpdateHover() {
     if (!D3D11Overlay::ImageRect(ix, iy, iw, ih)) return;
     MenuView v = View();
     MenuHit h = HitTestMenu(v, renderH_, cx - ix, cy - iy);
-    int hov = (h.kind >= MenuHit::Row && h.kind <= MenuHit::ItemButton) ? h.index : -1;
+    int hov = ((h.kind >= MenuHit::Row && h.kind <= MenuHit::ItemButton) || h.kind == MenuHit::TextField) ? h.index : -1;
     int ctl = h.kind == MenuHit::Page ? 100 + h.index : (h.kind >= MenuHit::ItemButton && h.kind <= MenuHit::Close) ? (int)h.kind : -1;
     if (drag_ >= 0 && !IsKeyRow(drag_)) SetSlider(drag_, MenuSliderFrac(v, renderH_, drag_, cx - ix));   // follows the mouse outside the track too
     if (hov != hover_ || ctl != hoverCtl_) { hover_ = hov; hoverCtl_ = ctl; dirty_ = true; }
@@ -717,6 +816,23 @@ SettingsMenu::Result SettingsMenu::Tick(InputManager& input) {
     while (MenuInput::Pop(e)) {
         dirty_ = true;
         if (e.type == MenuInput::Event::Key) {
+            if (capture_ == 3) {   // typing into a text row
+                const size_t maxLen = (sel_ >= 0 && sel_ < (int)defs_.size()) ? defs_[sel_].maxLen : 80;
+                if (e.vk == VK_RETURN) CommitText();
+                else if (e.vk == VK_ESCAPE) { capture_ = 0; status_ = T("Abgebrochen", "Cancelled"); }
+                else if (e.vk == VK_BACK) { if (!editBuf_.empty()) editBuf_.pop_back(); }
+                else if (e.vk == VK_DELETE) editBuf_.clear();
+                else if (e.ctrl && !e.alt && e.vk == 'V' && OpenClipboard(nullptr)) {
+                    if (HANDLE h = GetClipboardData(CF_UNICODETEXT)) {
+                        if (const wchar_t* t = (const wchar_t*)GlobalLock(h)) {
+                            for (const wchar_t* c = t; *c && editBuf_.size() < maxLen; ++c) if (*c >= 32) editBuf_ += *c;
+                            GlobalUnlock(h);
+                        }
+                    }
+                    CloseClipboard();
+                } else if (e.ch && editBuf_.size() < maxLen) editBuf_ += e.ch;
+                continue;
+            }
             if (capture_) {
                 if (e.vk == VK_ESCAPE && !e.ctrl && !e.shift && !e.alt) { capture_ = 0; status_ = T("Abgebrochen", "Cancelled"); }
                 else if (capture_ == 1) BindKey(sel_, KeyBinding{e.vk, e.ctrl, e.shift, e.alt});
@@ -759,7 +875,8 @@ SettingsMenu::Result SettingsMenu::Tick(InputManager& input) {
             continue;
         }
         if (e.button != 0) continue;
-        if (capture_ && h.kind != MenuHit::ButtonCell) { capture_ = 0; status_.clear(); }   // a click ends waiting for a key
+        if (capture_ == 3 && !(h.kind == MenuHit::TextField && h.index == sel_)) CommitText();   // a click elsewhere keeps what was typed
+        else if (capture_ && capture_ != 3 && h.kind != MenuHit::ButtonCell) { capture_ = 0; status_.clear(); }   // a click ends waiting for a key
         switch (h.kind) {
         case MenuHit::Close: return close();
         case MenuHit::Header: moving_ = true; grabX_ = cx - ix; grabY_ = cy - iy; break;   // drag the menu by its title
@@ -773,6 +890,7 @@ SettingsMenu::Result SettingsMenu::Tick(InputManager& input) {
         case MenuHit::ChoicePrev: sel_ = h.index; Adjust(h.index, -1); break;
         case MenuHit::ChoiceNext: sel_ = h.index; Adjust(h.index, 1); break;
         case MenuHit::KeyCell: sel_ = h.index; Activate(h.index); break;
+        case MenuHit::TextField: if (capture_ != 3) { sel_ = h.index; Activate(h.index); } break;
         case MenuHit::ButtonCell:
             sel_ = h.index; capture_ = 2; input.PollNewButton();
             status_ = T("Controller-Knopf drücken …  (Esc = abbrechen)", "Press a controller button …  (Esc = cancel)");
@@ -845,6 +963,7 @@ MenuView SettingsMenu::View() const {
                 v.items.push_back(it);
                 continue;
             }
+            if (d.kind == MenuItemKind::Text) { it.value = d.textGet(edit_); v.items.push_back(it); continue; }
             double val = d.get(edit_);
             if (d.kind == MenuItemKind::Toggle) it.on = val > 0.5;
             else if (d.kind == MenuItemKind::Slider) { it.frac = (float)((val - d.mn) / (d.mx - d.mn)); it.value = d.fmt ? d.fmt(val, en) : Num(val, 1, en); }
@@ -855,7 +974,7 @@ MenuView SettingsMenu::View() const {
     }
     v.selected = sel_; v.hover = hover_; v.hoverControl = hoverCtl_; v.firstRow = scroll_;
     v.capture = capture_;
-    v.captureText = capture_ == 2 ? T("Knopf drücken …", "Press a button …") : T("Taste drücken …", "Press a key …");
+    v.captureText = capture_ == 3 ? editBuf_ : capture_ == 2 ? T("Knopf drücken …", "Press a button …") : T("Taste drücken …", "Press a key …");
     v.unsaved = edit_.MenuJson() != savedJson_;
     v.status = !status_.empty() ? status_ : v.unsaved ? T("Nicht gespeicherte Änderungen", "Unsaved changes") : T("Alles gespeichert", "All saved");
     v.footer = T("\u00c4nderungen wirken sofort  \u2022  Esc speichert und schlie\u00dft  \u2022  Tab: Seite", "Changes apply at once  \u2022  Esc saves and closes  \u2022  Tab: page");
@@ -867,4 +986,13 @@ std::shared_ptr<OverlayImage> SettingsMenu::TakeImage() {
     if (!dirty_) return nullptr;
     dirty_ = false;
     return RenderMenu(View(), renderH_);
+}
+
+void SettingsMenu::CommitText() {
+    capture_ = 0; dirty_ = true;
+    if (sel_ < 0 || sel_ >= (int)defs_.size() || defs_[sel_].kind != MenuItemKind::Text) return;
+    if (defs_[sel_].textGet(edit_) == editBuf_) { status_.clear(); return; }
+    defs_[sel_].textSet(edit_, editBuf_);
+    status_.clear();
+    Edited_();
 }

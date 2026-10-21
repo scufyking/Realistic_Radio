@@ -6,6 +6,7 @@
 #include "RadioManager.h"
 #include "EmbeddedData.h"
 #include "D3D11Overlay.h"
+#include "GameAudio.h"
 #include "Logger.h"
 #include "json.hpp"
 #include <fstream>
@@ -25,15 +26,21 @@ bool RadioManager::Init(const std::wstring& dir, const std::string& game) {
     BuildFamilies();
     db_.AssignFrequencies();
     tunnels_.Init(dir, game);
+    game_ = game; startedAt_ = GetTickCount64();
     tuned_ = cfg_.tunedFreq;
     fav_.Load(dir + L"favourites-" + Utf8ToWide(game) + L".json");
     memPath_ = dir + L"trucks-" + Utf8ToWide(game) + L".json";
     LoadMemory();
     StreamSession::SetMetadataEnabled(cfg_.songTitle);   // ask the stations for the song title
     if (!audio_.Init(dir, cfg_.reconnectMaxSeconds)) return false;
+    GameAudio::Configure(cfg_.audioOutput == "cabin", cfg_.muteGameRadio, cfg_.gameBus,
+                         [](float* o, unsigned n, void* u) { ((AudioEngine*)u)->PullMix(o, n); }, &audio_);
+    if (cfg_.audioOutput == "cabin") Log::Write("Sound output: the game's cab (beta)");
+    g_outsideStatus = [this](bool en) { return OutsideStatus(en); };
     audio_.SetMaster((float)cfg_.volume); audio_.SetMuted(cfg_.muted);
     playing_ = cfg_.autoPlay;
     overlay_.Init(cfg_.overlay, cfg_.screen, dir);
+    InitPhone();
     {   // folder for the truck logos of the start screen (the player puts the pictures there)
         std::wstring b = overlay_.TruckLogoDir();
         bool fresh = CreateDirectoryW(b.c_str(), nullptr) != 0;
@@ -292,6 +299,21 @@ bool RadioManager::MenuTick(InputManager& input) {
                                     (en ? L" stored with the stations received here" : L" mit den Sendern in Reichweite belegt")
                               : std::wstring(en ? L"No stations in range here" : L"Hier sind keine Sender in Reichweite"));
         break; }
+    case SettingsMenu::PhoneTest: PhoneTest(); break;
+    case SettingsMenu::PhoneTestCall: {
+        const bool en = cfg_.menuLanguage == "en";
+        dispatchText_ = en ? L"Hello, dispatch here. This is a test call - the phone works. Drive safely!"
+                           : L"Hallo, hier ist die Disposition. Das ist ein Testanruf \u2013 das Handy funktioniert. Gute Fahrt!";
+        dispatchAt_ = GetTickCount64() + 3000;
+        menu_.SetStatus("Anruf kommt in 3 Sekunden \u2013 Men\u00fc schlie\u00dfen, dann Handy-Taste", "Call comes in 3 seconds - close the menu, then press the phone key");
+        break;
+    }
+    case SettingsMenu::OpenStylesFolder: {
+        std::wstring f = dir_ + L"styles\\";
+        CreateDirectoryW(f.c_str(), nullptr);
+        ShellExecuteW(nullptr, L"open", f.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        break;
+    }
     case SettingsMenu::OpenTruckLogoFolder: {   // the folder of this truck's brand, else truck-logos\
         CreateDirectoryW(overlay_.TruckLogoDir().c_str(), nullptr);
         std::wstring f = overlay_.TruckLogoDir();
@@ -453,7 +475,14 @@ void RadioManager::ApplySettings(const Config& e) {
     bool memWasOn = cfg_.truckMemory;
     std::string oldBand = cfg_.band, oldTuning = cfg_.tuning;
     bool oldSong = cfg_.songTitle;
+    std::string oldOutput = cfg_.audioOutput; bool oldMuteGame = cfg_.muteGameRadio;
     CopyMenuSettings(cfg_, e);
+    if (cfg_.audioOutput != oldOutput || cfg_.muteGameRadio != oldMuteGame) {
+        GameAudio::Configure(cfg_.audioOutput == "cabin", cfg_.muteGameRadio, cfg_.gameBus,
+                             [](float* o, unsigned n, void* u) { ((AudioEngine*)u)->PullMix(o, n); }, &audio_);
+        Log::Write("Sound output: %s, game radio %s", cfg_.audioOutput == "cabin" ? "the game's cab (beta)" : "Windows device",
+                   cfg_.muteGameRadio ? "muted while playing" : "not touched");
+    }
     if (cfg_.songTitle != oldSong) {
         StreamSession::SetMetadataEnabled(cfg_.songTitle);
         Log::Write("Live song title: %s", cfg_.songTitle ? "on" : "off");
@@ -479,12 +508,28 @@ void RadioManager::ApplySettings(const Config& e) {
     if (source_ == Source::Media) overlay_.Update(CurrentInfo());   // media type of the folder may have changed
 }
 
-void RadioManager::Shutdown() { if (UseMemory()) { StoreMemory(); SaveMemory(); } menu_.Close(); overlay_.HideMenu(); display_.Stop(); overlay_.Shutdown(); audio_.Shutdown(); cfg_.SaveVolume(cfgPath_); }
+void RadioManager::Shutdown() { g_outsideStatus = nullptr; phone_.Shutdown(); GameAudio::SetRadioAudible(false); GameAudio::Configure(false, false, cfg_.gameBus, nullptr, nullptr); audio_.SetExternal(false); if (UseMemory()) { StoreMemory(); SaveMemory(); } menu_.Close(); overlay_.HideMenu(); display_.Stop(); overlay_.Shutdown(); audio_.Shutdown(); cfg_.SaveVolume(cfgPath_); }
 
 
 std::string RadioManager::ResolveUrl(const std::string& url) const {
     if (url.empty() || url.find("://") != std::string::npos || (url.size() > 1 && url[1] == ':')) return url;
     return WideToUtf8(dir_) + url;   // relative local file -> realistic-radio folder
+}
+// station buttons 1..9 as tiles (station-list design): name, logo, active
+void RadioManager::FillTiles(OverlayInfo& i) const {
+    if (!cfg_.memoryButtons) return;
+    for (int n = 1; n <= 9; ++n) {
+        OverlayInfo::Tile t; t.button = n; t.active = n == i.button;
+        std::string v = ButtonGet(n);
+        if (v.rfind("f:", 0) == 0) { int f = atoi(v.c_str() + 2); if (f > 0) t.name = FreqText(f); }
+        else if (size_t bar = v.find('|'); bar != std::string::npos) {
+            std::string region = v.substr(0, bar), name = v.substr(bar + 1);
+            t.name = Utf8ToWide(name);
+            int k = StationIndexByName(region, name);
+            if (auto* st = db_.StationsOf(region); st && k >= 0) t.logo = (*st)[k].logo;
+        }
+        i.tiles.push_back(t);
+    }
 }
 OverlayInfo RadioManager::CurrentInfo(const std::wstring& sub) {
     if (source_ == Source::Media) return MediaInfo(sub);
@@ -497,7 +542,8 @@ OverlayInfo RadioManager::CurrentInfo(const std::wstring& sub) {
         i.title = FreqText(tuned_);
         i.subtitle = sub.empty() ? std::wstring(en ? L"No station on this frequency" : L"Kein Sender auf dieser Frequenz") : sub;
         i.bars = playing_ ? 0 : -1;
-        if (int b = CurrentButton()) i.detail = std::wstring(en ? L"Button " : L"Taste ") + std::to_wstring(b);
+        if (int b = CurrentButton()) { i.button = b; i.buttonText = std::wstring(en ? L"Button " : L"Taste ") + std::to_wstring(b); i.detail = i.buttonText; }
+        FillTiles(i);
         i.lcd = FreqText(tuned_);
         return i;
     }
@@ -513,10 +559,15 @@ OverlayInfo RadioManager::CurrentInfo(const std::wstring& sub) {
     for (size_t k = 0; k < list_.size(); ++k)   // "Sender 3 / 12" (position in the Next/Previous order)
         if (list_[k].country == currentCountry_ && (int)list_[k].index == currentIndex_) {
             i.detail = Utf8ToWide(cfg_.overlay.textStations) + L" " + std::to_wstring(k + 1) + L" / " + std::to_wstring(list_.size());
+            i.position = std::to_wstring(k + 1) + L" / " + std::to_wstring(list_.size());
             break;
         }
     if (FreqMode() && s.freq > 0) i.detail = FreqText(s.freq);   // the dial instead of "station 3 / 12"
-    if (int b = CurrentButton()) i.detail += (i.detail.empty() ? L"" : L"  \u2022  ") + std::wstring(cfg_.menuLanguage == "en" ? L"Button " : L"Taste ") + std::to_wstring(b);
+    if (int b = CurrentButton()) {
+        i.button = b; i.buttonText = std::wstring(cfg_.menuLanguage == "en" ? L"Button " : L"Taste ") + std::to_wstring(b);
+        i.detail += (i.detail.empty() ? L"" : L"  \u2022  ") + i.buttonText;
+    }
+    FillTiles(i);
     i.lcd = i.title;
     if (FreqMode() && s.freq > 0) i.lcd = i.title + L" " + FreqText(s.freq);
     if (playing_ && cfg_.songTitle && !song_.empty()) { i.song = song_; i.lcd = i.title + L"  \u266A " + song_; }
@@ -603,6 +654,10 @@ void RadioManager::Tick(double x, double z, bool valid, bool electric, bool engi
         audio_.SetStreamGain(1, 0.05f);
         noiseAllowed_ = true;
     }
+    PhoneTick(GetTickCount64());
+    phone_.Update(GetTickCount64());
+    audio_.SetExternal(GameAudio::Playing());   // cab output: the game plays the mix, the Windows device stays silent
+    GameAudio::SetRadioAudible(powered_ && !cfg_.muted && (source_ == Source::Media ? !mediaPaused_ : playing_));
     if (!powered_) { overlay_.Tick(); UpdateDisplay(); return; }
     if (valid && now - lastRefresh_ >= 1000) { lastRefresh_ = now; Refresh(x, z); }
     if (source_ == Source::Media) TickMedia(now);
@@ -1140,6 +1195,7 @@ void RadioManager::OnAction(Action a, bool hold) {
         overlay_.ShowMenu(menu_.TakeImage());
         return;
     }
+    if (a == Action::Phone) { if (phone_.IsOpen()) { phone_.Close(); overlay_.HideMenu(); } else OpenPhone(); return; }
     if (a == Action::ScreenPage) {   // in-cab screen: navigation <-> radio page
         bool page = cfg_.screenPage != "radio";
         cfg_.screenPage = page ? "radio" : "navi";
@@ -1226,5 +1282,356 @@ void RadioManager::OnAction(Action a, bool hold) {
         ShowCurrent();
         break;
     default: break;
+    }
+}
+
+// Cab screen at night: with the lights on a real infotainment display dims to the dashboard backlight setting
+void RadioManager::SetLights(float backlight, bool lightsOn) {
+    float target = 0.f;
+    if (cfg_.screen.dimWithLights && lightsOn) target = 1.f - (0.35f + 0.45f * std::clamp(backlight, 0.f, 1.f));   // 35 % .. 80 % brightness
+    float step = 0.05f;   // ~1 s from day to night brightness (called ~20x per second)
+    float d = dim_ + std::clamp(target - dim_, -step, step);
+    if (std::fabs(d - dim_) > 1e-4f || (target == 0.f && dim_ != 0.f)) {
+        if (std::fabs(target - d) < 1e-3f) d = target;
+        if ((d > 0.f) != (dim_ > 0.f)) Log::Write("Screen: %s", d > 0.f ? "dimmed (lights on)" : "full brightness");
+        dim_ = d;
+        D3D11Overlay::SetScreenDim(dim_);
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// Quieter outside the truck (e.g. walking around with a walk mod): the game tells its sound system where the camera is
+// (FMOD listener). Compared with the driver's head from the telemetry this gives the distance to the cab: in the cab the
+// radio is unchanged, outside it is muffled by the closed cab (less with an open window) and fades with the distance.
+// The listener may use another coordinate system than the telemetry; the matching one is found while the camera is at
+// the driver's seat, until then nothing changes.
+void RadioManager::SetPose(bool valid, const double truck[3], const double head[3], float speed, double heading) {
+    if (valid) { for (int k = 0; k < 3; ++k) truckPos_[k] = truck[k]; heading_ = heading; }
+    const bool want = cfg_.outsideFade;
+    GameAudio::WatchListener(want);
+    ULONGLONG now = GetTickCount64();
+    float cabinOut = -1, wl = 0, wr = 0, L[3];
+    const bool state = want && GameAudio::CabState(cabinOut, wl, wr);
+    const bool haveL = want && GameAudio::Listener(L);
+    outsideMap_ = state ? 1 : -1;
+    if (!state) { audio_.SetOutside(1.f, 20000.f, 0.f); outsideNow_ = false; return; }
+    // The game's sound coordinates are world coordinates minus an origin that stays put while the truck moves (it is
+    // moved now and then). While the camera is in the cab, origin = driver's head (telemetry) - listener; outside, the
+    // camera's distance from the cab is |listener + origin - head| - right also after the truck was moved.
+    float o = std::clamp(cabinOut, 0.f, 1.f);
+    if (std::abs(speed) > 1.5f) o = 0.f;   // driving: you are in the truck (also with an outside camera)
+    if (haveL && valid && cabinOut < 0.05f) {
+        double n[3] = {head[0] - L[0], head[1] - L[1], head[2] - L[2]};
+        double jump = cabRefValid_ ? std::hypot(n[0] - cabRef_[0], n[2] - cabRef_[2]) : 1e9;
+        for (int k = 0; k < 3; ++k) cabRef_[k] = jump > 20 ? n[k] : cabRef_[k] + (n[k] - cabRef_[k]) * 0.2;   // > 20 m: the game moved its origin
+        if (!cabRefValid_) Log::Write("Outside: camera in the cab - distance outside is measured from here");
+        cabRefValid_ = true;
+    }
+    float dist = 0.f;
+    if (cabinOut >= 0.05f) {
+        if (haveL && valid && cabRefValid_) {
+            double dx = L[0] + cabRef_[0] - head[0], dy = L[1] + cabRef_[1] - head[1], dz = L[2] + cabRef_[2] - head[2];
+            dist = (float)std::sqrt(dx * dx + dy * dy + dz * dz);
+        } else dist = 2.f;   // outside, distance not known yet (never been in the cab since loading): right behind the cab wall
+    }
+    const float window = std::clamp(std::max(wl, wr), 0.f, 1.f);   // 0 = closed .. 1 = fully open
+    auto smooth = [](float a, float b, float x) { float t = std::clamp((x - a) / (b - a), 0.f, 1.f); return t * t * (3 - 2 * t); };
+    const float maxD = (float)std::max(5.0, cfg_.outsideDistance) * (1.f + window);
+    const float dd = std::max(0.f, dist - 1.5f);                 // distance from the cab
+    const float att = 1.f / (1.f + dd / 4.f) * (1.f - smooth(0.6f * maxD, maxD, dist));
+    const float shell = 0.3f + 0.4f * window;                     // closed cab: muffled and quieter, open window lets more through
+    const float cutOut = std::exp(std::log(1000.f) + (std::log(4500.f) - std::log(1000.f)) * window) / (1.f + dd / 60.f);
+    const float gain = 1.f + (shell * att - 1.f) * o;
+    const float cut = o > 0.001f ? std::exp(std::log(20000.f) + (std::log(cutOut) - std::log(20000.f)) * o) : 20000.f;
+    audio_.SetOutside(gain, cut, 0.7f * o);
+    outsideDist_ = dist; outsideNow_ = o > 0.5f; outsideWindow_ = window > 0.2f;
+    if (outsideNow_ != outsideWasOut_ && outsideLogs_ < 100) {
+        ++outsideLogs_;
+        if (outsideNow_) Log::Write("Outside: left the cab (window %.0f %% open)", window * 100);
+        else Log::Write("Outside: back in the cab");
+        outsideLogAt_ = now + 3000;
+    }
+    outsideWasOut_ = outsideNow_;
+    if (outsideNow_ && now >= outsideLogAt_ && outsideLogs_ < 100) {
+        ++outsideLogs_; outsideLogAt_ = now + 5000;
+        Log::Write("Outside: %.1f m from the cab, volume %.0f %%, window %.0f %% open", dist, gain * 100, window * 100);
+    }
+}
+std::wstring RadioManager::OutsideStatus(bool en) const {
+    if (!cfg_.outsideFade) return en ? L"Walk away from the truck: quieter and muffled, an open window lets more through" : L"Vom LKW weggehen: leiser und dumpfer, offenes Fenster l\u00e4sst mehr durch";
+    if (outsideMap_ < 0) return en ? L"Waiting for the game's sound system \u2026" : L"Wartet auf den Sound des Spiels \u2026";
+    wchar_t b[128];
+    if (!outsideNow_) return en ? L"Active \u2022 you are in the truck" : L"Aktiv \u2022 du bist im LKW";
+    swprintf(b, 128, en ? L"Active \u2022 outside, %.0f m from the cab%s" : L"Aktiv \u2022 drau\u00dfen, %.0f m vom LKW%s", outsideDist_,
+             outsideWindow_ ? (en ? L", window open" : L", Fenster offen") : L"");
+    return b;
+}
+
+// ------------------------------------------------------------------------------------------------
+// Virtual phone (1.6.0): "connected" after the radio starts, message from the customer when the delivery is due soon.
+// Shown like a smartphone notification at the top of the navigation screen (and in the pop-up overlay), with a tone.
+namespace {
+std::wstring Fill(std::wstring t, const JobInfo& j, int remaining, bool en) {
+    wchar_t tm[64];
+    if (remaining >= 60) swprintf(tm, 64, L"%d h %d min", remaining / 60, remaining % 60); else swprintf(tm, 64, L"%d min", std::max(0, remaining));
+    auto rep = [&](const std::wstring& key, const std::wstring& val) {
+        for (size_t p = t.find(key); p != std::wstring::npos; p = t.find(key, p + val.size())) t.replace(p, key.size(), val);
+    };
+    rep(L"{city}", Utf8ToWide(j.city.empty() ? (en ? "the destination" : "dem Ziel") : j.city));
+    rep(L"{company}", Utf8ToWide(j.company));
+    rep(L"{cargo}", Utf8ToWide(j.cargo.empty() ? (en ? "the cargo" : "die Ladung") : j.cargo));
+    rep(L"{time}", tm);
+    return t;
+}
+}
+void RadioManager::PhoneNotice(const std::string& icon, const std::wstring& app, const std::wstring& title, const std::wstring& text) {
+    const bool en = cfg_.menuLanguage == "en";
+    OverlayInfo i;
+    i.notice = true; i.noticeIcon = icon; i.noticeApp = app; i.noticeTitle = title; i.noticeText = text;
+    i.noticeTime = en ? L"now" : L"jetzt";
+    i.headline = app; i.title = title; i.subtitle = text; i.lcd = title + L": " + text;   // pop-up overlay
+    overlay_.Show(i, "", 7.0);
+    if (cfg_.screen.phone.sound) audio_.PlayChime(icon == "phone" ? 0 : 1);
+    Log::Write("Phone: %s - %s: %s", WideToUtf8(app).c_str(), WideToUtf8(title).c_str(), WideToUtf8(text).c_str());
+}
+void RadioManager::SetJob(const JobInfo& j) {
+    bool newJob = j.deliveryTime != job_.deliveryTime || j.city != job_.city || j.cargo != job_.cargo;
+    bool keepCityForDelivered = !j.active && job_.active;
+    if (keepCityForDelivered) { job_.active = false; }   // keep the last destination for the "delivered" call
+    else job_ = j;
+    if (newJob) jobMessageSent_ = false;
+    const PhoneConfig& ph = cfg_.screen.phone;
+    // a job that comes with loading a save (shortly after the game time appeared) is not a new job
+    const bool loadedWithSave = !gameTimeAt_ || GetTickCount64() - gameTimeAt_ < 20000;
+    if (newJob && j.active && !loadedWithSave && ph.enabled && ph.calls) {   // a new job was taken
+        const bool en = cfg_.menuLanguage == "en";
+        unsigned d = j.deliveryTime;
+        wchar_t when[48]; swprintf(when, 48, L"%02u:%02u", (d / 60) % 24, d % 60);
+        dispatchText_ = en ? L"Hello, dispatch here. Your new job: " + Utf8ToWide(j.cargo) + L" from " + Utf8ToWide(j.sourceCity) + L" to " + Utf8ToWide(j.city) +
+                                 L", " + Utf8ToWide(j.company) + L". Please deliver by " + when + L". Drive safely!"
+                           : L"Hallo, hier ist die Disposition. Dein neuer Auftrag: " + Utf8ToWide(j.cargo) + L" von " + Utf8ToWide(j.sourceCity) + L" nach " + Utf8ToWide(j.city) +
+                                 L", Firma " + Utf8ToWide(j.company) + L". Lieferung bis " + when + L" Uhr. Gute Fahrt!";
+        dispatchAt_ = GetTickCount64() + 8000;
+    }
+    if (j.active) Log::Write("Job: %s to %s (%s), delivery window ends at game minute %u%s", j.cargo.c_str(), j.city.c_str(), j.company.c_str(), j.deliveryTime,
+                             j.loaded ? "" : " - cargo not loaded yet");
+    else Log::Write("Job: none");
+}
+void RadioManager::SetGameTime(unsigned minutes) {
+    // the game was loaded (time appears, or jumps back / far ahead: another save): remember when, for "new job"
+    if (minutes && (!gameTime_ || minutes < gameTime_ || minutes > gameTime_ + 24 * 60)) gameTimeAt_ = GetTickCount64();
+    gameTime_ = minutes;
+}
+void RadioManager::PhoneTest() {
+    const bool en = cfg_.menuLanguage == "en";
+    const PhoneConfig& ph = cfg_.screen.phone;
+    JobInfo j = job_;
+    if (!j.active) { j.city = en ? "Berlin" : "Berlin"; j.cargo = en ? "Furniture" : "M\xc3\xb6" "bel"; j.company = "Tradeaux"; }
+    int remaining = j.active && gameTime_ ? (int)j.deliveryTime - (int)gameTime_ : (int)ph.minutes;
+    std::wstring text = Fill(Utf8ToWide(ph.text), j, remaining, en);
+    PhoneNotice("message", en ? L"Messages" : L"Nachrichten", Utf8ToWide(ph.sender), text);
+    phone_.AddMessage(Utf8ToWide(ph.sender), text);
+}
+void RadioManager::PhoneTick(ULONGLONG now) {
+    const PhoneConfig& ph = cfg_.screen.phone;
+    const bool en = cfg_.menuLanguage == "en";
+    const bool on = ph.enabled;
+    if (!powered_ && wasPowered_) powerOffAt_ = now;
+    // "connected" after the start logo - not again when the ignition was off only for a moment (engine start)
+    if (on && powered_ && !wasPowered_ && (!powerOffAt_ || now - powerOffAt_ > 15000))
+        phoneConnectAt_ = now + (cfg_.screen.startLogo ? (ULONGLONG)(cfg_.screen.startLogoSeconds * 1000) : 0) + 1500;
+    if (on && !phoneWasOn_ && powered_ && wasPowered_) phoneConnectAt_ = now + 300;   // switched on in the menu
+    wasPowered_ = powered_; phoneWasOn_ = on;
+    if (!on || !powered_) { phoneConnectAt_ = 0; return; }
+    if (dispatchAt_ && now >= dispatchAt_) {   // the dispatcher calls
+        dispatchAt_ = 0;
+        const std::wstring disp = Utf8ToWide(ph.dispatcher.empty() ? std::string(en ? "Dispatch" : "Disposition") : ph.dispatcher);
+        phone_.Call(disp, dispatchText_);
+    }
+    if (phoneConnectAt_ && now >= phoneConnectAt_) {
+        phoneConnectAt_ = 0;
+        PhoneNotice("phone", L"Bluetooth", Utf8ToWide(ph.name.empty() ? "Phone" : ph.name), en ? L"Connected" : L"Verbunden");
+        return;
+    }
+    if (!ph.messages || jobMessageSent_ || !job_.active || !job_.loaded || !gameTime_ || phoneConnectAt_) return;
+    const int remaining = (int)job_.deliveryTime - (int)gameTime_;
+    if (remaining > 0 && remaining <= (int)ph.minutes) {
+        jobMessageSent_ = true;
+        std::wstring text = Fill(Utf8ToWide(ph.text), job_, remaining, en);
+        PhoneNotice("message", en ? L"Messages" : L"Nachrichten", Utf8ToWide(ph.sender), text);
+        phone_.AddMessage(Utf8ToWide(ph.sender), text);
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// The phone itself (1.6.0): smartphone in the corner of the screen, calls from the dispatcher, messages, job, music
+void RadioManager::InitPhone() {
+    PhoneHost h;
+    h.english = [this] { return cfg_.menuLanguage == "en"; };
+    h.gameTime = [this] { return gameTime_; };
+    h.fillJob = [this](PhoneView& v) { FillPhoneJob(v); };
+    h.fillMusic = [this](PhoneView& v) { FillPhoneMusic(v); };
+    h.musicFolder = [this](int i) {
+        auto bt = BluetoothDiscs();
+        if (i < 0 || i >= (int)bt.size()) return;
+        if (source_ == Source::Media && disc_ == bt[i]) return;
+        EnterMedia(bt[i], false);
+    };
+    h.musicControl = [this](int what) {
+        if (source_ != Source::Media || order_.empty()) return;
+        if (what) { StepTrack(what); return; }
+        if (!audio_.Track().active) { PlayTrack(orderPos_, true); return; }
+        mediaPaused_ = !mediaPaused_; audio_.SetPaused(mediaPaused_ || !powered_);
+        ShowCurrent();
+    };
+    h.settings = [this]() -> const PhoneConfig& { return cfg_.screen.phone; };
+    h.design = [this] { return cfg_.screen.design; };
+    h.key = [this] { return cfg_.keys[(int)Action::Phone]; };
+    h.play = [this](Speech::Clip c, bool loop, float gain) { audio_.PlayPhone(c, loop, gain); };
+    h.stopSound = [this] { audio_.StopPhone(); };
+    h.soundPlaying = [this] { return audio_.PhonePlaying(); };
+    h.callBanner = [this](const std::wstring& caller, const std::wstring&) {
+        const bool en = cfg_.menuLanguage == "en";
+        std::wstring key = Utf8ToWide(KeyBindingName(cfg_.keys[(int)Action::Phone]));
+        if (!en && key.rfind(L"Shift+", 0) == 0) key = L"Umschalt+" + key.substr(6);
+        if (!en && key.rfind(L"Ctrl+", 0) == 0) key = L"Strg+" + key.substr(5);
+        OverlayInfo i;
+        i.notice = true; i.noticeIcon = "call"; i.noticeApp = en ? L"Phone" : L"Telefon"; i.noticeTitle = caller;
+        i.noticeText = en ? L"Incoming call • " + key + L" to answer" : L"Eingehender Anruf • " + key + L" zum Annehmen";
+        i.noticeTime = en ? L"now" : L"jetzt";
+        i.headline = i.noticeApp; i.title = caller; i.subtitle = i.noticeText; i.lcd = caller;
+        overlay_.Show(i, "", 10.0);
+    };
+    phone_.Init(dir_ + L"phone-" + Utf8ToWide(game_) + L".json", h);
+}
+
+void RadioManager::OpenPhone() {
+    const bool en = cfg_.menuLanguage == "en";
+    if (menu_.IsOpen()) return;
+    if (!cfg_.screen.phone.enabled) {
+        PhoneNotice("phone", en ? L"Phone" : L"Handy", en ? L"The phone is off" : L"Das Handy ist aus",
+                    en ? L"Settings menu → Phone → Virtual mobile device" : L"Einstellungsmenü → Handy → Virtuelles Handy");
+        return;
+    }
+    overlay_.PrepareMenu();
+    phone_.Open();
+    if (auto img = phone_.TakeImage()) overlay_.ShowPhone(img);
+}
+
+void RadioManager::PhoneUiTick(InputManager& input) {
+    phone_.Tick(input);
+    if (!phone_.IsOpen()) { overlay_.HideMenu(); return; }
+    if (auto img = phone_.TakeImage()) overlay_.ShowPhone(img);
+}
+
+std::wstring RadioManager::Money(long long amount) const {
+    std::wstring n = std::to_wstring(amount < 0 ? -amount : amount), out;
+    for (int i = 0; i < (int)n.size(); ++i) { if (i && (n.size() - i) % 3 == 0) out += cfg_.menuLanguage == "en" ? L"," : L"."; out += n[i]; }
+    if (amount < 0) out = L"-" + out;
+    return game_ == "ats" ? L"$" + out : out + L" €";
+}
+
+void RadioManager::FillPhoneJob(PhoneView& v) {
+    const bool en = cfg_.menuLanguage == "en";
+    v.jobActive = job_.active;
+    if (!job_.active) return;
+    v.cargo = Utf8ToWide(job_.cargo);
+    v.from = Utf8ToWide(job_.sourceCity); v.fromCompany = Utf8ToWide(job_.sourceCompany);
+    v.to = Utf8ToWide(job_.city); v.toCompany = Utf8ToWide(job_.company);
+    auto hm = [&](int m) { wchar_t b[32]; if (m >= 60) swprintf(b, 32, L"%d h %d min", m / 60, m % 60); else swprintf(b, 32, L"%d min", m); return std::wstring(b); };
+    if (gameTime_ && job_.deliveryTime) {
+        int rem = (int)job_.deliveryTime - (int)gameTime_;
+        v.late = rem < 0;
+        v.remaining = rem < 0 ? (en ? L"late " : L"zu spät ") + hm(-rem) : hm(rem);
+    }
+    if (navDist_ > 0) { wchar_t b[32]; swprintf(b, 32, L"%.0f km", navDist_ / 1000.f); v.distance = b; } else v.distance = L"–";
+    if (navTime_ > 0 && gameTime_) {
+        unsigned eta = gameTime_ + (unsigned)(navTime_ / 60.f);
+        wchar_t b[16]; swprintf(b, 16, L"%02u:%02u", (eta / 60) % 24, eta % 60); v.eta = b;
+    } else v.eta = L"–";
+    v.income = job_.income ? Money(job_.income) : L"–";
+    // small map: cities around the truck and the destination (world x / z, north up)
+    const City* dest = nullptr; const City* src = nullptr;
+    for (auto& c : db_.cities) {
+        if (!job_.cityId.empty() && c.gameName == job_.cityId) dest = &c;
+        if (!job_.sourceCityId.empty() && c.gameName == job_.sourceCityId) src = &c;
+    }
+    double tx = truckPos_[0], tz = truckPos_[2];
+    if (tx == 0 && tz == 0) return;
+    double minX = tx, maxX = tx, minZ = tz, maxZ = tz;
+    if (dest) { minX = std::min(minX, dest->x); maxX = std::max(maxX, dest->x); minZ = std::min(minZ, dest->z); maxZ = std::max(maxZ, dest->z); }
+    double span = std::max({maxX - minX, maxZ - minZ, 8000.0}) * 1.25, cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
+    auto toMap = [&](double x, double z, float& mx, float& my) { mx = (float)((x - (cx - span / 2)) / span); my = (float)((z - (cz - span / 2)) / span); };
+    v.haveMap = true;
+    toMap(tx, tz, v.truckX, v.truckY);
+    v.truckHeading = (float)(heading_ * 6.283185307179586);
+    std::vector<std::pair<double, const City*>> close;
+    for (auto& c : db_.cities) {
+        if (&c == dest || &c == src) continue;
+        float mx, my; toMap(c.x, c.z, mx, my);
+        if (mx < 0.02f || mx > 0.98f || my < 0.02f || my > 0.98f) continue;
+        close.push_back({std::hypot(c.x - cx, c.z - cz), &c});
+    }
+    std::sort(close.begin(), close.end(), [](auto& a, auto& b) { return a.first < b.first; });
+    for (size_t i = 0; i < close.size() && i < 30; ++i) {
+        PhoneMapPoint p; toMap(close[i].second->x, close[i].second->z, p.x, p.y);
+        if (i < 5) p.name = Utf8ToWide(close[i].second->realName.empty() ? close[i].second->gameName : close[i].second->realName);
+        v.map.push_back(p);
+    }
+    if (src) { PhoneMapPoint p; toMap(src->x, src->z, p.x, p.y); p.kind = 2; p.name = v.from; if (p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1) v.map.push_back(p); }
+    if (dest) { PhoneMapPoint p; toMap(dest->x, dest->z, p.x, p.y); p.kind = 1; p.name = v.to; v.map.push_back(p); }
+}
+
+std::vector<int> RadioManager::BluetoothDiscs() const {
+    std::vector<int> r;
+    for (int k = 0; k < (int)lib_.Discs().size(); ++k) if (DiscType(k) == "bluetooth") r.push_back(k);
+    return r;
+}
+
+void RadioManager::FillPhoneMusic(PhoneView& v) {
+    if (lib_.Discs().empty() && cfg_.media.enabled) lib_.Scan(MediaFolder(), cfg_.media.folderPerDisc);
+    auto bt = BluetoothDiscs();
+    for (size_t i = 0; i < bt.size(); ++i) {
+        const auto& n = lib_.Discs()[bt[i]].name;
+        v.musicFolders.push_back(n.empty() ? std::wstring(L"Bluetooth") : n);
+        if (source_ == Source::Media && disc_ == bt[i]) v.musicFolderPlaying = (int)i;
+    }
+    if (v.musicFolderPlaying >= 0 && track_ >= 0 && track_ < (int)lib_.Tracks().size()) {
+        const MediaTrack& t = lib_.Tracks()[track_];
+        v.musicActive = true; v.musicPaused = mediaPaused_;
+        v.musicTitle = t.title; v.musicArtist = t.artist;
+        auto ts = audio_.Track();
+        v.musicPos = ts.active ? (int)ts.pos : 0; v.musicLen = ts.active && ts.len > 0 ? (int)(ts.len + 0.5) : -1;
+    }
+}
+
+void RadioManager::OnGameEvent(const GameEvent& e) {
+    const bool en = cfg_.menuLanguage == "en";
+    const PhoneConfig& ph = cfg_.screen.phone;
+    Log::Write("Game event: %s (%lld)%s%s", e.id.c_str(), e.amount, e.text.empty() ? "" : " ", e.text.c_str());
+    if (!ph.enabled) return;
+    const std::wstring disp = Utf8ToWide(ph.dispatcher.empty() ? std::string(en ? "Dispatch" : "Disposition") : ph.dispatcher);
+    if (e.id == "job.delivered" && ph.calls) {
+        std::wstring t = en ? L"Hello, dispatch here. The delivery to " + Utf8ToWide(job_.city) + L" has arrived, thank you! " + Money(e.amount) + L" have been transferred to your account."
+                            : L"Hallo, hier ist die Disposition. Die Lieferung nach " + Utf8ToWide(job_.city) + L" ist angekommen, danke! " + Money(e.amount) + L" sind überwiesen.";
+        dispatchText_ = t; dispatchAt_ = GetTickCount64() + 6000;
+    } else if (e.id == "job.cancelled") {
+        PhoneNotice("message", en ? L"Messages" : L"Nachrichten", disp,
+                    en ? L"Job cancelled. Penalty: " + Money(e.amount) : L"Auftrag abgebrochen. Vertragsstrafe: " + Money(e.amount));
+        phone_.AddMessage(disp, en ? L"Job cancelled. Penalty: " + Money(e.amount) : L"Auftrag abgebrochen. Vertragsstrafe: " + Money(e.amount));
+    } else if (e.id == "player.fined" && ph.fines) {
+        static const std::map<std::string, std::pair<const wchar_t*, const wchar_t*>> why = {
+            {"crash", {L"Unfall", L"Crash"}}, {"avoid_sleeping", {L"Ruhezeit nicht eingehalten", L"No rest taken"}}, {"wrong_way", {L"Falsche Richtung", L"Wrong way"}},
+            {"speeding_camera", {L"Geblitzt", L"Speed camera"}}, {"no_lights", {L"Ohne Licht", L"No lights"}}, {"red_signal", {L"Rote Ampel", L"Red light"}},
+            {"speeding", {L"Zu schnell", L"Speeding"}}, {"avoid_weighing", {L"Waage umfahren", L"Avoided weighing"}}, {"illegal_trailer", {L"Unerlaubter Anhänger", L"Illegal trailer"}},
+            {"avoid_inspection", {L"Kontrolle umfahren", L"Avoided inspection"}}, {"illegal_border_crossing", {L"Illegaler Grenzübertritt", L"Illegal border crossing"}},
+            {"hard_shoulder_violation", {L"Standstreifen befahren", L"Hard shoulder"}}, {"damaged_vehicle_usage", {L"Beschädigtes Fahrzeug", L"Damaged vehicle"}},
+            {"generic", {L"Verstoß", L"Offence"}}};
+        auto it = why.find(e.text);
+        std::wstring reason = it != why.end() ? (en ? it->second.second : it->second.first) : Utf8ToWide(e.text);
+        std::wstring from = en ? L"Police" : L"Polizei";
+        std::wstring text = (en ? L"Fine: " : L"Bußgeld: ") + Money(e.amount) + L" – " + reason;
+        PhoneNotice("message", en ? L"Messages" : L"Nachrichten", from, text);
+        phone_.AddMessage(from, text);
     }
 }

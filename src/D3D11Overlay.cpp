@@ -55,6 +55,7 @@ inline const VtHook* FindVt(ID3D11DeviceContext* c) {
 }
 bool g_wantScreenHook = false;
 std::atomic<bool> g_screenHooked{false};
+std::atomic<float> g_screenDim{0.f};   // 0 = full brightness (the cab screen dims at night like a real display)
 // Screen layers: 0 = Realistic Radio, 1 = Trucker Chat (separate plugin, PluginApi.cpp). Each has its own picture, target size and area;
 // both are drawn into a matching render target in this order.
 constexpr int kLayers = 2;
@@ -123,7 +124,7 @@ struct VO { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
 VO vs_main(uint id : SV_VertexID) {
     VO o; float2 uv = float2(id & 1, id >> 1);
     o.pos = float4(lerp(rect.x, rect.z, uv.x), lerp(rect.y, rect.w, uv.y), 0, 1); o.uv = uv; return o; }
-float4 ps_main(VO i) : SV_Target { return tex.Sample(smp, i.uv) * alpha.x; }
+float4 ps_main(VO i) : SV_Target { float4 c = tex.Sample(smp, i.uv) * alpha.x; c.rgb *= 1 - alpha.y; return c; }   // alpha.y: dimming of the cab screen
 )";
 
 bool CompileShaders() {
@@ -369,7 +370,7 @@ void DrawIntoTarget(ID3D11DeviceContext* ctx, int L, ID3D11RenderTargetView* rtv
         float x0 = ax * 2 - 1, x1 = (ax + aw) * 2 - 1, yTop = 1 - ay * 2, yBot = 1 - (ay + ah) * 2;
         if (g_flipY[L]) std::swap(yTop, yBot);
         if (g_flipX[L]) std::swap(x0, x1);
-        float cbdata[8] = {x0, yTop, x1, yBot, alpha, 0, 0, 0};
+        float cbdata[8] = {x0, yTop, x1, yBot, alpha, std::clamp(g_screenDim.load(), 0.f, 0.9f), 0, 0};
         DrawQuad(ctx, rtv, (float)w, (float)h, g_res.ssrv[L], cbdata);
     }
     dev->Release();
@@ -811,6 +812,7 @@ namespace { std::atomic<bool> g_radioPinned{false}; }
 void SetRadioPinned(bool pinned) { g_radioPinned = pinned; }
 bool RadioCardShowing() { return !g_radioPinned.load() && g_scrAlpha[0].load() > 0.003f; }
 void SetChatImage(std::shared_ptr<const OverlayImage> img) { std::lock_guard<std::mutex> l(g_img2Mtx); g_img2 = std::move(img); ++g_img2Version; }
+void SetScreenDim(float d) { g_screenDim = d; }
 void SetChatAlpha(float a) { g_alpha2 = a; }
 void SetChatPlacement(int anchor, float offsetX, float offsetY) { g_anchor2 = anchor; g_offX2 = offsetX; g_offY2 = offsetY; }
 void SetCollectTargets(bool on) { g_collect = on; }

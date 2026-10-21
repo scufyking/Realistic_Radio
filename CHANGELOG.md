@@ -2,6 +2,40 @@
 
 **English** · [Deutsch](#changelog-deutsch)
 
+## 1.6.0 – Virtual phone
+
+### New
+- **Virtual phone** (settings menu → new page **Phone**, setting `"phone": { … }`, off by default). After the radio starts, a notification "Connected" with the name of your phone appears at the top of the navigation screen – like on a smartphone: a banner with an app icon, the navigation (or the pinned radio page) stays visible below, and a short notification tone plays. The name is your own text ("Phone" by default).
+- **Messages from the customer.** When the delivery time of the current job is running out (default: 60 game minutes before the end of the delivery window), the customer sends a message to the phone: sender and text are your own, `{city}`, `{company}`, `{cargo}` and `{time}` are filled in. Once per job; a **Test** button shows the message at once. The time comes from the telemetry (delivery window and game time).
+- **The phone itself (Shift + Insert).** A smartphone comes up at the bottom right of the screen, like in GTA, and is worked with mouse and keyboard while it is open:
+  - **Messages:** conversations with the customer, the dispatcher, the police and the mailbox.
+  - **Phone:** when you take a new job and after every delivery the dispatcher calls – the phone rings (also with the radio off), the navigation screen shows "Incoming call", answer with the phone key and Enter or a click. A Windows voice reads the call, filtered to sound like a phone; the text appears as subtitles. Not answered within 25 s: missed call, the text goes to the mailbox. The call list can play a call again.
+  - **Job:** cargo, from → to with companies, time left, distance, arrival time and pay, plus a small map with the cities around, your truck and the destination.
+  - **Music:** the music folders set to **Bluetooth** (settings menu → USB / CD) – choose a folder, play / pause, next / previous.
+  - **Fines** come as a message from the police with the reason and amount; a cancelled job as a message from the dispatcher with the penalty.
+  - Messages and calls are kept in `phone-ets2.json` / `phone-ats.json`. Settings: phone key, dispatcher calls, caller name, voice, fines as messages and a **test call** on the **Phone** page.
+- **Per truck.** The phone settings are kept in the truck presets like the screen settings: every truck can have its own phone name, messages or none at all.
+- **Text fields in the settings menu.** Click a text field (or press Enter), type, Enter applies, Esc cancels, Ctrl + V pastes – with the keyboard layout of the game (umlauts, @ with AltGr).
+
+### Upgrade notes
+- Replace `realistic-radio.dll` only. Old configurations keep working; the phone is off until you switch it on.
+
+## 1.5.0 – New designs, own styles, sound from the cab, works with the game's radio
+
+### New
+- **Three new designs for the navigation screen** (settings menu → Navigation screen → **Design**, setting `"screen": { "design": … }`):
+  - **Classic truck radio** (`"classic"`): a radio faceplate with CD slot, eject and play buttons, two knobs, a red source button and station buttons 1–6 (the active one lit). The station, country and live song title are on a backlit green LCD in dot-matrix letters, with signal, band and "PRESET 3" in the status row; long song titles scroll. The volume appears in the LCD with a large number and 20 segments.
+  - **Smart dashboard** (`"smart"`): source chip, "Now playing" and signal at the top, an icon bar on the left, a glass panel with a large station logo, station name, country, the song title in the accent colour and "station 3 / 41 • button 3".
+  - **Station list** (`"presets"`): the station name between arrows, the song title below it, and the station buttons as tiles with logo and name – the current station is framed, page marks show where you are among buttons 1–9. Logos of the buttons are loaded one after another.
+- **Own styles.** Every JSON file in `realistic-radio\styles\` becomes a design of its own: it picks a layout (standard, classic, smart, station list), starts from the colours of a built-in design and changes colours, font, glow and optionally sets a background picture. Own styles appear in the settings menu next to the built-in designs; a button opens the folder, and a commented template (`_vorlage-template.json`) is put there. Changes to a style file show up within a few seconds, mistakes are written to the log (`Styles: …`). See README → *Own styles*.
+- **Sound from the cab (beta).** Realistic Radio can now play inside the game's own sound system (FMOD) on the game's radio bus instead of straight on the Windows audio device. It then sounds like the game's own radio: cab acoustics, louder with the window open, quieter when you walk outside the truck, and the game's radio volume applies. Settings menu → Radio → **Sound output**: *Windows device* (as before, default) or *The game's cab (beta)*; setting `"audioOutput": "cabin"`. If the game's sound system cannot be used, the sound simply stays on the Windows device. Log: `Game audio: the radio plays in the cab`.
+- **Quieter outside the truck.** Walk away from the truck – for example with a walk mod – and the radio no longer sounds like headphones: outside the cab it is muffled by the closed cab, narrower in stereo and fades with the distance until it is silent after 40 m. With an open window more gets through and it carries twice as far. While driving nothing changes. The game's sound system reports whether the camera is in the cab, where it is and how far the windows are open; the distance is measured from the driver's seat. Works with both sound outputs. Settings menu → Radio → **Quieter outside the truck** (on by default) and **Range outside**; settings `"outsideFade"`, `"outsideDistance"`.
+- **Works together with the game's built-in radio.** While Realistic Radio plays (radio or USB / CD), the game's own radio is muted, so two radios never play at once. Switch Realistic Radio off, mute or pause it, and the game's radio is audible again. Settings menu → Radio → **Mute the game's radio** (on by default), setting `"muteGameRadio"`.
+- **The display dims at night (beta).** With the parking light or low beam on, the radio display on the navigation screen follows the dashboard brightness like a real screen at night, instead of glaring at full brightness; smooth transition. Settings menu → Navigation screen → **Dims with the lights (beta)** (on by default), setting `"screen": { "dimWithLights": true }`.
+
+### Upgrade notes
+- Replace `realistic-radio.dll` only. Old configurations keep working; the sound stays on the Windows device until you choose the cab.
+
 ## 1.4.7 – Works with Snowymoon
 
 ### Fixed
@@ -230,6 +264,40 @@
 
 <a id="changelog-deutsch"></a>
 # Changelog (Deutsch)
+
+## 1.6.0 – Virtuelles Handy
+
+### Neu
+- **Virtuelles Handy** (Einstellungsmenü → neue Seite **Handy**, Einstellung `"phone": { … }`, standardmäßig aus). Nach dem Start des Radios erscheint oben auf dem Navi die Benachrichtigung „Verbunden“ mit dem Namen deines Handys – wie auf dem Smartphone: ein Banner mit App-Symbol, die Navigation (oder die feste Radio-Seite) bleibt darunter sichtbar, dazu ein kurzer Hinweiston. Den Namen legst du selbst fest (Standard „Phone“).
+- **Nachrichten vom Kunden.** Läuft die Lieferzeit des aktuellen Auftrags bald ab (Standard: 60 Spielminuten vor Ende der Lieferzeit), schreibt der Kunde dem Handy eine Nachricht: Absender und Text sind frei wählbar, `{city}`, `{company}`, `{cargo}` und `{time}` werden ersetzt. Einmal pro Auftrag; der Knopf **Test** zeigt die Nachricht sofort. Die Zeit kommt aus der Telemetrie (Lieferzeit und Spielzeit).
+- **Das Handy selbst (Umschalt + Einfg).** Unten rechts im Bild erscheint ein Smartphone, wie bei GTA, und wird mit Maus und Tastatur bedient, solange es offen ist:
+  - **Nachrichten:** Unterhaltungen mit dem Kunden, der Disposition, der Polizei und die Mailbox.
+  - **Telefon:** Nimmst du einen neuen Auftrag an und nach jeder Lieferung ruft die Disposition an – das Handy klingelt (auch bei ausgeschaltetem Radio), auf dem Navi steht „Eingehender Anruf“, annehmen mit der Handy-Taste und Enter oder Klick. Eine Windows-Stimme liest den Anruf vor, gefiltert wie am Telefon; der Text läuft als Untertitel mit. Nach 25 s ohne Antwort: verpasster Anruf, der Text landet auf der Mailbox. In der Anrufliste lässt sich ein Anruf nochmal anhören.
+  - **Auftrag:** Fracht, von → nach mit Firmen, Restzeit, Entfernung, Ankunftszeit und Lohn, dazu eine kleine Karte mit den Städten ringsum, deinem LKW und dem Ziel.
+  - **Musik:** die Musikordner, die auf **Bluetooth** stehen (Einstellungsmenü → USB / CD) – Ordner wählen, Wiedergabe / Pause, nächster / vorheriger Titel.
+  - **Bußgelder** kommen als Nachricht von der Polizei mit Grund und Betrag; ein abgebrochener Auftrag als Nachricht von der Disposition mit der Vertragsstrafe.
+  - Nachrichten und Anrufe bleiben in `phone-ets2.json` / `phone-ats.json` gespeichert. Einstellungen: Handy-Taste, Anrufe vom Disponenten, Name des Anrufers, Sprachausgabe, Bußgelder als Nachricht und ein **Testanruf** auf der Seite **Handy**.
+- **Je LKW.** Die Handy-Einstellungen werden wie die Navi-Einstellungen in den LKW-Presets gespeichert: Jeder LKW kann einen eigenen Handy-Namen, eigene Nachrichten oder gar keine haben.
+- **Textfelder im Einstellungsmenü.** Textfeld anklicken (oder Enter), tippen, Enter übernimmt, Esc bricht ab, Strg + V fügt ein – mit dem Tastaturlayout des Spiels (Umlaute, @ mit AltGr).
+
+### Hinweise zum Update
+- Nur `realistic-radio.dll` ersetzen. Alte Einstellungen funktionieren weiter; das Handy ist aus, bis du es einschaltest.
+
+## 1.5.0 – Neue Designs, eigene Styles, Ton aus der Kabine, Zusammenspiel mit dem Spielradio
+
+### Neu
+- **Drei neue Designs für den Navi-Bildschirm** (Einstellungsmenü → Navi-Bildschirm → **Design**, Einstellung `"screen": { "design": … }`):
+  - **Klassisches LKW-Radio** (`"classic"`): eine Radioblende mit CD-Schacht, Auswurf- und Play-Taste, zwei Drehknöpfen, roter Quellen-Taste und den Stationstasten 1–6 (die aktive leuchtet). Sender, Land und Songtitel stehen in Punktmatrix-Schrift auf einem beleuchteten grünen LCD, darüber Empfang, Band und „PRESET 3“; lange Songtitel laufen durch. Die Lautstärke erscheint im LCD mit großer Zahl und 20 Segmenten.
+  - **Smart-Dashboard** (`"smart"`): oben Quelle, „Jetzt läuft …“ und Empfang, links eine Symbolleiste, dazu ein Glas-Panel mit großem Senderlogo, Sendername, Land, dem Songtitel in der Akzentfarbe und „Sender 3 / 41 • Taste 3“.
+  - **Senderliste** (`"presets"`): der Sendername zwischen Pfeilen, darunter der Songtitel und die Stationstasten als Kacheln mit Logo und Namen – der aktuelle Sender ist eingerahmt, Seitenmarken zeigen, wo du in den Tasten 1–9 bist. Die Logos der Tasten werden nacheinander geladen.
+- **Eigene Styles.** Jede JSON-Datei im Ordner `realistic-radio\styles\` wird zu einem eigenen Design: Sie wählt einen Aufbau (Standard, Klassisch, Smart, Senderliste), startet mit den Farben eines eingebauten Designs und ändert Farben, Schrift, Leuchten und auf Wunsch ein Hintergrundbild. Eigene Styles erscheinen im Einstellungsmenü neben den eingebauten Designs; ein Knopf öffnet den Ordner, in dem eine kommentierte Vorlage (`_vorlage-template.json`) liegt. Änderungen an einer Style-Datei sind nach ein paar Sekunden zu sehen, Fehler stehen im Log (`Styles: …`). Siehe README → *Eigene Styles*.
+- **Ton aus der Kabine (Beta).** Realistic Radio kann jetzt im Soundsystem des Spiels (FMOD) auf dessen Radio-Bus laufen statt direkt über das Windows-Audiogerät. Es klingt dann wie das Radio des Spiels: Kabinen-Akustik, lauter bei offenem Fenster, leiser, wenn du außerhalb des LKWs bist, und die Radio-Lautstärke des Spiels gilt. Einstellungsmenü → Radio → **Ton ausgeben**: *Windows-Gerät* (wie bisher, Standard) oder *Kabine des Spiels (Beta)*; Einstellung `"audioOutput": "cabin"`. Lässt sich das Soundsystem des Spiels nicht nutzen, bleibt der Ton einfach auf dem Windows-Gerät. Log: `Game audio: the radio plays in the cab`.
+- **Leiser außerhalb des LKWs.** Gehst du vom LKW weg – zum Beispiel mit einem Lauf-Mod –, klingt das Radio nicht mehr wie Kopfhörer: Draußen dämpft es die geschlossene Kabine, das Stereobild wird schmaler und der Ton wird mit der Entfernung leiser, bis nach 40 m nichts mehr zu hören ist. Bei offenem Fenster kommt mehr durch und es trägt doppelt so weit. Während der Fahrt ändert sich nichts. Das Soundsystem des Spiels meldet, ob die Kamera in der Kabine ist, wo sie ist und wie weit die Fenster offen sind; die Entfernung wird ab dem Fahrersitz gemessen. Funktioniert mit beiden Tonausgaben. Einstellungsmenü → Radio → **Leiser außerhalb des LKWs** (standardmäßig an) und **Hörweite draußen**; Einstellungen `"outsideFade"`, `"outsideDistance"`.
+- **Zusammenspiel mit dem eingebauten Radio des Spiels.** Solange Realistic Radio spielt (Radio oder USB / CD), ist das Radio des Spiels stumm – es laufen nie zwei Radios gleichzeitig. Realistic Radio aus, stumm oder pausiert, und das Spielradio ist wieder zu hören. Einstellungsmenü → Radio → **Spielradio stummschalten** (standardmäßig an), Einstellung `"muteGameRadio"`.
+- **Die Anzeige dimmt nachts (Beta).** Mit Standlicht oder Abblendlicht folgt die Radioanzeige auf dem Navi der Helligkeit des Armaturenbretts wie ein echter Bildschirm nachts, statt mit voller Helligkeit zu blenden; mit weichem Übergang. Einstellungsmenü → Navi-Bildschirm → **Dimmt mit dem Licht (Beta)** (standardmäßig an), Einstellung `"screen": { "dimWithLights": true }`.
+
+### Hinweise zum Update
+- Nur `realistic-radio.dll` ersetzen. Alte Einstellungen funktionieren weiter; der Ton bleibt auf dem Windows-Gerät, bis du die Kabine wählst.
 
 ## 1.4.7 – Läuft mit Snowymoon
 

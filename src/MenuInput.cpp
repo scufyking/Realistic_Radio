@@ -48,7 +48,22 @@ LRESULT CALLBACK KeyboardProc(int code, WPARAM wp, LPARAM lp) {
         default: modifier = false;
         }
         if (down) {
-            if (!modifier) { Event e; e.type = Event::Key; e.vk = (int)vk; e.ctrl = g_ctrl; e.shift = g_shift; e.alt = g_alt; Push(e); }
+            if (!modifier) {
+                Event e; e.type = Event::Key; e.vk = (int)vk; e.ctrl = g_ctrl; e.shift = g_shift; e.alt = g_alt;
+                if (!(g_ctrl && !g_alt)) {   // the typed character for text fields (AltGr = Ctrl + Alt, e.g. @ on German keyboards)
+                    BYTE ks[256] = {0};
+                    if (g_shift) ks[VK_SHIFT] = ks[VK_LSHIFT] = 0x80;
+                    if (g_ctrl) ks[VK_CONTROL] = ks[VK_LCONTROL] = 0x80;
+                    if (g_alt) ks[VK_MENU] = ks[VK_RMENU] = 0x80;
+                    if (GetKeyState(VK_CAPITAL) & 1) ks[VK_CAPITAL] = 0x01;
+                    HWND fg = GetForegroundWindow();
+                    HKL hkl = GetKeyboardLayout(fg ? GetWindowThreadProcessId(fg, nullptr) : 0);
+                    wchar_t buf[8] = {0};
+                    int n = ToUnicodeEx(vk, k->scanCode, ks, buf, 8, 4, hkl);   // 4: keep the keyboard state (dead keys)
+                    if (n == 1 && buf[0] >= 32) e.ch = buf[0];
+                }
+                Push(e);
+            }
             g_swallowed.insert(vk);
             return 1;
         }

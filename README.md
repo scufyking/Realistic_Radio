@@ -14,7 +14,7 @@ By **ScufyKing**. The whole radio runs inside the game:
 
 Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ETS2, and the radio plays. Station data and sounds are built into the DLL.
 
-> **Version 1.4.7** · [Changes](CHANGELOG.md)
+> **Version 1.6.0** · [Changes](CHANGELOG.md)
 >
 > **Status:** Tested in ETS2 1.61 (Windows x64) with several MAN and Scania models and mod trucks: the plugin loads, reads the truck position, switches stations by region, plays audio and shows station and volume on the navigation screen. American Truck Simulator data is included but ATS is untested.
 
@@ -50,6 +50,13 @@ Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ET
 - **Radio page on the navigation screen.** Press **Insert** to switch between the navigation and a permanent radio page that shows the station or track live.
 - **Display on the truck's navigation screen.** On every station change the logo, station name, country, signal and "station 3 / 12" appear on the in-cab navigation screen for a few seconds, on volume changes a speaker symbol, a large percentage and a 20-segment bar; then the navigation is back. Works in trucks with a modern infotainment/navigation screen (tested: several MAN and Scania models and mod trucks; see "In-cab screen").
 - **Live song title.** Artist and title of the song the station is playing right now appear on the navigation screen – switched exactly when the song changes in what you hear, and scrolling when the title is long (settings menu → Radio → **Live song title**).
+- **Eight designs for the navigation screen** – among them a **classic truck radio** (faceplate with CD slot, knobs, station buttons and a green LCD with dot-matrix text), a **smart dashboard** (icon bar, large logo, song title in the accent colour) and a **station list** (the station buttons as logo tiles, like a modern infotainment system).
+- **Your own styles:** a JSON file in `realistic-radio\styles\` picks a layout, colours, font and optionally a background picture – it appears in the settings menu next to the built-in designs (see [Own styles](#own-styles-styles)).
+- **Sound from the cab (beta).** The radio can play inside the game's own sound system instead of straight on the Windows device: it then sounds like the game's radio – cab acoustics, louder with the window open, quieter outside the truck, and the game's radio volume applies (settings menu → Radio → **Sound output** → *The game's cab*).
+- **Quieter outside the truck:** walk away from the truck (e.g. with a walk mod) and the radio gets muffled by the cab and fades with the distance; with an open window more gets through and it carries further.
+- **Works with the game's own radio:** while Realistic Radio plays, the game's built-in radio is muted, so two radios never play at once; when Realistic Radio is off or paused, the game's radio is back.
+- **The display dims at night (beta):** with the truck's lights on, the radio display on the navigation screen follows the dashboard brightness instead of glaring at full brightness.
+- **Virtual phone:** a smartphone in the corner of the screen (**Shift + Insert**, like in GTA) with messages, phone calls from the dispatcher (spoken by a Windows voice, with a ringtone), the current job with a small map, and music from your folders marked as Bluetooth. On the navigation screen it shows "Connected", messages and incoming calls like smartphone notifications; the customer gets in touch when the delivery time is running out, the police for every fine. Every truck preset can have its own phone settings (settings menu → **Phone**).
 - **Radio memory per truck** (optional): every truck keeps its own stations, favourites, volume, source and USB track.
 - **Truck presets:** the position and design of the screen display can be saved per truck; the right preset is loaded automatically by the truck id from the telemetry.
 - **Start screen** when the ignition is switched on: the truck's manufacturer fades in on black, like on modern infotainment systems (your own logo pictures can be added).
@@ -135,6 +142,7 @@ plugins\
 | Station buttons 1–9: tap = select, hold = save | NumPad 1–9 | `keys.memory1` … `keys.memory9` |
 | Frequency radio: tune 0.1 MHz up / down | Shift + → / Shift + ← | `keys.tuneUp`, `keys.tuneDown` |
 | Mark an own tunnel (press at the entry and at the exit) | – | `keys.tunnelMark` |
+| Open / close the phone | Shift + Insert | `keys.phone` |
 
 "Next" and "Previous" step through every station of every region you currently receive; the same programme from several regions appears only once. In USB/CD mode the keys work differently, see [USB / CD](#usb--cd-your-own-music).
 
@@ -181,7 +189,8 @@ The most important settings can be changed right in the game. **Ctrl + 0** (or *
 |---|---|
 | Radio | Volume, mute, radio on with (ignition / engine running / always), start automatically, menu language, **band FM / DAB+** and its key, **station buttons** on/off and hold time, **tuning: station list or frequency**, **RDS AF** |
 | Reception | Broadcast range, switch threshold, **change region** (only when the station is lost / on better reception), **DAB+ range**, auto volume, static, tuning sound, **no reception in tunnels**, key to mark an own tunnel |
-| Navigation screen | Display on/off, display time, **design**, **start logo** on/off, time and size, **size of text and pictures**, **size of the station logo**, **drawing surface** (if the display appears twice), keep the radio page on, key for navigation ↔ radio page, **test mode**, **automatic detection (beta)** and the position of the display (area X / Y / width / height, flip, mirror) |
+| Navigation screen | Display on/off, display time, **design** (built-in and own styles, button to open the styles folder), **start logo** on/off, time and size, **size of text and pictures**, **size of the station logo**, **drawing surface** (if the display appears twice), keep the radio page on, key for navigation ↔ radio page, **test mode**, **automatic detection (beta)** and the position of the display (area X / Y / width / height, flip, mirror) |
+| Phone | **Virtual mobile device** on/off, name of the phone, tone, phone key, **dispatcher calls** on/off, caller name, voice on/off, fines as messages, test call, **messages from the customer** on/off, when (game minutes before the delivery time ends), sender, message text, test message. Text fields: click or Enter, type, Enter applies (Ctrl + V pastes) |
 | Trucks | Current truck (from the telemetry), **radio memory per truck**, **start logo** (choice, preview, logo folder), new preset, active preset, change automatically per truck, link / unlink, delete, load a saved preset |
 | Pop-up overlay | Mode, style, position, size, display time, station logos |
 | USB / CD | Mode on/off, every folder its own USB, default type, shuffle, repeat, open the music folder, type of every music folder (USB, CD, SD card, cassette, Bluetooth, AUX) |
@@ -228,6 +237,11 @@ All settings are in `realistic-radio\realistic-radio.json`. The file is created 
 | `tuning` | `"list"` | FM: `"list"` = Next / Previous step through the stations in range; `"frequency"` = frequency radio like in the old days (see below) |
 | `rdsAf` | `false` | Frequency radio: follow the programme to its other frequency when it is lost (RDS AF). `false` = old style: the dial stays where it is |
 | `tunedFreq` | – | Last frequency in 0.1 MHz, e.g. `947` (saved automatically) |
+| `audioOutput` | `"device"` | Where the sound goes: `"device"` = Windows audio device (as before), `"cabin"` = inside the game's sound system on its radio bus (beta): cab acoustics, windows, quieter outside, the game's **radio volume** applies (at 0 % in the game's audio settings the radio is silent). If the game's sound system cannot be used, the sound stays on the Windows device (log: `Game audio: …`). Settings menu → Radio → **Sound output** |
+| `muteGameRadio` | `true` | Mute the game's built-in radio while Realistic Radio plays (radio or USB / CD). When Realistic Radio is off, muted or paused, the game's radio is audible again. Settings menu → Radio → **Mute the game's radio** |
+| `outsideFade` | `true` | Quieter outside the truck: when the camera leaves the cab (e.g. walking with a walk mod, outside camera while standing), the radio sounds muffled through the cab, narrower and fades with the distance; an open window lets more through. While driving nothing changes. The game's sound system reports whether the camera is in the cab, where it is and how far the windows are open; the distance is measured from the driver's seat (log: `Outside: left the cab`, `Outside: 12.0 m from the cab, …`). Settings menu → Radio → **Quieter outside the truck** |
+| `outsideDistance` | `40` | Metres from the cab until the radio is silent outside (twice as far with an open window). Settings menu → Radio → **Range outside** |
+| `gameBus` | `"bus:/radio"` | Only for `"cabin"`: the sound bus of the game the radio plays on (only in the JSON file; the log lists all buses at start: `Game audio: buses …`) |
 | `songTitle` | `true` | Live song title of the station on the navigation screen (and in the dot-matrix display). Read from the stream (ICY `StreamTitle`), switched exactly when the song changes in the audio; for AAC streams it is asked for every 20 s. Stations that send no title show none |
 | `tunnelSignal` | `true` | No reception in tunnels (FM: static, DAB+: drop-outs, then silence) |
 | `screenPage` | `"navi"` | `"radio"` = radio page permanently on the navigation screen (switched with the `screenPage` key and saved) |
@@ -287,7 +301,8 @@ Because every truck and mod uses different render targets, the right one must be
 | `flipY` | `false` | Turn the card upside down – needed on drawing surface 2 (`target` 2), not on surface 1. Choosing the drawing surface in the settings menu sets it accordingly |
 | `flipX` | `false` | Mirror horizontally (`flipX` + `flipY` = rotated by 180°) |
 | `grid` | `false` | Test mode (easiest in the settings menu): a 10×10 coordinate grid over the whole render target and an orange frame showing where the display is drawn, with its values in the corners. Move the frame with the area sliders until it lies fully on the visible part of the screen. Not saved as on |
-| `design` | `"modern"` | Look of the display: `"modern"` (dark, amber), `"ocean"` (navy, light blue), `"sport"` (black, red), `"light"` (white, blue), `"retro"` (green LCD look) |
+| `design` | `"modern"` | Look of the display: `"modern"` (dark, amber), `"ocean"` (navy, light blue), `"sport"` (black, red), `"light"` (white, blue), `"retro"` (green LCD look), `"classic"` (old truck radio with LCD and station buttons), `"smart"` (modern dashboard with icon bar), `"presets"` (station list: the station buttons as logo tiles), `"style:<file name>"` (own style from the `styles` folder, see [Own styles](#own-styles-styles)) |
+| `dimWithLights` | `true` | With the truck's lights on (parking or low beam), the display dims with the dashboard brightness like a real screen at night (beta). Settings menu → Navigation screen → **Dims with the lights (beta)** |
 | `volumeStyle` | `"card"` | How the volume is shown on the navigation screen: `"card"` = large card, `"bar"` = slim bar at the top like on modern infotainment systems ("20%" and a thin level line; the navigation stays visible). Settings menu → Navigation screen → **Volume display** |
 | `startLogo` | `true` | Start screen when the ignition is switched on (also with the radio off): the manufacturer's logo fades in on black, like on modern infotainment systems. Logos come from `realistic-radio\truck-logos\` (delivered for DAF, Iveco, MAN, Mercedes-Benz, Scania, Volvo) (see [Truck logos](#truck-logos-start-screen)); without one the brand name and model are shown |
 | `startLogoFile` | `""` | Picture to show, relative to `truck-logos\` (e.g. `"mercedes\\gold.png"`); `""` = the first picture for the truck, `"text"` = the name only. Stored in the truck preset (`"logo"`) – easiest in the settings menu, page Trucks |
@@ -300,6 +315,58 @@ Because every truck and mod uses different render targets, the right one must be
 Example (MAN TGX, ETS2 1.61, navigation screen): `"width": 1024, "height": 1024, "format": 29, "flipY": false, "target": 1, "areaX": 0.11, "areaY": 0.24, "areaW": 0.78, "areaH": 0.58`. Other trucks use other render targets.
 
 Independent of the pop-up overlay, which is off by default (`"overlay": { "mode": "auto" }` turns it on in addition). This mode hooks into the game's Direct3D 11 rendering; in probe mode the test pattern can briefly appear on other surfaces too. Untested combinations with other graphics mods are possible.
+
+### Own styles (`styles\`)
+
+Every JSON file in `realistic-radio\styles\` is a style of its own and appears in the settings menu under **Navigation screen → Design** with "(own style)". The plugin puts a commented template there: `_vorlage-template.json`. Copy it, give the copy a name without the `_` at the start (e.g. `night-blue.json`), change it and choose it in the menu. Files starting with `_` are not listed. Changes to a file show up on the screen within a few seconds; mistakes are written to the log (`Styles: …`).
+
+| Key | Meaning |
+|---|---|
+| `name` | Name in the menu (else the file name) |
+| `layout` | `"standard"` (logo left, text right), `"classic"` (old truck radio), `"smart"` (dashboard with icon bar), `"presets"` (station list with the station buttons) |
+| `basedOn` | Built-in design whose colours are the starting point: `modern`, `ocean`, `sport`, `light`, `retro`, `classic`, `smart`, `presets` |
+| `font` | Any font installed in Windows, e.g. `"Segoe UI"`, `"Bahnschrift"`, `"Consolas"` |
+| `glow` | Glow in the accent colour, `0` … `1` |
+| `colors` | Only the colours that should change, as `"#RRGGBB"`: `background`, `backgroundBottom` (gradient), `accent`, `onAccent` (text on the accent colour), `text`, `subtext`, `muted`, `tile` (panels and buttons), `logoTile` (behind station logos), `inactive` (empty bars), `icon`, and for `classic` `lcd`, `lcdGlow`, `lcdText` |
+| `backgroundImage` | Picture in the `styles` folder (PNG, JPG, BMP) that fills the display behind everything; `backgroundOpacity` `0` … `1` |
+
+The design is stored as `"design": "style:<file name>"` (also in the truck presets). If the file is missing, the display shows *Modern*.
+
+### Virtual phone (`"phone": { … }`)
+
+After the radio starts, a notification "Connected" with the name of the phone appears at the top of the navigation screen. When the delivery time of the current job is about to run out, the customer sends a message. Both look like notifications on a smartphone (banner at the top, the navigation or the radio page stays visible below) and come with a short tone; with the pop-up overlay on, they appear there too. When the customer gets in touch is worked out from the telemetry (end of the delivery window minus the game time), once per job.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `false` | Virtual phone on |
+| `name` | `"Phone"` | Name of the phone in the "Connected" message |
+| `sound` | `true` | Short notification tone (its own volume, also with the radio muted) |
+| `messages` | `true` | Message from the customer when the delivery time is running out |
+| `minutes` | `60` | Game minutes before the end of the delivery window |
+| `sender` | `"Kunde"` | Sender of the message |
+| `text` | `"Wo bleibt die Lieferung? Wir erwarten {cargo} bald in {city}."` | Message; `{city}`, `{company}`, `{cargo}` and `{time}` (time left) are filled in |
+
+**The phone (Shift + Insert):** a smartphone appears at the bottom right of the screen; while it is open, mouse and keyboard work the phone (the game waits). Esc or the phone key closes it.
+
+| App | What it shows |
+|---|---|
+| Messages | Conversations: the customer, the dispatcher, the police (fines) and the mailbox of calls you did not answer |
+| Phone | Call list (missed in red); a call shows what was said and can be played again |
+| Job | Cargo, from → to with companies, time left (red when late), distance, arrival time and pay, plus a small map with the cities around, your truck as an arrow and the destination |
+| Music | The music folders set to **Bluetooth** (settings menu → USB / CD): choose a folder, play / pause, next / previous track |
+
+**Calls:** when you take a new job and after a delivery, the dispatcher calls: the phone rings (also with the radio off), the navigation screen shows "Incoming call", press the phone key and answer (Enter or click). A Windows voice reads the text, sounding like a phone call; without a voice it is shown as text. Not answered within 25 s: missed call, the text goes to the mailbox. Keys in the phone: ↑ ↓ choose, Enter open / answer, Backspace back / decline, 1–4 open an app, right click back.
+
+| Key in `"phone"` | Default | Meaning |
+|---|---|---|
+| `calls` | `true` | The dispatcher calls for a new job and after a delivery |
+| `dispatcher` | `"Disposition"` | Name of the caller |
+| `voice` | `true` | A Windows voice speaks the calls (German or English voice preferred, Windows' default otherwise) |
+| `fines` | `true` | A message from the police for every fine (reason and amount) |
+
+Messages and calls are kept in `realistic-radio\phone-ets2.json` (`phone-ats.json`).
+
+The phone settings belong to the screen settings and are therefore kept **per truck preset**: switch to a truck with its own preset and its phone settings are loaded (log: `Phone: …`).
 
 ### Truck presets (`"presets"`, `"activePreset"`, `"presetAuto"`)
 
@@ -431,6 +498,9 @@ Almost every problem can be diagnosed from `realistic-radio\realistic-radio.log`
 
 | Problem | Cause and solution |
 |---|---|
+| No sound with **Sound output → The game's cab** | The game's **radio volume** (game options → Audio) also applies to Realistic Radio in the cab – turn it up. The log shows whether the cab is used: `Game audio: the radio plays in the cab`; if it says `not possible` or `cannot …`, the sound stays on the Windows device. |
+| Outside the truck the radio stays as loud as in the cab | Settings menu → Radio → **Quieter outside the truck** on; the hint under it shows what the plugin sees. The log shows `Outside: left the cab` and every 5 s the distance – please send these lines (and those starting with `Game audio:`). |
+| The game's radio plays at the same time | Settings menu → Radio → **Mute the game's radio** on. Log: `Game audio: the game's own radio is muted while Realistic Radio plays`. |
 | No `realistic-radio.log` is created | The DLL was not loaded. Check the folder: it must be `bin\win_x64\plugins\`. Did you confirm the "advanced SDK features" message with OK? |
 | Radio still audible at volume 0, or two stations at once | Two copies of the plugin are installed (e.g. `realistic-radio (1).dll`). The log then says `WARNING: another radio plugin DLL is in the plugins folder`; keep only one DLL. A second copy of this version stays inactive by itself. |
 | "Data file not found" in the log | The plugin could not write its folder next to the DLL (e.g. no write permission in the game folder). Check the log for "Could not write". |
@@ -558,7 +628,10 @@ The folder `server/logo/` contains all logos (downscaled to 200 px) in exactly t
 │   ├── AudioEngine.*          mixer and audio device
 │   ├── StreamSource.*         network streams, decoding, reconnect
 │   ├── NetReader.h            makes the start of a live stream rewindable
-│   ├── Overlay.*, OverlayImage.*, D3D11Overlay.*   in-game overlay
+│   ├── Overlay.*, OverlayImage.*, D3D11Overlay.*   in-game overlay and navigation-screen designs
+│   ├── CardStyles.*           own styles from the styles folder
+│   ├── GameAudio.*            sound through the game (cab output, muting the game radio)
+│   ├── Phone.*, Speech.*      virtual phone (apps, calls, Windows voices)
 │   ├── DisplayWindow.*        optional display window
 │   ├── InputManager.*         keyboard and controller
 │   ├── InputBlock.*           keeps the mouse from the game while the menu is open

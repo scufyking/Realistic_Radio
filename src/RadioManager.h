@@ -12,12 +12,24 @@
 #include "MediaLibrary.h"
 #include "SettingsMenu.h"
 #include "TunnelMap.h"
+#include "Phone.h"
 #include <set>
 #include <unordered_map>
 
 // Replaces main.js (refresh, setRadioStation, setWhitenoise, nextStation, favourites) + the server's command handling.
 class RadioManager {
 public:
+    void SetLights(float backlight, bool lightsOn);
+    // truck origin and driver's head in world coordinates, speed m/s: the radio gets quieter when you walk away from the truck
+    void SetJob(const JobInfo& job);          // telemetry: the current job (delivery window, destination, cargo)
+    void SetGameTime(unsigned minutes);       // telemetry: absolute game time in minutes
+    void PhoneTest();                         // settings menu: send a test message
+    void SetPose(bool valid, const double truck[3], const double head[3], float speed, double heading = 0);
+    void SetNavigation(float metres, float seconds) { navDist_ = metres; navTime_ = seconds; }
+    void OnGameEvent(const GameEvent& e);     // telemetry: job delivered / cancelled, fine
+    bool PhoneOpen() const { return phone_.IsOpen(); }
+    void PhoneUiTick(InputManager& input);    // while the phone is open: its input and picture
+    std::wstring OutsideStatus(bool en) const;   // settings menu: what "quieter outside" sees right now   // dashboard backlight 0..1, parking / low beam lights (telemetry)
     bool Init(const std::wstring& dataDir, const std::string& game);
     void Shutdown();
     void Tick(double x, double z, bool positionValid, bool electric, bool engine, float speed = 0.f);   // speed in m/s   // called ~4x per second from the radio thread
@@ -35,6 +47,7 @@ private:
     void SetWhitenoise(double whitenoise);
     void NextStation(int amount);
     std::string ResolveUrl(const std::string& url) const;
+    void FillTiles(OverlayInfo& i) const;
     OverlayInfo CurrentInfo(const std::wstring& subtitleOverride = L"");
     void ShowCurrent(const std::wstring& subtitleOverride = L"", bool volumeMessage = false);
     int StationIndexByName(const std::string& country, const std::string& name) const;
@@ -49,6 +62,33 @@ private:
     void UpdateDisplay();
     bool lastBuffering_ = false;
     bool lastFailed_ = false;
+    float dim_ = 0.f;
+    // virtual phone (1.6.0)
+    JobInfo job_;
+    Phone phone_;
+    std::string game_;
+    float navDist_ = 0, navTime_ = 0;
+    double truckPos_[3] = {0, 0, 0}, heading_ = 0;
+    ULONGLONG startedAt_ = 0, dispatchAt_ = 0;
+    ULONGLONG gameTimeAt_ = 0, powerOffAt_ = 0;
+    std::wstring dispatchText_;
+    void InitPhone();
+    void OpenPhone();
+    void FillPhoneJob(PhoneView& v);
+    void FillPhoneMusic(PhoneView& v);
+    std::vector<int> BluetoothDiscs() const;
+    std::wstring Money(long long amount) const;
+    unsigned gameTime_ = 0;
+    bool jobMessageSent_ = false, wasPowered_ = false, phoneWasOn_ = false;
+    ULONGLONG phoneConnectAt_ = 0;
+    void PhoneTick(ULONGLONG now);
+    void PhoneNotice(const std::string& icon, const std::wstring& app, const std::wstring& title, const std::wstring& text);
+    // quieter outside the truck: which way the game's listener coordinates match the world (-1 = not known yet)
+    int outsideMap_ = -1;
+    ULONGLONG outsideMapSince_ = 0, outsideLogAt_ = 0, outsideDiagAt_ = 0;
+    int outsideCand_ = -1, outsideLogs_ = 0;
+    float outsideDist_ = 0.f; bool outsideNow_ = false, outsideWindow_ = false, outsideWasOut_ = false;
+    double cabRef_[3] = {0, 0, 0}; bool cabRefValid_ = false;   // origin of the game's sound coordinates in the world (learnt in the cab)                  // current dimming of the cab screen (follows the lights smoothly)
     std::wstring song_;                // live song title of the station (shown on the screen card)
     ULONGLONG songAt_ = 0;
     bool powered_ = true;
