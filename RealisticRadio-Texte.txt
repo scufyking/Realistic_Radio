@@ -1,0 +1,1973 @@
+Realistic Radio 1.7.0 – alle Texte / all texts
+============================================================
+DE: Jeder Eintrag hat eine deutsche (DE) und englische (EN) Fassung. Die Übersetzung hinter "RU:" eintragen.
+    Platzhalter wie %s, %d, %.0f, {city}, {cargo}, {company}, {time} und Zeichen wie \ • → unverändert lassen.
+    Die Angabe in [eckigen Klammern] ist nur die Stelle im Quellcode, bitte nicht ändern.
+EN: Every entry has a German (DE) and English (EN) version. Write the translation after "RU:".
+    Keep placeholders like %s, %d, %.0f, {city}, {cargo}, {company}, {time} and characters like \ • → as they are.
+    The [square brackets] only show where the text is in the source code - please do not change them.
+
+
+############################################################
+# Einstellungsmenü (Strg + 0) / Settings menu
+############################################################
+
+[SettingsMenu.cpp:91]
+DE: Lautstärke
+EN: Volume
+RU: 
+
+[SettingsMenu.cpp:92]
+DE: Stumm
+EN: Mute
+RU: 
+
+[SettingsMenu.cpp:93]
+DE: Radio an bei
+EN: Radio on with
+RU: 
+
+[SettingsMenu.cpp:93]
+DE: Wann das Radio spielt
+EN: When the radio plays
+RU: 
+
+[SettingsMenu.cpp:94]
+DE: Zündung
+EN: Ignition
+RU: 
+
+[SettingsMenu.cpp:94]
+DE: Motor läuft
+EN: Engine running
+RU: 
+
+[SettingsMenu.cpp:94]
+DE: Immer
+EN: Always
+RU: 
+
+[SettingsMenu.cpp:95]
+DE: Automatisch starten
+EN: Start automatically
+RU: 
+
+[SettingsMenu.cpp:95]
+DE: Beim Spielstart sofort spielen
+EN: Play as soon as the game starts
+RU: 
+
+[SettingsMenu.cpp:96]
+DE: Sprache des Menüs
+EN: Menu language
+RU: 
+
+[SettingsMenu.cpp:98, SettingsMenu.cpp:225]
+DE: Ton
+EN: Sound
+RU: 
+
+[SettingsMenu.cpp:100]
+DE: Ton ausgeben
+EN: Sound output
+RU: 
+
+[SettingsMenu.cpp:101]
+DE: Windows-Gerät
+EN: Windows device
+RU: 
+
+[SettingsMenu.cpp:101]
+DE: Kabine des Spiels (Beta)
+EN: The game's cab (beta)
+RU: 
+
+[SettingsMenu.cpp:104]
+DE: Spielt in der Kabine: Fenster, Spiel-Lautstärke, draußen leiser
+EN: Plays in the cab: windows, game volume, quieter outside
+RU: 
+
+[SettingsMenu.cpp:105, RadioManager.cpp:1373]
+DE: Wartet auf den Sound des Spiels …
+EN: Waiting for the game's sound system …
+RU: 
+
+[SettingsMenu.cpp:106]
+DE: Hier nicht möglich – läuft über Windows (siehe Log)
+EN: Not possible here - plays on the Windows device (see log)
+RU: 
+
+[SettingsMenu.cpp:107]
+DE: Kabine: klingt wie das Spielradio (Kabinen-Akustik, Fenster)
+EN: Cab: sounds like the game's radio (cab acoustics, windows)
+RU: 
+
+[SettingsMenu.cpp:112]
+DE: Spielradio stummschalten
+EN: Mute the game's radio
+RU: 
+
+[SettingsMenu.cpp:112]
+DE: Solange Realistic Radio spielt (Radio und USB / CD)
+EN: While Realistic Radio plays (radio and USB / CD)
+RU: 
+
+[SettingsMenu.cpp:115]
+DE: Leiser außerhalb des LKWs
+EN: Quieter outside the truck
+RU: 
+
+[SettingsMenu.cpp:119]
+DE: Hörweite draußen
+EN: Range outside
+RU: 
+
+[SettingsMenu.cpp:119]
+DE: Bis hier ist es draußen noch zu hören (offenes Fenster: doppelt)
+EN: Up to here it can still be heard outside (open window: twice)
+RU: 
+
+[SettingsMenu.cpp:123]
+DE: DAB+: weiter, ohne Rauschen, bricht bei schwachem Signal ab
+EN: DAB+: further, no static, drops out on a weak signal
+RU: 
+
+[SettingsMenu.cpp:124]
+DE: FM (UKW)
+EN: FM
+RU: 
+
+[SettingsMenu.cpp:125]
+DE: Taste: Band wechseln
+EN: Key: change band
+RU: 
+
+[SettingsMenu.cpp:126]
+DE: Senderwahl (FM)
+EN: Tuning (FM)
+RU: 
+
+[SettingsMenu.cpp:126]
+DE: Frequenz: Weiter/Zurück sucht den nächsten Sender, Umschalt+Pfeile 0,1 MHz
+EN: Frequency: Next/Previous seeks, Shift+arrows 0.1 MHz
+RU: 
+
+[SettingsMenu.cpp:128]
+DE: Senderliste
+EN: Station list
+RU: 
+
+[SettingsMenu.cpp:128]
+DE: Frequenz (wie früher)
+EN: Frequency (old style)
+RU: 
+
+[SettingsMenu.cpp:129]
+DE: RDS-AF: Programm folgen
+EN: RDS AF: follow the programme
+RU: 
+
+[SettingsMenu.cpp:129]
+DE: Aus = wie früher: die Frequenz bleibt, auch wenn der Sender weg ist
+EN: Off = old style: the frequency stays even when the station is gone
+RU: 
+
+[SettingsMenu.cpp:131]
+DE: Songtitel live
+EN: Live song title
+RU: 
+
+[SettingsMenu.cpp:131]
+DE: Interpret und Titel aus dem Stream, läuft auf dem Navi mit
+EN: Artist and title from the stream, scrolls on the navigation screen
+RU: 
+
+[SettingsMenu.cpp:133]
+DE: Stationstasten
+EN: Station buttons
+RU: 
+
+[SettingsMenu.cpp:134]
+DE: Stationstasten 1–9
+EN: Station buttons 1–9
+RU: 
+
+[SettingsMenu.cpp:134]
+DE: Nummernblock: kurz drücken = wählen, gedrückt halten = speichern
+EN: Numpad: tap = select, hold = save
+RU: 
+
+[SettingsMenu.cpp:136]
+DE: Halten zum Speichern
+EN: Hold to save
+RU: 
+
+[SettingsMenu.cpp:136]
+DE: Tasten ändern: Seite Tasten
+EN: Change the keys: page Keys
+RU: 
+
+[SettingsMenu.cpp:138]
+DE: Stationstasten neu belegen
+EN: Store station buttons again
+RU: 
+
+[SettingsMenu.cpp:138]
+DE: Mit den 9 am besten empfangenen Sendern hier (Travelstore)
+EN: With the 9 best received stations here (travel store)
+RU: 
+
+[SettingsMenu.cpp:142]
+DE: Sendereichweite
+EN: Broadcast range
+RU: 
+
+[SettingsMenu.cpp:142]
+DE: Grundreichweite einer Stadt
+EN: Base range of a city
+RU: 
+
+[SettingsMenu.cpp:144]
+DE: Wechselschwelle
+EN: Switch threshold
+RU: 
+
+[SettingsMenu.cpp:144]
+DE: Wie viel besser eine andere Region sein muss
+EN: How much better another region must be
+RU: 
+
+[SettingsMenu.cpp:146]
+DE: Auto-Lautstärke
+EN: Auto volume
+RU: 
+
+[SettingsMenu.cpp:146]
+DE: Lauter bei höherem Tempo (ab 30 km/h, voll bei 90 km/h)
+EN: Louder at higher speed (from 30 km/h, full at 90 km/h)
+RU: 
+
+[SettingsMenu.cpp:148, SettingsMenu.cpp:256, SettingsMenu.cpp:274]
+DE: Aus
+EN: Off
+RU: 
+
+[SettingsMenu.cpp:149]
+DE: Region wechseln
+EN: Change region
+RU: 
+
+[SettingsMenu.cpp:149]
+DE: Wann das Radio einen Sender einer anderen Region wählt
+EN: When the radio picks a station of another region
+RU: 
+
+[SettingsMenu.cpp:151]
+DE: Erst wenn der Sender weg ist
+EN: Only when the station is lost
+RU: 
+
+[SettingsMenu.cpp:151]
+DE: Bei besserem Empfang
+EN: On better reception
+RU: 
+
+[SettingsMenu.cpp:152]
+DE: DAB+-Reichweite
+EN: DAB+ range
+RU: 
+
+[SettingsMenu.cpp:152]
+DE: Im Vergleich zu FM
+EN: Compared to FM
+RU: 
+
+[SettingsMenu.cpp:154]
+DE: Rauschen bei schwachem Empfang
+EN: Static on weak reception
+RU: 
+
+[SettingsMenu.cpp:155]
+DE: Kein Empfang im Tunnel
+EN: No reception in tunnels
+RU: 
+
+[SettingsMenu.cpp:155]
+DE: Tunnel-Daten: ETS2 Tunnel Radio (bohbotoly) • USB / CD spielt weiter
+EN: Tunnel data: ETS2 Tunnel Radio (bohbotoly) • USB / CD keeps playing
+RU: 
+
+[SettingsMenu.cpp:157]
+DE: Taste: eigenen Tunnel markieren
+EN: Key: mark an own tunnel
+RU: 
+
+[SettingsMenu.cpp:157]
+DE: Am Anfang und am Ende drücken (Map-Mods)
+EN: Press at the entry and at the exit (map mods)
+RU: 
+
+[SettingsMenu.cpp:159]
+DE: Umschaltgeräusch
+EN: Tuning sound
+RU: 
+
+[SettingsMenu.cpp:159]
+DE: Beim Senderwechsel
+EN: When the station changes
+RU: 
+
+[SettingsMenu.cpp:161]
+DE: Radio-Seite dauerhaft zeigen
+EN: Keep the radio page on
+RU: 
+
+[SettingsMenu.cpp:161]
+DE: Statt der Navigation
+EN: Instead of the navigation
+RU: 
+
+[SettingsMenu.cpp:166]
+DE: Anzeige auf dem Navi
+EN: Show on the navigation screen
+RU: 
+
+[SettingsMenu.cpp:166]
+DE: Sender und Lautstärke im LKW
+EN: Station and volume in the truck
+RU: 
+
+[SettingsMenu.cpp:168, SettingsMenu.cpp:262]
+DE: Anzeigedauer
+EN: Display time
+RU: 
+
+[SettingsMenu.cpp:168]
+DE: Wie lange Sender / Lautstärke zu sehen sind
+EN: How long station / volume are shown
+RU: 
+
+[SettingsMenu.cpp:170]
+DE: Aussehen der Anzeige im LKW
+EN: Look of the display in the truck
+RU: 
+
+[SettingsMenu.cpp:172]
+DE: Ozean
+EN: Ocean
+RU: 
+
+[SettingsMenu.cpp:172]
+DE: Hell
+EN: Light
+RU: 
+
+[SettingsMenu.cpp:173]
+DE: Eigene Styles
+EN: Own styles
+RU: 
+
+[SettingsMenu.cpp:173]
+DE: Ordner styles: Vorlage kopieren, anpassen, hier wählen
+EN: Folder styles: copy the template, edit it, choose it here
+RU: 
+
+[SettingsMenu.cpp:175]
+DE: Dimmt mit dem Licht (Beta)
+EN: Dims with the lights (beta)
+RU: 
+
+[SettingsMenu.cpp:175]
+DE: Licht an: so hell wie die Instrumentenbeleuchtung, wie ein echtes Display
+EN: Lights on: as bright as the dashboard backlight, like a real display
+RU: 
+
+[SettingsMenu.cpp:177]
+DE: Lautstärke-Anzeige
+EN: Volume display
+RU: 
+
+[SettingsMenu.cpp:177]
+DE: Leiste: oben im Navi wie bei modernen Systemen, die Navigation bleibt sichtbar
+EN: Bar: at the top of the screen like modern systems, the navigation stays visible
+RU: 
+
+[SettingsMenu.cpp:179]
+DE: Große Karte
+EN: Large card
+RU: 
+
+[SettingsMenu.cpp:179]
+DE: Leiste oben (modern)
+EN: Bar at the top (modern)
+RU: 
+
+[SettingsMenu.cpp:180]
+DE: Start-Logo beim Einschalten
+EN: Start logo at ignition on
+RU: 
+
+[SettingsMenu.cpp:180]
+DE: Hersteller des LKWs auf Schwarz (Bild wählen: Seite LKW)
+EN: The truck's manufacturer on black (choose the picture: page Trucks)
+RU: 
+
+[SettingsMenu.cpp:182]
+DE: Dauer Start-Logo
+EN: Start logo time
+RU: 
+
+[SettingsMenu.cpp:183]
+DE: Größe Start-Logo
+EN: Start logo size
+RU: 
+
+[SettingsMenu.cpp:183]
+DE: Höhe des Logos im Anzeigebereich (Vorschau: Seite LKW)
+EN: Height of the logo in the display area (preview: page Trucks)
+RU: 
+
+[SettingsMenu.cpp:185]
+DE: Größe Schrift und Bilder
+EN: Size of text and pictures
+RU: 
+
+[SettingsMenu.cpp:185]
+DE: Inhalt größer oder kleiner (höchstens so hoch wie der Bereich)
+EN: Content larger or smaller (at most as high as the area)
+RU: 
+
+[SettingsMenu.cpp:187]
+DE: Größe Senderlogo / Cover
+EN: Size of station logo / cover
+RU: 
+
+[SettingsMenu.cpp:190]
+DE: Taste: Navi ↔ Radio-Seite
+EN: Key: navigation ↔ radio page
+RU: 
+
+[SettingsMenu.cpp:191]
+DE: Position auf dem Bildschirm
+EN: Position on the screen
+RU: 
+
+[SettingsMenu.cpp:193]
+DE: Zeichenfläche
+EN: Drawing surface
+RU: 
+
+[SettingsMenu.cpp:194]
+DE: Alle
+EN: All
+RU: 
+
+[SettingsMenu.cpp:203]
+DE: Gefunden:
+EN: Found:
+RU: 
+
+[SettingsMenu.cpp:203]
+DE: mit dieser Größe
+EN: with this size
+RU: 
+
+[SettingsMenu.cpp:204]
+DE: Doppelt zu sehen? Nur in eine zeichnen
+EN: Shows up twice? Draw into one only
+RU: 
+
+[SettingsMenu.cpp:205]
+DE: • je LKW im Preset
+EN: • per truck in the preset
+RU: 
+
+[SettingsMenu.cpp:209]
+DE: Testmodus
+EN: Test mode
+RU: 
+
+[SettingsMenu.cpp:209]
+DE: Gitter + Rahmen der Anzeige im LKW (Menü am Titel verschiebbar)
+EN: Grid + frame of the display in the truck (drag the menu by its title)
+RU: 
+
+[SettingsMenu.cpp:211]
+DE: Automatisch erkennen (Beta)
+EN: Detect automatically (beta)
+RU: 
+
+[SettingsMenu.cpp:211]
+DE: Im LKW sitzen, Navigation sichtbar
+EN: Sit in the truck with the navigation visible
+RU: 
+
+[SettingsMenu.cpp:213]
+DE: Bereich links (X)
+EN: Area left (X)
+RU: 
+
+[SettingsMenu.cpp:214]
+DE: Bereich oben (Y)
+EN: Area top (Y)
+RU: 
+
+[SettingsMenu.cpp:215]
+DE: Breite
+EN: Width
+RU: 
+
+[SettingsMenu.cpp:216]
+DE: Höhe
+EN: Height
+RU: 
+
+[SettingsMenu.cpp:217]
+DE: Umdrehen (oben/unten)
+EN: Flip (up/down)
+RU: 
+
+[SettingsMenu.cpp:218]
+DE: Spiegeln (links/rechts)
+EN: Mirror (left/right)
+RU: 
+
+[SettingsMenu.cpp:221]
+DE: Virtuelles Handy
+EN: Virtual mobile device
+RU: 
+
+[SettingsMenu.cpp:221]
+DE: Nach dem Start des Radios: „Verbunden“ auf dem Navi
+EN: After the radio starts: “Connected” on the navigation screen
+RU: 
+
+[SettingsMenu.cpp:223]
+DE: Name des Handys
+EN: Name of the phone
+RU: 
+
+[SettingsMenu.cpp:223]
+DE: Steht in der Meldung „Verbunden“
+EN: Shown in the “connected” message
+RU: 
+
+[SettingsMenu.cpp:225]
+DE: Kurzer Hinweiston wie beim Handy
+EN: Short notification tone like a phone
+RU: 
+
+[SettingsMenu.cpp:226]
+DE: Taste: Handy
+EN: Key: phone
+RU: 
+
+[SettingsMenu.cpp:227]
+DE: Anrufe
+EN: Calls
+RU: 
+
+[SettingsMenu.cpp:228]
+DE: Disponent ruft an
+EN: Dispatcher calls
+RU: 
+
+[SettingsMenu.cpp:228]
+DE: Bei neuem Auftrag und nach der Lieferung
+EN: For a new job and after the delivery
+RU: 
+
+[SettingsMenu.cpp:230]
+DE: Name des Anrufers
+EN: Name of the caller
+RU: 
+
+[SettingsMenu.cpp:231]
+DE: Sprachausgabe
+EN: Voice
+RU: 
+
+[SettingsMenu.cpp:231]
+DE: Windows-Stimme liest den Anruf vor (sonst nur Text)
+EN: A Windows voice speaks the call (else text only)
+RU: 
+
+[SettingsMenu.cpp:233]
+DE: Bußgelder als Nachricht
+EN: Fines as a message
+RU: 
+
+[SettingsMenu.cpp:233]
+DE: Von der Polizei, mit Grund und Betrag
+EN: From the police, with reason and amount
+RU: 
+
+[SettingsMenu.cpp:235]
+DE: Testanruf
+EN: Test call
+RU: 
+
+[SettingsMenu.cpp:235]
+DE: Klingelt gleich – Handy-Taste drücken und annehmen
+EN: Rings in a moment - press the phone key and answer
+RU: 
+
+[SettingsMenu.cpp:237]
+DE: Nachrichten vom Kunden
+EN: Messages from the customer
+RU: 
+
+[SettingsMenu.cpp:238]
+DE: Kunde meldet sich
+EN: Customer gets in touch
+RU: 
+
+[SettingsMenu.cpp:238]
+DE: Wenn die Lieferzeit bald abläuft
+EN: When the delivery time is running out
+RU: 
+
+[SettingsMenu.cpp:240]
+DE: Wann
+EN: When
+RU: 
+
+[SettingsMenu.cpp:240]
+DE: Spielminuten vor Ende der Lieferzeit
+EN: Game minutes before the delivery time ends
+RU: 
+
+[SettingsMenu.cpp:243]
+DE: Absender
+EN: Sender
+RU: 
+
+[SettingsMenu.cpp:244]
+DE: Nachricht
+EN: Message
+RU: 
+
+[SettingsMenu.cpp:244]
+DE: {city} {company} {cargo} {time} werden ersetzt
+EN: {city} {company} {cargo} {time} are filled in
+RU: 
+
+[SettingsMenu.cpp:246]
+DE: Schickt die Nachricht jetzt aufs Navi
+EN: Sends the message to the screen now
+RU: 
+
+[SettingsMenu.cpp:247]
+DE: Je LKW
+EN: Per truck
+RU: 
+
+[SettingsMenu.cpp:252]
+DE: Oben links
+EN: Top left
+RU: 
+
+[SettingsMenu.cpp:252]
+DE: Oben Mitte
+EN: Top centre
+RU: 
+
+[SettingsMenu.cpp:252]
+DE: Oben rechts
+EN: Top right
+RU: 
+
+[SettingsMenu.cpp:253]
+DE: Unten links
+EN: Bottom left
+RU: 
+
+[SettingsMenu.cpp:253]
+DE: Unten Mitte
+EN: Bottom centre
+RU: 
+
+[SettingsMenu.cpp:253]
+DE: Unten rechts
+EN: Bottom right
+RU: 
+
+[SettingsMenu.cpp:255]
+DE: Modus
+EN: Mode
+RU: 
+
+[SettingsMenu.cpp:256, SettingsMenu.cpp:427]
+DE: Automatisch
+EN: Automatic
+RU: 
+
+[SettingsMenu.cpp:256]
+DE: Fenster
+EN: Window
+RU: 
+
+[SettingsMenu.cpp:257]
+DE: Stil
+EN: Style
+RU: 
+
+[SettingsMenu.cpp:258]
+DE: Info-Panel
+EN: Info panel
+RU: 
+
+[SettingsMenu.cpp:258]
+DE: Autoradio-Display
+EN: Car radio display
+RU: 
+
+[SettingsMenu.cpp:260]
+DE: Größe
+EN: Size
+RU: 
+
+[SettingsMenu.cpp:263]
+DE: Senderlogos
+EN: Station logos
+RU: 
+
+[SettingsMenu.cpp:266]
+DE: USB / CD-Modus
+EN: USB / CD mode
+RU: 
+
+[SettingsMenu.cpp:266]
+DE: Musik aus dem Ordner usb (Taste Pos1)
+EN: Music from the usb folder (Home key)
+RU: 
+
+[SettingsMenu.cpp:267]
+DE: Jeder Ordner ein eigener USB
+EN: Every folder is its own USB
+RU: 
+
+[SettingsMenu.cpp:267]
+DE: Aus = der ganze Ordner ist ein USB
+EN: Off = the whole folder is one USB
+RU: 
+
+[SettingsMenu.cpp:269]
+DE: Standard-Typ
+EN: Default type
+RU: 
+
+[SettingsMenu.cpp:269]
+DE: Für Ordner ohne eigene Einstellung
+EN: For folders without their own setting
+RU: 
+
+[SettingsMenu.cpp:271]
+DE: SD-Karte
+EN: SD card
+RU: 
+
+[SettingsMenu.cpp:271]
+DE: Kassette
+EN: Cassette
+RU: 
+
+[SettingsMenu.cpp:272]
+DE: Zufallswiedergabe
+EN: Shuffle
+RU: 
+
+[SettingsMenu.cpp:273]
+DE: Wiederholen
+EN: Repeat
+RU: 
+
+[SettingsMenu.cpp:274]
+DE: Alle Titel
+EN: All tracks
+RU: 
+
+[SettingsMenu.cpp:274]
+DE: Einen Titel
+EN: One track
+RU: 
+
+[SettingsMenu.cpp:275]
+DE: Musikordner
+EN: Music folder
+RU: 
+
+[SettingsMenu.cpp:275]
+DE: Hier Musik hinzufügen (öffnet den Explorer)
+EN: Add music here (opens Explorer)
+RU: 
+
+[SettingsMenu.cpp:280]
+DE: Logo-Speicher höchstens
+EN: Logo storage at most
+RU: 
+
+[SettingsMenu.cpp:280]
+DE: Älteste Logos werden automatisch gelöscht
+EN: Oldest logos are deleted automatically
+RU: 
+
+[SettingsMenu.cpp:286]
+DE: Senderlogos laden
+EN: Load station logos
+RU: 
+
+[SettingsMenu.cpp:286]
+DE: Aus = keine Downloads, keine Logos
+EN: Off = no downloads, no logos
+RU: 
+
+[SettingsMenu.cpp:287]
+DE: Belegt
+EN: In use
+RU: 
+
+[SettingsMenu.cpp:287]
+DE: Logos und USB-Cover im Ordner logos
+EN: Logos and USB covers in the logos folder
+RU: 
+
+[SettingsMenu.cpp:288, SettingsMenu.cpp:438]
+DE: Logo-Ordner
+EN: Logo folder
+RU: 
+
+[SettingsMenu.cpp:370]
+DE: Pos1
+EN: Home
+RU: 
+
+[SettingsMenu.cpp:371]
+DE: Ende
+EN: End
+RU: 
+
+[SettingsMenu.cpp:372]
+DE: Einfg
+EN: Insert
+RU: 
+
+[SettingsMenu.cpp:373]
+DE: Entf
+EN: Delete
+RU: 
+
+[SettingsMenu.cpp:374]
+DE: Bild ↑
+EN: Page Up
+RU: 
+
+[SettingsMenu.cpp:375]
+DE: Bild ↓
+EN: Page Down
+RU: 
+
+[SettingsMenu.cpp:377]
+DE: Leertaste
+EN: Space
+RU: 
+
+[SettingsMenu.cpp:379]
+DE: Rücktaste
+EN: Backspace
+RU: 
+
+[SettingsMenu.cpp:390]
+DE: Strg +
+EN: Ctrl +
+RU: 
+
+[SettingsMenu.cpp:391]
+DE: Umschalt +
+EN: Shift +
+RU: 
+
+[SettingsMenu.cpp:407]
+DE: Kein LKW erkannt
+EN: No truck detected
+RU: 
+
+[SettingsMenu.cpp:407]
+DE: Dieser LKW:
+EN: This truck:
+RU: 
+
+[SettingsMenu.cpp:408]
+DE: Erst einsteigen – „Neues Preset“ speichert die aktuellen Navi-Einstellungen
+EN: Get into a truck first - "New preset" saves the current screen settings
+RU: 
+
+[SettingsMenu.cpp:411]
+DE: Noch kein Preset  (
+EN: No preset yet  (
+RU: 
+
+[SettingsMenu.cpp:413]
+DE: Radio-Speicher je LKW
+EN: Radio memory per truck
+RU: 
+
+[SettingsMenu.cpp:413]
+DE: Sender, Favoriten, Lautstärke, Quelle und USB-Titel merkt sich jeder LKW
+EN: Every truck keeps its own stations, favourites, volume, source and USB track
+RU: 
+
+[SettingsMenu.cpp:418]
+DE: Start-Logo
+EN: Start logo
+RU: 
+
+[SettingsMenu.cpp:423]
+DE: Kein Bild für diesen LKW im Ordner truck-logos – der Name wird gezeigt
+EN: No picture for this truck in the folder truck-logos - the name is shown
+RU: 
+
+[SettingsMenu.cpp:425]
+DE: Bild(er) • im aktiven Preset gespeichert
+EN: picture(s) • stored in the active preset
+RU: 
+
+[SettingsMenu.cpp:428]
+DE: Nur Name
+EN: Name only
+RU: 
+
+[SettingsMenu.cpp:437]
+DE: Vorschau auf dem Navi
+EN: Preview on the screen
+RU: 
+
+[SettingsMenu.cpp:438]
+DE: Öffnet den Ordner des Herstellers – Bilder einfach hineinlegen
+EN: Opens the folder of this brand - just put pictures in
+RU: 
+
+[SettingsMenu.cpp:441]
+DE: Navi-Presets
+EN: Screen presets
+RU: 
+
+[SettingsMenu.cpp:449]
+DE: (keins)
+EN: (none)
+RU: 
+
+[SettingsMenu.cpp:460]
+DE: Automatisch je LKW wechseln
+EN: Change automatically per truck
+RU: 
+
+[SettingsMenu.cpp:460]
+DE: Erkennt den LKW über die LKW-ID der Telemetrie
+EN: Detects the truck by the truck id of the telemetry
+RU: 
+
+[SettingsMenu.cpp:463]
+DE: Aktives Preset
+EN: Active preset
+RU: 
+
+[SettingsMenu.cpp:464]
+DE: Mit diesem LKW verknüpfen
+EN: Link to this truck
+RU: 
+
+[SettingsMenu.cpp:464]
+DE: Das aktive Preset lädt dann automatisch in diesem LKW
+EN: The active preset then loads automatically in this truck
+RU: 
+
+[SettingsMenu.cpp:466]
+DE: Verknüpfung lösen
+EN: Unlink
+RU: 
+
+[SettingsMenu.cpp:466]
+DE: Dieser LKW lädt das aktive Preset nicht mehr automatisch
+EN: This truck no longer loads the active preset automatically
+RU: 
+
+[SettingsMenu.cpp:468]
+DE: Aktives Preset löschen
+EN: Delete active preset
+RU: 
+
+[SettingsMenu.cpp:468]
+DE: Die Navi-Einstellungen bleiben
+EN: The screen settings stay
+RU: 
+
+[SettingsMenu.cpp:473]
+DE: Gespeicherte Presets
+EN: Saved presets
+RU: 
+
+[SettingsMenu.cpp:479]
+DE: Kein LKW verknüpft
+EN: No truck linked
+RU: 
+
+[SettingsMenu.cpp:486]
+DE: •  Standard
+EN: •  standard
+RU: 
+
+[SettingsMenu.cpp:486]
+DE: •  angepasst
+EN: •  customised
+RU: 
+
+[SettingsMenu.cpp:519]
+DE: Erst ein Preset wählen oder anlegen
+EN: Choose or create a preset first
+RU: 
+
+[SettingsMenu.cpp:523]
+DE: Verknüpft mit
+EN: Linked to
+RU: 
+
+[SettingsMenu.cpp:527]
+DE: Dieser LKW ist nicht mit dem aktiven Preset verknüpft
+EN: This truck is not linked to the active preset
+RU: 
+
+[SettingsMenu.cpp:530]
+DE: Verknüpfung gelöst
+EN: Link removed
+RU: 
+
+[SettingsMenu.cpp:533]
+DE: Kein Preset aktiv
+EN: No preset active
+RU: 
+
+[SettingsMenu.cpp:535]
+DE: Standard-Presets lassen sich nicht löschen – eigenes Preset anlegen oder Verknüpfung lösen
+EN: Standard presets cannot be deleted - create an own preset or unlink the truck
+RU: 
+
+[SettingsMenu.cpp:539]
+DE: Zum Löschen nochmal klicken
+EN: Click again to delete
+RU: 
+
+[SettingsMenu.cpp:545]
+DE: auf Standard zurückgesetzt
+EN: reset to the standard values
+RU: 
+
+[SettingsMenu.cpp:548]
+DE: gelöscht (Navi-Werte bleiben)
+EN: deleted (screen values stay)
+RU: 
+
+[SettingsMenu.cpp:586]
+DE: (eigener Style)
+EN: (own style)
+RU: 
+
+[SettingsMenu.cpp:602]
+DE: Musikordner und ihr Typ
+EN: Music folders and their type
+RU: 
+
+[SettingsMenu.cpp:605]
+DE: Standard
+EN: Default
+RU: 
+
+[SettingsMenu.cpp:635]
+DE: Erkannt: X %.2f  Y %.2f  B %.2f  H %.2f – Rahmen im LKW prüfen, bei Bedarf nachstellen
+EN: Detected: X %.2f  Y %.2f  W %.2f  H %.2f - check the frame in the truck, adjust if needed
+RU: 
+
+[SettingsMenu.cpp:671]
+DE: Hinweis: Tasten erreichen während des Menüs auch das Spiel
+EN: Note: keys also reach the game while the menu is open
+RU: 
+
+[SettingsMenu.cpp:686]
+DE: Gespeichert
+EN: Saved
+RU: 
+
+[SettingsMenu.cpp:722]
+DE: Neue Taste oder Controller-Knopf drücken …  (Esc = abbrechen)
+EN: Press the new key or controller button …  (Esc = cancel)
+RU: 
+
+[SettingsMenu.cpp:729]
+DE: Tippen • Enter = übernehmen • Esc = abbrechen • Strg + V = einfügen
+EN: Type • Enter = apply • Esc = cancel • Ctrl + V = paste
+RU: 
+
+[SettingsMenu.cpp:745]
+DE: Diese Taste öffnet das Menü – bitte eine andere wählen
+EN: This key opens the menu - please choose another one
+RU: 
+
+[SettingsMenu.cpp:752]
+DE: Taste war vorher bei „
+EN: Key was used by "
+RU: 
+
+[SettingsMenu.cpp:752, SettingsMenu.cpp:764]
+DE: “ – dort entfernt
+EN: " - removed there
+RU: 
+
+[SettingsMenu.cpp:764]
+DE: Knopf war vorher bei „
+EN: Button was used by "
+RU: 
+
+[SettingsMenu.cpp:770]
+DE: Das Menü braucht eine Taste
+EN: The menu needs a key
+RU: 
+
+[SettingsMenu.cpp:772]
+DE: Belegung entfernt
+EN: Binding removed
+RU: 
+
+[SettingsMenu.cpp:784]
+DE: Standardwerte dieser Seite gesetzt
+EN: Defaults of this page restored
+RU: 
+
+[SettingsMenu.cpp:790]
+DE: Auf den gespeicherten Stand zurückgesetzt
+EN: Reverted to the saved settings
+RU: 
+
+[SettingsMenu.cpp:822, SettingsMenu.cpp:837]
+DE: Abgebrochen
+EN: Cancelled
+RU: 
+
+[SettingsMenu.cpp:883]
+DE: Nichts zu speichern
+EN: Nothing to save
+RU: 
+
+[SettingsMenu.cpp:896]
+DE: Controller-Knopf drücken …  (Esc = abbrechen)
+EN: Press a controller button …  (Esc = cancel)
+RU: 
+
+[SettingsMenu.cpp:924]
+DE: Einstellungen
+EN: Settings
+RU: 
+
+[SettingsMenu.cpp:929]
+DE: •  Preset:
+EN: •  preset:
+RU: 
+
+[SettingsMenu.cpp:930]
+DE: Taste
+EN: Key
+RU: 
+
+[SettingsMenu.cpp:931]
+DE: NEUSTART
+EN: RESTART
+RU: 
+
+[SettingsMenu.cpp:949]
+DE: (Dateien direkt im Ordner usb)
+EN: (files directly in the usb folder)
+RU: 
+
+[SettingsMenu.cpp:956]
+DE: Dateien
+EN: files
+RU: 
+
+[SettingsMenu.cpp:977]
+DE: Knopf drücken …
+EN: Press a button …
+RU: 
+
+[SettingsMenu.cpp:977]
+DE: Taste drücken …
+EN: Press a key …
+RU: 
+
+[SettingsMenu.cpp:979]
+DE: Nicht gespeicherte Änderungen
+EN: Unsaved changes
+RU: 
+
+[SettingsMenu.cpp:979]
+DE: Alles gespeichert
+EN: All saved
+RU: 
+
+[SettingsMenu.cpp:980]
+DE: Änderungen wirken sofort  •  Esc speichert und schließt  •  Tab: Seite
+EN: Changes apply at once  •  Esc saves and closes  •  Tab: page
+RU: 
+
+[SettingsMenu.cpp:981]
+DE: Speichern
+EN: Save
+RU: 
+
+[SettingsMenu.cpp:981]
+DE: Zurücksetzen
+EN: Revert
+RU: 
+
+[SettingsMenu.cpp:981]
+DE: Standard
+EN: Defaults
+RU: 
+
+
+############################################################
+# Radio: Meldungen auf Navi und Popup / Radio messages
+############################################################
+
+[RadioManager.cpp:121]
+DE: Medien
+EN: Media
+RU: 
+
+[RadioManager.cpp:123]
+DE: Musik in realistic-radio\
+EN: Add music to realistic-radio\
+RU: 
+
+[RadioManager.cpp:126]
+DE: → USB / CD → Musikordner öffnen
+EN: → USB / CD → Music folder
+RU: 
+
+[RadioManager.cpp:294]
+DE: Ordner im Explorer geöffnet – neue Musik erscheint beim Umschalten auf USB
+EN: Folder opened in Explorer - new music appears when you switch to USB
+RU: 
+
+[RadioManager.cpp:300]
+DE: Stationstasten 1–
+EN: Station buttons 1-
+RU: 
+
+[RadioManager.cpp:301]
+DE: mit den Sendern in Reichweite belegt
+EN: stored with the stations received here
+RU: 
+
+[RadioManager.cpp:302]
+DE: Hier sind keine Sender in Reichweite
+EN: No stations in range here
+RU: 
+
+[RadioManager.cpp:307]
+DE: Hallo, hier ist die Disposition. Das ist ein Testanruf – das Handy funktioniert. Gute Fahrt!
+EN: Hello, dispatch here. This is a test call - the phone works. Drive safely!
+RU: 
+
+[RadioManager.cpp:310]
+DE: Anruf kommt in 3 Sekunden – Menü schließen, dann Handy-Taste
+EN: Call comes in 3 seconds - close the menu, then press the phone key
+RU: 
+
+[RadioManager.cpp:328, SettingsMenu.cpp:518]
+DE: Kein LKW erkannt – erst einsteigen
+EN: No truck detected - get into a truck first
+RU: 
+
+[RadioManager.cpp:330]
+DE: Start-Logo wird auf dem Navi gezeigt
+EN: The start logo is shown on the navigation screen
+RU: 
+
+[RadioManager.cpp:334]
+DE: Erkenne den sichtbaren Bereich … (Navigation im LKW muss zu sehen sein)
+EN: Detecting the visible area … (the navigation must be visible in the truck)
+RU: 
+
+[RadioManager.cpp:344]
+DE: Logo-Speicher geleert – Logos werden bei Bedarf neu geladen
+EN: Logo storage cleared - logos are downloaded again when needed
+RU: 
+
+[RadioManager.cpp:354]
+DE: Die Anzeige auf dem Navi ist aus oder nicht bereit
+EN: The navigation screen display is off or not ready
+RU: 
+
+[RadioManager.cpp:355]
+DE: Navi-Bildschirm nicht gefunden – im LKW sitzen, Navigation sichtbar, nochmal versuchen
+EN: Navigation screen not found - sit in the truck with the navigation visible and try again
+RU: 
+
+[RadioManager.cpp:357]
+DE: Automatische Erkennung hier nicht möglich – bitte von Hand einstellen
+EN: Automatic detection is not possible here - please adjust by hand
+RU: 
+
+[RadioManager.cpp:545]
+DE: Kein Sender auf dieser Frequenz
+EN: No station on this frequency
+RU: 
+
+[RadioManager.cpp:547, RadioManager.cpp:569, RadioManager.cpp:1073]
+DE: Taste
+EN: Button
+RU: 
+
+[RadioManager.cpp:848]
+DE: Kein Sender gefunden
+EN: No station found
+RU: 
+
+[RadioManager.cpp:1056, RadioManager.cpp:1064]
+DE: Auf Taste
+EN: Saved on button
+RU: 
+
+[RadioManager.cpp:1056]
+DE: gespeichert:
+EN: :
+RU: 
+
+[RadioManager.cpp:1073]
+DE: – kein Empfang
+EN: - nothing received
+RU: 
+
+[RadioManager.cpp:1084]
+DE: ist leer – gedrückt halten zum Speichern
+EN: is empty - hold it to save
+RU: 
+
+[RadioManager.cpp:1091]
+DE: – nicht in Reichweite
+EN: - out of range
+RU: 
+
+[RadioManager.cpp:1228]
+DE: Frequenzwahl: Einstellungsmenü → Radio → Senderwahl
+EN: Tuning by frequency: settings menu → Radio
+RU: 
+
+[RadioManager.cpp:1372]
+DE: Vom LKW weggehen: leiser und dumpfer, offenes Fenster lässt mehr durch
+EN: Walk away from the truck: quieter and muffled, an open window lets more through
+RU: 
+
+[RadioManager.cpp:1375]
+DE: Aktiv • du bist im LKW
+EN: Active • you are in the truck
+RU: 
+
+[RadioManager.cpp:1376]
+DE: Aktiv • draußen, %.0f m vom LKW%s
+EN: Active • outside, %.0f m from the cab%s
+RU: 
+
+[RadioManager.cpp:1377]
+DE: , Fenster offen
+EN: , window open
+RU: 
+
+[RadioManager.cpp:1391]
+DE: dem Ziel
+EN: the destination
+RU: 
+
+[RadioManager.cpp:1393]
+DE: die Ladung
+EN: the cargo
+RU: 
+
+[RadioManager.cpp:1440]
+DE: M\xc3\xb6bel
+EN: Furniture
+RU: 
+
+[RadioManager.cpp:1459, RadioManager.cpp:1624]
+DE: Disposition
+EN: Dispatch
+RU: 
+
+[RadioManager.cpp:1464]
+DE: Verbunden
+EN: Connected
+RU: 
+
+[RadioManager.cpp:1523]
+DE: Handy
+EN: Phone
+RU: 
+
+[RadioManager.cpp:1523]
+DE: Das Handy ist aus
+EN: The phone is off
+RU: 
+
+[RadioManager.cpp:1524]
+DE: Einstellungsmenü → Handy → Virtuelles Handy
+EN: Settings menu → Phone → Virtual mobile device
+RU: 
+
+[RadioManager.cpp:1556]
+DE: zu spät
+EN: late
+RU: 
+
+[RadioManager.cpp:1635]
+DE: Unfall
+EN: Crash
+RU: 
+
+[RadioManager.cpp:1635]
+DE: Ruhezeit nicht eingehalten
+EN: No rest taken
+RU: 
+
+[RadioManager.cpp:1635]
+DE: Falsche Richtung
+EN: Wrong way
+RU: 
+
+[RadioManager.cpp:1636]
+DE: Geblitzt
+EN: Speed camera
+RU: 
+
+[RadioManager.cpp:1636]
+DE: Ohne Licht
+EN: No lights
+RU: 
+
+[RadioManager.cpp:1636]
+DE: Rote Ampel
+EN: Red light
+RU: 
+
+[RadioManager.cpp:1637]
+DE: Zu schnell
+EN: Speeding
+RU: 
+
+[RadioManager.cpp:1637]
+DE: Waage umfahren
+EN: Avoided weighing
+RU: 
+
+[RadioManager.cpp:1637]
+DE: Unerlaubter Anhänger
+EN: Illegal trailer
+RU: 
+
+[RadioManager.cpp:1638]
+DE: Kontrolle umfahren
+EN: Avoided inspection
+RU: 
+
+[RadioManager.cpp:1638]
+DE: Illegaler Grenzübertritt
+EN: Illegal border crossing
+RU: 
+
+[RadioManager.cpp:1639]
+DE: Standstreifen befahren
+EN: Hard shoulder
+RU: 
+
+[RadioManager.cpp:1639]
+DE: Beschädigtes Fahrzeug
+EN: Damaged vehicle
+RU: 
+
+[RadioManager.cpp:1640]
+DE: Verstoß
+EN: Offence
+RU: 
+
+[RadioManager.cpp:1643]
+DE: Polizei
+EN: Police
+RU: 
+
+[RadioManager.cpp:1644]
+DE: Bußgeld:
+EN: Fine:
+RU: 
+
+
+############################################################
+# Virtuelles Handy / Virtual phone
+############################################################
+
+[Phone.cpp:48, Phone.cpp:78]
+DE: Mailbox:
+EN: Voicemail:
+RU: 
+
+[Phone.cpp:153]
+DE: Esc: schließen  •  1-4: App
+EN: Esc: close  •  1-4: app
+RU: 
+
+[Phone.cpp:155, RadioManager.cpp:1443, RadioManager.cpp:1472]
+DE: Nachrichten
+EN: Messages
+RU: 
+
+[Phone.cpp:163]
+DE: Keine Nachrichten
+EN: No messages
+RU: 
+
+[Phone.cpp:173, RadioManager.cpp:1510]
+DE: Telefon
+EN: Phone
+RU: 
+
+[Phone.cpp:175]
+DE: Verpasst
+EN: Missed
+RU: 
+
+[Phone.cpp:175]
+DE: Eingehend
+EN: Incoming
+RU: 
+
+[Phone.cpp:175]
+DE: Abgelehnt
+EN: Declined
+RU: 
+
+[Phone.cpp:178]
+DE: Noch keine Anrufe
+EN: No calls yet
+RU: 
+
+[Phone.cpp:182]
+DE: Anruf
+EN: Call
+RU: 
+
+[Phone.cpp:188]
+DE: Eingehender Anruf …
+EN: Incoming call …
+RU: 
+
+[Phone.cpp:189]
+DE: Enter: annehmen  •  Rücktaste: ablehnen
+EN: Enter: answer  •  Backspace: decline
+RU: 
+
+[Phone.cpp:193]
+DE: Verbinde …
+EN: Connecting …
+RU: 
+
+[Phone.cpp:201]
+DE: Auftrag
+EN: Job
+RU: 
+
+[Phone.cpp:207]
+DE: Einstellungsmenü → USB / CD: einen Musikordner auf Bluetooth stellen
+EN: Settings menu → USB / CD: set a music folder to Bluetooth
+RU: 
+
+
+############################################################
+# Anzeigen (Navi, Handy) / Displays
+############################################################
+
+[OverlayImage.cpp:1669]
+DE: Nochmal anhören
+EN: Play again
+RU: 
+
+[OverlayImage.cpp:1691]
+DE: Ablehnen
+EN: Decline
+RU: 
+
+[OverlayImage.cpp:1692]
+DE: Annehmen
+EN: Answer
+RU: 
+
+[OverlayImage.cpp:1693]
+DE: Auflegen
+EN: End
+RU: 
+
+[OverlayImage.cpp:1699]
+DE: Kein Auftrag
+EN: No job
+RU: 
+
+[OverlayImage.cpp:1700]
+DE: Nimm einen Auftrag an – er erscheint hier
+EN: Take a job and it shows up here
+RU: 
+
+[OverlayImage.cpp:1714]
+DE: Restzeit
+EN: Time left
+RU: 
+
+[OverlayImage.cpp:1714]
+DE: Entfernung
+EN: Distance
+RU: 
+
+[OverlayImage.cpp:1714]
+DE: Ankunft
+EN: Arrival
+RU: 
+
+[OverlayImage.cpp:1714]
+DE: Lohn
+EN: Pay
+RU: 
+
+[OverlayImage.cpp:1800]
+DE: ORDNER
+EN: FOLDERS
+RU: 
+
+
+############################################################
+# Tasten / Keys
+############################################################
+
+[InputManager.cpp:39]
+DE: (Radio: andere Taste wählen)
+EN: (radio: choose another key)
+RU: 
+
+
+############################################################
+# Tunnel
+############################################################
+
+[TunnelMap.cpp:110]
+DE: Tunnel-Anfang gespeichert – am Ende nochmal drücken
+EN: Tunnel entry saved - press again at the exit
+RU: 
+
+[TunnelMap.cpp:114]
+DE: Tunnel nicht gespeichert (zu kurz oder zu lang)
+EN: Tunnel not saved (too short or too long)
+RU: 
+
+[TunnelMap.cpp:120]
+DE: Tunnel gespeichert (%.0f m)
+EN: Tunnel saved (%.0f m)
+RU: 
+
+
+############################################################
+# Einstellungen / Settings
+############################################################
+
+[Config.cpp:692]
+DE: Knopf
+EN: Button
+RU: 
+
+
+############################################################
+# Weitere Texte – Satzteile oder nur auf Deutsch gefunden (EN steht meist in derselben Zeile)
+# More texts – parts of sentences or found in German only (the EN text is usually in the same line)
+############################################################
+
+[CardStyles.cpp:105]
+DE: // DE: Datei kopieren, umbenennen (ohne _ am Anfang, z. B. mein-style.json) und anpassen. Danach im Spiel:\r\n
+RU: 
+
+[CardStyles.cpp:106]
+DE: //     Strg + 0 -> Navi-Bildschirm -> Design. Aenderungen an der Datei wirken sofort (nach ein paar Sekunden).\r\n
+RU: 
+
+[Config.cpp:186]
+DE: Jetzt läuft:
+EN (gleiche Zeile / same line): textNowPlaying
+RU: 
+
+[Config.cpp:192]
+DE: Sender nicht erreichbar
+EN (gleiche Zeile / same line): textUnavailable
+RU: 
+
+[Config.cpp:193]
+DE: Zündung aus
+EN (gleiche Zeile / same line): textPowerOff
+RU: 
+
+[Config.h:31]
+DE: Wo bleibt die Lieferung? Wir erwarten {cargo} bald in {city}.
+RU: 
+
+[InputManager.cpp:39]
+DE:  (Radio: andere Taste wählen)
+EN (gleiche Zeile / same line):  →  |  (radio: choose another key)
+RU: 
+
+[MediaLibrary.cpp:217]
+DE: Jeder Unterordner ist ein eigener USB-Stick / eine eigene CD, z. B.:\r\n
+RU: 
+
+[MediaLibrary.cpp:221]
+DE: Im Spiel schaltet die Taste "Pos1" (Home) weiter: Radio -> USB 1 -> USB 2 -> ... -> Radio.\r\n
+RU: 
+
+[MediaLibrary.cpp:223]
+DE: Titel und Interpret kommen aus den MP3-Tags, sonst aus dem Dateinamen ("Interpret - Titel.mp3").\r\n
+RU: 
+
+[MediaLibrary.cpp:224]
+DE: Ein Cover wird angezeigt, wenn es in der MP3 steckt oder als cover.jpg / folder.jpg im Ordner liegt.\r\n\r\n
+RU: 
+
+[RadioManager.cpp:57]
+DE: DE: Beim Einschalten der Zuendung zeigt das Navi kurz das Logo des Herstellers. Die Bilder legst du hier ab\r\n
+RU: 
+
+[RadioManager.cpp:58]
+DE: (PNG, JPG oder BMP). Logos fuer DAF, Iveco, MAN, Mercedes-Benz (8 Farben), Scania und Volvo liefert das\r\n
+RU: 
+
+[RadioManager.cpp:59]
+DE: Plugin schon mit; geloeschte oder ersetzte Logos werden nicht wiederhergestellt. Ein dunkler Hintergrund wird automatisch durchsichtig und das Bild auf das Logo zugeschnitten,\r\n
+RU: 
+
+[RadioManager.cpp:64]
+DE:   - Mod-LKW: Ordner mit der Hersteller-ID oder der LKW-ID des Mods (steht im realistic-radio.log in der Zeile\r\n
+RU: 
+
+[RadioManager.cpp:65]
+DE:     "Start logo"); ein Ordner mit der LKW-ID gilt nur fuer dieses Modell.\r\n
+RU: 
+
+[RadioManager.cpp:66]
+DE: Gibt es mehrere Bilder, waehlst du im Einstellungsmenue (Strg + 0) auf der Seite LKW unter "Start-Logo", welches\r\n
+RU: 
+
+[RadioManager.cpp:67]
+DE: gezeigt wird; die Wahl wird im LKW-Preset gespeichert. Ohne Bild wird der Herstellername gezeigt.\r\n\r\n
+RU: 
+
+[RadioManager.cpp:126]
+DE:  → USB / CD → Musikordner öffnen
+EN (gleiche Zeile / same line):  → USB / CD → Music folder
+RU: 
+
+[RadioManager.cpp:301]
+DE:  mit den Sendern in Reichweite belegt
+EN (gleiche Zeile / same line):  stored with the stations received here
+RU: 
+
+[RadioManager.cpp:547]
+DE: Taste 
+EN (gleiche Zeile / same line): Button 
+RU: 
+
+[RadioManager.cpp:736]
+DE:  Sender in Reichweite
+EN (gleiche Zeile / same line): ♥  Favorit
+RU: 
+
+[RadioManager.cpp:975]
+DE: das
+EN (gleiche Zeile / same line): schlager | the | die | der | top | oldie | oldies | jazz | country | news | info | sport | dance | pop | city
+RU: 
+
+[RadioManager.cpp:975]
+DE: die
+EN (gleiche Zeile / same line): schlager | the | das | der | top | oldie | oldies | jazz | country | news | info | sport | dance | pop | city
+RU: 
+
+[RadioManager.cpp:975]
+DE: der
+EN (gleiche Zeile / same line): schlager | the | das | die | top | oldie | oldies | jazz | country | news | info | sport | dance | pop | city
+RU: 
+
+[RadioManager.cpp:1056]
+DE: Auf Taste 
+EN (gleiche Zeile / same line): Saved on button  | :  |  gespeichert: 
+RU: 
+
+[RadioManager.cpp:1073]
+DE:  – kein Empfang
+EN (gleiche Zeile / same line): Button  | Taste  | :  |  - nothing received
+RU: 
+
+[RadioManager.cpp:1084]
+DE:  ist leer – gedrückt halten zum Speichern
+EN (gleiche Zeile / same line): Button  | Taste  |  is empty - hold it to save
+RU: 
+
+[RadioManager.cpp:1091]
+DE:  – nicht in Reichweite
+EN (gleiche Zeile / same line): Button  | Taste  | :  |  - out of range
+RU: 
+
+[RadioManager.cpp:1423]
+DE: Hallo, hier ist die Disposition. Dein neuer Auftrag: 
+EN (gleiche Zeile / same line):  von  |  nach 
+RU: 
+
+[RadioManager.cpp:1424]
+DE:  Uhr. Gute Fahrt!
+EN (gleiche Zeile / same line): , Firma  | . Lieferung bis 
+RU: 
+
+[RadioManager.cpp:1511]
+DE: Eingehender Anruf • 
+EN (gleiche Zeile / same line): Incoming call •  |  to answer |  zum Annehmen
+RU: 
+
+[RadioManager.cpp:1556]
+DE: zu spät 
+EN (gleiche Zeile / same line): late 
+RU: 
+
+[RadioManager.cpp:1627]
+DE: Hallo, hier ist die Disposition. Die Lieferung nach 
+EN (gleiche Zeile / same line):  ist angekommen, danke! 
+RU: 
+
+[RadioManager.cpp:1627]
+DE:  ist angekommen, danke! 
+EN (gleiche Zeile / same line): Hallo, hier ist die Disposition. Die Lieferung nach 
+RU: 
+
+[RadioManager.cpp:1627]
+DE:  sind überwiesen.
+EN (gleiche Zeile / same line): Hallo, hier ist die Disposition. Die Lieferung nach  |  ist angekommen, danke! 
+RU: 
+
+[RadioManager.cpp:1631]
+DE: Auftrag abgebrochen. Vertragsstrafe: 
+EN (gleiche Zeile / same line): Job cancelled. Penalty: 
+RU: 
+
+[RadioManager.cpp:1644]
+DE: Bußgeld: 
+EN (gleiche Zeile / same line): Fine:  |  – 
+RU: 
+
+[SettingsMenu.cpp:141]
+DE: Sender und Empfang
+EN (gleiche Zeile / same line): Empfang | Reception | Stations and reception
+RU: 
+
+[SettingsMenu.cpp:174]
+DE: Ordner öffnen
+EN (gleiche Zeile / same line): Open folder
+RU: 
+
+[SettingsMenu.cpp:203]
+DE:  mit dieser Größe
+EN (gleiche Zeile / same line): Found:  | Gefunden:  |  with this size
+RU: 
+
+[SettingsMenu.cpp:249]
+DE: Radio und Navi-Presets je LKW
+EN (gleiche Zeile / same line): LKW | Trucks | Radio and screen presets per truck
+RU: 
+
+[SettingsMenu.cpp:276]
+DE: Öffnen
+EN (gleiche Zeile / same line): Open
+RU: 
+
+[SettingsMenu.cpp:278]
+DE: Logos und Cover
+EN (gleiche Zeile / same line): Speicher | Storage | Logos and covers
+RU: 
+
+[SettingsMenu.cpp:290]
+DE: Tastatur und Controller
+EN (gleiche Zeile / same line): Tasten | Keys | Keyboard and controller
+RU: 
+
+[SettingsMenu.cpp:306]
+DE: Nächster Sender / Titel
+RU: 
+
+[SettingsMenu.cpp:307]
+DE: Vorheriger Sender / Titel
+RU: 
+
+[SettingsMenu.cpp:313]
+DE: Nächster USB / CD
+RU: 
+
+[SettingsMenu.cpp:319]
+DE: Dieses Menü
+RU: 
+
+[SettingsMenu.cpp:320]
+DE: Dieses Menü (zweite Taste)
+RU: 
+
+[SettingsMenu.cpp:322]
+DE: Handy öffnen / schließen
+RU: 
+
+[SettingsMenu.cpp:447]
+DE: Wird geladen und merkt sich Änderungen der Navi-Seite
+EN (gleiche Zeile / same line): Is loaded and keeps the changes of the screen page
+RU: 
+
+[SettingsMenu.cpp:465]
+DE: Verknüpfen
+EN (gleiche Zeile / same line): The active preset then loads automatically in this truck | Link
+RU: 
+
+[SettingsMenu.cpp:467]
+DE: Lösen
+EN (gleiche Zeile / same line): This truck no longer loads the active preset automatically | Unlink
+RU: 
+
+[SettingsMenu.cpp:469]
+DE: Löschen
+EN (gleiche Zeile / same line): Delete
+RU: 
+
+[SettingsMenu.cpp:523]
+DE: Verknüpft mit 
+EN (gleiche Zeile / same line): Linked to 
+RU: 
+
+[SettingsMenu.cpp:545]
+DE:  auf Standard zurückgesetzt
+EN (gleiche Zeile / same line): Preset  | Preset  |  reset to the standard values
+RU: 
+
+[SettingsMenu.cpp:548]
+DE:  gelöscht (Navi-Werte bleiben)
+EN (gleiche Zeile / same line): Preset  | Preset  |  deleted (screen values stay)
+RU: 
+
+[StationDatabase.cpp:184]
+DE: // Echte Frequenzen der Sender: "94.3" (UKW in MHz) oder "560 AM" (AM in kHz) eintragen, leer "" = das Plugin plant eine.\n
+RU: 
+
+[StationDatabase.cpp:185]
+DE: // Eintraege hier haben Vorrang. Neue Sender kommen beim naechsten Start dazu. Ausgefuellte Datei gern an mich schicken.\n
+RU: 
+
