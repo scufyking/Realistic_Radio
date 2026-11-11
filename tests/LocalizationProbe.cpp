@@ -20,6 +20,7 @@ struct LocalizationTestAccess {
 void Require(bool b,const char* message){if(!b)throw std::runtime_error(message);}
 int main(){
     try {
+        Require(Config{}.menuLanguage=="de","Default language must remain German");
         SettingsMenu menu;auto en=LocalizationTestAccess::View(menu,"en");
         Require(en.btnSave==L"Save","English changed");
         auto de=LocalizationTestAccess::View(menu,"de");
