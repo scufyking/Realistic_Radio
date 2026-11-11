@@ -127,7 +127,7 @@ struct Config {
     std::string mediaTrack;         // last USB track, relative to the folder (remembered)
     std::map<std::string, std::string> mediaResume;   // last track per USB / CD (folder name -> track), remembered
     std::string screenPage = "navi";   // navi | radio: radio page kept on the in-cab screen (remembered)
-    std::string menuLanguage = "de";   // key menu (Ctrl+0): de | en
+    std::string menuLanguage = "de";   // key menu (Ctrl+0): de | en | ru
     std::vector<TruckPreset> presets;
     std::string activePreset;          // name, empty = none
     bool presetAuto = true;            // load the preset linked to the truck when the truck changes

@@ -1,3 +1,4 @@
+#include "Localization.h"
 // Realistic Radio
 // Copyright (c) 2026 ScufyKing
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
@@ -1656,7 +1657,7 @@ std::shared_ptr<OverlayImage> RenderPhone(const PhoneView& v, int screenH, std::
         DrawWrap(mask, px, fText, v.callText, RECT{sx0 + U(38), ty + U(14), sx1 - U(38), ty + th2 - U(10)}, TR, TG, TB);
         int by = contentBot - U(86);
         cv.Round(sx0 + U(60), by, sw - U(120), U(48), (float)U(24), AR, AG, AB);
-        DrawText(mask, px, fTitle, e ? L"Play again" : L"Nochmal anhören", RECT{sx0 + U(60), by, sx1 - U(60), by + U(48)}, th.chipText[0], th.chipText[1], th.chipText[2], DT_CENTER);
+        DrawText(mask, px, fTitle, Localization::Select(e, L"Play again", L"Nochmal anhören"), RECT{sx0 + U(60), by, sx1 - U(60), by + U(48)}, th.chipText[0], th.chipText[1], th.chipText[2], DT_CENTER);
         spot(sx0 + U(60), by, sx1 - U(60), by + U(48), PA_Replay);
         break; }
     case PhoneScreen::Incoming: case PhoneScreen::InCall: {
@@ -1678,16 +1679,16 @@ std::shared_ptr<OverlayImage> RenderPhone(const PhoneView& v, int screenH, std::
             spot(cx - bs / 2 - U(8), by - U(8), cx + bs / 2 + U(8), by + bs + U(28), act);
         };
         if (v.screen == PhoneScreen::Incoming) {
-            button(sx0 + sw / 4, false, 0.f, e ? L"Decline" : L"Ablehnen", PA_Decline, v.sel == 1);
-            button(sx0 + sw * 3 / 4, true, -0.75f, e ? L"Answer" : L"Annehmen", PA_Accept, v.sel == 0);
-        } else button(sx0 + sw / 2, false, 0.f, e ? L"End" : L"Auflegen", PA_Hangup, false);
+            button(sx0 + sw / 4, false, 0.f, Localization::Select(e, L"Decline", L"Ablehnen"), PA_Decline, v.sel == 1);
+            button(sx0 + sw * 3 / 4, true, -0.75f, Localization::Select(e, L"Answer", L"Annehmen"), PA_Accept, v.sel == 0);
+        } else button(sx0 + sw / 2, false, 0.f, Localization::Select(e, L"End", L"Auflegen"), PA_Hangup, false);
         DeleteObject(fName);
         break; }
     case PhoneScreen::Job: {
         int y = header(v.title);
         if (!v.jobActive) {
-            DrawText(mask, px, fHead, e ? L"No job" : L"Kein Auftrag", RECT{sx0, y + U(120), sx1, y + U(160)}, TR, TG, TB, DT_CENTER);
-            DrawText(mask, px, fText, e ? L"Take a job and it shows up here" : L"Nimm einen Auftrag an – er erscheint hier", RECT{sx0 + U(20), y + U(164), sx1 - U(20), y + U(190)}, MR, MG, MB, DT_CENTER);
+            DrawText(mask, px, fHead, Localization::Select(e, L"No job", L"Kein Auftrag"), RECT{sx0, y + U(120), sx1, y + U(160)}, TR, TG, TB, DT_CENTER);
+            DrawText(mask, px, fText, Localization::Select(e, L"Take a job and it shows up here", L"Nimm einen Auftrag an – er erscheint hier"), RECT{sx0 + U(20), y + U(164), sx1 - U(20), y + U(190)}, MR, MG, MB, DT_CENTER);
             break;
         }
         DrawText(mask, px, fHead, v.cargo, RECT{sx0 + U(24), y + U(6), sx1 - U(24), y + U(38)}, TR, TG, TB);
@@ -1701,7 +1702,7 @@ std::shared_ptr<OverlayImage> RenderPhone(const PhoneView& v, int screenH, std::
         DrawText(mask, px, fTitle, v.to, RECT{sx0 + U(50), ry + U(44), sx1 - U(20), ry + U(68)}, TR, TG, TB);
         DrawText(mask, px, fSmall, v.toCompany, RECT{sx0 + U(50), ry + U(66), sx1 - U(20), ry + U(84)}, MR, MG, MB);
         // facts: 2 x 2
-        const wchar_t* lab[4] = {e ? L"Time left" : L"Restzeit", e ? L"Distance" : L"Entfernung", e ? L"Arrival" : L"Ankunft", e ? L"Pay" : L"Lohn"};
+        const wchar_t* lab[4] = {Localization::Select(e, L"Time left", L"Restzeit"), Localization::Select(e, L"Distance", L"Entfernung"), Localization::Select(e, L"Arrival", L"Ankunft"), Localization::Select(e, L"Pay", L"Lohn")};
         const std::wstring* val[4] = {&v.remaining, &v.distance, &v.eta, &v.income};
         int fy = ry + U(96);
         for (int k = 0; k < 4; ++k) {
@@ -1787,7 +1788,7 @@ std::shared_ptr<OverlayImage> RenderPhone(const PhoneView& v, int screenH, std::
             y = cy + U(44);
         }
         if (!v.musicFolders.empty()) {
-            DrawText(mask, px, fSmall, e ? L"FOLDERS" : L"ORDNER", RECT{sx0 + U(24), y, sx1, y + U(20)}, MR, MG, MB);
+            DrawText(mask, px, fSmall, Localization::Select(e, L"FOLDERS", L"ORDNER"), RECT{sx0 + U(24), y, sx1, y + U(20)}, MR, MG, MB);
             y += U(24);
             const int rowH = U(48);
             for (int i = 0; i < (int)v.musicFolders.size() && y + rowH < contentBot - U(10); ++i, y += rowH) {
