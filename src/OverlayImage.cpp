@@ -1,3 +1,4 @@
+#include "Localization.h"
 // Realistic Radio
 // Copyright (c) 2026 ScufyKing
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
@@ -218,7 +219,7 @@ std::shared_ptr<OverlayImage> RenderDisplay(const DisplayState& st, int W, int H
     FillRect(px, W, H, 0, 0, W, headH, 1.f, 0.05f, 0.05f, 0.06f);
     FillRect(px, W, H, 0, headH - S(3), W, headH, 1.f, OR, OG, OB);
     DrawText(mask, px, fHead, L"Realistic Radio", RECT{S(28), 0, W / 2, headH - S(3)}, 0.95f, 0.95f, 0.95f);
-    std::wstring vol = st.muted ? std::wstring(L"Stumm") : std::to_wstring(st.volume) + L" %";
+    std::wstring vol = st.muted ? Localization::Text(L"Stumm") : std::to_wstring(st.volume) + L" %";
     DrawText(mask, px, fSmall, vol, RECT{W / 2, 0, W - S(28), headH - S(3)}, 0.85f, 0.85f, 0.88f, DT_RIGHT);
     if (st.volume >= 0 && !st.muted) {   // volume bar under header text
         int bw = S(160), bx = W - S(28) - bw - S(90), by = headH / 2 - S(2);
@@ -899,7 +900,7 @@ static std::shared_ptr<OverlayImage> ClassicCard(const OverlayInfo& info, int W,
     // top row: eject / play buttons, CD slot, source button
     HFONT fBtn = MakeFont(U(15), FW_BOLD);
     const int topY = U(14), topH = U(28);
-    std::wstring src = Upper(info.source.empty() ? L"Radio" : info.source);
+    std::wstring src = Upper(info.source.empty() ? Localization::Text(L"Radio") : info.source);
     int srcW = Measure(mdc, fBtn, src).cx + U(30);
     int srcX = W - side - srcW;
     cv.Round(srcX, topY + U(2), srcW, topH, (float)U(6), 0.f, 0.f, 0.f, 0.5f);
@@ -965,14 +966,17 @@ static std::shared_ptr<OverlayImage> ClassicCard(const OverlayInfo& info, int W,
         if (!band.empty() && DotFontCovers(band)) { DotText(cv, band, (float)x, y, p, ink, ghost); x += (int)(DotWidth(band.size(), p) + p * 4); }
         std::wstring right;
         if (info.volume < 0 && info.media && info.posSec >= 0) right = Clock(info.posSec) + (info.lenSec > 0 ? L" / " + Clock(info.lenSec) : L"");
-        else if (info.volume < 0 && info.button > 0) right = L"PRESET " + std::to_wstring(info.button);
+        else if (info.volume < 0 && info.button > 0) right = Upper(Localization::Text(L"Preset")) + L" " + std::to_wstring(info.button);
         if (info.volume < 0 && info.favourite) right = (right.empty() ? L"" : right + L" ") + L"♥";
-        if (!right.empty()) DotText(cv, right, ix1 - DotWidth(right.size(), p), y, p, ink, ghost);
+        if (!right.empty()) {
+            if (DotFontCovers(right)) DotText(cv, right, ix1 - DotWidth(right.size(), p), y, p, ink, ghost);
+            else { HFONT f=MakeFont((int)std::ceil(7*p),FW_BOLD); DrawText(mask,px,f,right,RECT{x,(int)y,ix1,(int)std::ceil(y+8*p)},ink[0],ink[1],ink[2],DT_RIGHT); DeleteObject(f); }
+        }
     }
     if (info.volume >= 0) {   // volume: label, big number, 20 segments
         const bool muted = info.muted;
         int v = std::clamp(info.volume, 0, 100);
-        std::wstring label = Upper(info.volumeLabel.empty() ? L"Volume" : info.volumeLabel);
+        std::wstring label = Upper(info.volumeLabel.empty() ? Localization::Text(L"Volume") : info.volumeLabel);
         LcdLine(cv, mask, px, label, ix0, ix1, (float)lcdY0 + U(42), 3.4f * u, 2.4f * u, ink, ghost, true);
         std::wstring num = muted ? L"--" : std::to_wstring(v);
         LcdLine(cv, mask, px, num, ix0, ix1, (float)lcdY0 + U(76), 8.5f * u, 4.f * u, ink, ghost, true);
@@ -1024,7 +1028,7 @@ static std::shared_ptr<OverlayImage> ClassicCard(const OverlayInfo& info, int W,
         if (knobs && info.volume < 0 && !info.position.empty()) {   // "3 / 41" under the tuning knob
             HFONT fPos = MakeFont(U(19), FW_SEMIBOLD), fLab = MakeFont(U(13), FW_SEMIBOLD);
             int cx = (int)(W - side - R * u), hw = U(R + 14);
-            if (info.button > 0) DrawText(mask, px, fLab, L"PRESET " + std::to_wstring(info.button), RECT{cx - hw, U(258), cx + hw, U(276)}, th.muted[0], th.muted[1], th.muted[2], DT_CENTER);
+            if (info.button > 0) DrawText(mask, px, fLab, Upper(Localization::Text(L"Preset")) + L" " + std::to_wstring(info.button), RECT{cx - hw, U(258), cx + hw, U(276)}, th.muted[0], th.muted[1], th.muted[2], DT_CENTER);
             DrawText(mask, px, fPos, info.position, RECT{cx - hw, U(276), cx + hw, U(304)}, th.sub[0], th.sub[1], th.sub[2], DT_CENTER);
             DeleteObject(fPos); DeleteObject(fLab);
         }
@@ -1046,7 +1050,7 @@ static std::shared_ptr<OverlayImage> SmartCard(const OverlayInfo& info, const Ov
     const int padX = U(20);
     // header
     HFONT fChip = MakeFont(U(16), FW_BOLD), fHead = MakeFont(U(19), FW_NORMAL);
-    std::wstring chip = Upper(info.source.empty() ? L"Radio" : info.source);
+    std::wstring chip = Upper(info.source.empty() ? Localization::Text(L"Radio") : info.source);
     int chipW = Measure(mdc, fChip, chip).cx + U(28), chipH = U(30), chipY = U(14);
     cv.Round(padX, chipY, chipW, chipH, chipH / 2.f, th.accent[0], th.accent[1], th.accent[2]);
     DrawText(mask, px, fChip, chip, RECT{padX, chipY, padX + chipW, chipY + chipH}, th.chipText[0], th.chipText[1], th.chipText[2], DT_CENTER);
@@ -1232,7 +1236,7 @@ static std::shared_ptr<OverlayImage> RenderScreenCardImpl(const OverlayInfo& inf
 
     // header: source chip + headline, status on the right
     HFONT fChip = MakeFont(U(16), FW_BOLD), fHead = MakeFont(U(19), FW_NORMAL);
-    std::wstring chip = Upper(info.source.empty() ? L"Radio" : info.source);
+    std::wstring chip = Upper(info.source.empty() ? Localization::Text(L"Radio") : info.source);
     int chipW = Measure(mdc, fChip, chip).cx + U(26), chipH = U(28), chipY = U(17);
     cv.Round(padX, chipY, chipW, chipH, chipH / 2.f, AR, AG, AB);
     DrawText(mask, px, fChip, chip, RECT{padX, chipY, padX + chipW, chipY + chipH}, th.chipText[0], th.chipText[1], th.chipText[2], DT_CENTER);
@@ -1259,7 +1263,7 @@ static std::shared_ptr<OverlayImage> RenderScreenCardImpl(const OverlayInfo& inf
         DeleteObject(fHeart);
         rightEdge -= U(36);
     }
-    std::wstring headline = info.volume >= 0 ? (info.volumeLabel.empty() ? L"Volume" : info.volumeLabel) : info.headline;
+    std::wstring headline = info.volume >= 0 ? (info.volumeLabel.empty() ? Localization::Text(L"Volume") : info.volumeLabel) : info.headline;
     DrawText(mask, px, fHead, headline, RECT{padX + chipW + U(14), headY0, std::max(padX + chipW + U(14), rightEdge), headY1}, MR, MG, MB);
     cv.Round(padX, U(60), W - 2 * padX, std::max(1, U(1.5f)), 1.f, TR, TG, TB, 0.12f);   // separator
     DeleteObject(fChip); DeleteObject(fHead);
@@ -1394,7 +1398,7 @@ std::shared_ptr<OverlayImage> RenderScreenVolumeBar(const OverlayInfo& info, int
     const float TR = th.text[0], TG = th.text[1], TB = th.text[2], MR = th.muted[0], MG = th.muted[1], MB = th.muted[2];
     Gdi mask(W, sh);
     HFONT fNum = MakeFont(U(40), FW_SEMIBOLD);
-    std::wstring text = muted ? (info.volumeLabel.empty() ? L"Mute" : info.volumeLabel) : std::to_wstring(v) + L"%";
+    std::wstring text = muted ? (info.volumeLabel.empty() ? Localization::Text(L"Mute") : info.volumeLabel) : std::to_wstring(v) + L"%";
     DrawText(mask, img->pixels, fNum, text, RECT{0, U(6), W, sh - U(24)}, muted ? MR : TR, muted ? MG : TG, muted ? MB : TB, DT_CENTER);
     DeleteObject(fNum);
     // level line: thin track over the whole width, the filled part in the text colour (grey while muted)
@@ -1595,7 +1599,7 @@ std::shared_ptr<OverlayImage> RenderPhone(const PhoneView& v, int screenH, std::
             int cx = sx0 + sw / 2 + (k % 2 ? U(70) : -U(70)), y = contentTop + U(230) + (k / 2) * U(150), x = cx - s / 2;
             if (k == v.sel) cv.Round(x - U(8), y - U(8), s + U(16), s + U(44), (float)U(26), 1.f, 1.f, 1.f, 0.14f);
             appIcon(k, x, y, s);
-            DrawText(mask, px, fLabel, e ? len[k] : lde[k], RECT{x - U(30), y + s + U(6), x + s + U(30), y + s + U(28)}, 0.96f, 0.96f, 0.97f, DT_CENTER);
+            DrawText(mask, px, fLabel, Localization::Text(e ? len[k] : lde[k]), RECT{x - U(30), y + s + U(6), x + s + U(30), y + s + U(28)}, 0.96f, 0.96f, 0.97f, DT_CENTER);
             int badge = k == 0 ? v.unreadMessages : k == 1 ? v.missedCalls : 0;
             if (badge > 0) {
                 float bx = x + s - U(6), by = y + U(6);
@@ -1656,7 +1660,7 @@ std::shared_ptr<OverlayImage> RenderPhone(const PhoneView& v, int screenH, std::
         DrawWrap(mask, px, fText, v.callText, RECT{sx0 + U(38), ty + U(14), sx1 - U(38), ty + th2 - U(10)}, TR, TG, TB);
         int by = contentBot - U(86);
         cv.Round(sx0 + U(60), by, sw - U(120), U(48), (float)U(24), AR, AG, AB);
-        DrawText(mask, px, fTitle, e ? L"Play again" : L"Nochmal anhören", RECT{sx0 + U(60), by, sx1 - U(60), by + U(48)}, th.chipText[0], th.chipText[1], th.chipText[2], DT_CENTER);
+        DrawText(mask, px, fTitle, Localization::Select(e, L"Play again", L"Nochmal anhören"), RECT{sx0 + U(60), by, sx1 - U(60), by + U(48)}, th.chipText[0], th.chipText[1], th.chipText[2], DT_CENTER);
         spot(sx0 + U(60), by, sx1 - U(60), by + U(48), PA_Replay);
         break; }
     case PhoneScreen::Incoming: case PhoneScreen::InCall: {
@@ -1678,16 +1682,16 @@ std::shared_ptr<OverlayImage> RenderPhone(const PhoneView& v, int screenH, std::
             spot(cx - bs / 2 - U(8), by - U(8), cx + bs / 2 + U(8), by + bs + U(28), act);
         };
         if (v.screen == PhoneScreen::Incoming) {
-            button(sx0 + sw / 4, false, 0.f, e ? L"Decline" : L"Ablehnen", PA_Decline, v.sel == 1);
-            button(sx0 + sw * 3 / 4, true, -0.75f, e ? L"Answer" : L"Annehmen", PA_Accept, v.sel == 0);
-        } else button(sx0 + sw / 2, false, 0.f, e ? L"End" : L"Auflegen", PA_Hangup, false);
+            button(sx0 + sw / 4, false, 0.f, Localization::Select(e, L"Decline", L"Ablehnen"), PA_Decline, v.sel == 1);
+            button(sx0 + sw * 3 / 4, true, -0.75f, Localization::Select(e, L"Answer", L"Annehmen"), PA_Accept, v.sel == 0);
+        } else button(sx0 + sw / 2, false, 0.f, Localization::Select(e, L"End", L"Auflegen"), PA_Hangup, false);
         DeleteObject(fName);
         break; }
     case PhoneScreen::Job: {
         int y = header(v.title);
         if (!v.jobActive) {
-            DrawText(mask, px, fHead, e ? L"No job" : L"Kein Auftrag", RECT{sx0, y + U(120), sx1, y + U(160)}, TR, TG, TB, DT_CENTER);
-            DrawText(mask, px, fText, e ? L"Take a job and it shows up here" : L"Nimm einen Auftrag an – er erscheint hier", RECT{sx0 + U(20), y + U(164), sx1 - U(20), y + U(190)}, MR, MG, MB, DT_CENTER);
+            DrawText(mask, px, fHead, Localization::Select(e, L"No job", L"Kein Auftrag"), RECT{sx0, y + U(120), sx1, y + U(160)}, TR, TG, TB, DT_CENTER);
+            DrawText(mask, px, fText, Localization::Select(e, L"Take a job and it shows up here", L"Nimm einen Auftrag an – er erscheint hier"), RECT{sx0 + U(20), y + U(164), sx1 - U(20), y + U(190)}, MR, MG, MB, DT_CENTER);
             break;
         }
         DrawText(mask, px, fHead, v.cargo, RECT{sx0 + U(24), y + U(6), sx1 - U(24), y + U(38)}, TR, TG, TB);
@@ -1701,7 +1705,7 @@ std::shared_ptr<OverlayImage> RenderPhone(const PhoneView& v, int screenH, std::
         DrawText(mask, px, fTitle, v.to, RECT{sx0 + U(50), ry + U(44), sx1 - U(20), ry + U(68)}, TR, TG, TB);
         DrawText(mask, px, fSmall, v.toCompany, RECT{sx0 + U(50), ry + U(66), sx1 - U(20), ry + U(84)}, MR, MG, MB);
         // facts: 2 x 2
-        const wchar_t* lab[4] = {e ? L"Time left" : L"Restzeit", e ? L"Distance" : L"Entfernung", e ? L"Arrival" : L"Ankunft", e ? L"Pay" : L"Lohn"};
+        const wchar_t* lab[4] = {Localization::Select(e, L"Time left", L"Restzeit"), Localization::Select(e, L"Distance", L"Entfernung"), Localization::Select(e, L"Arrival", L"Ankunft"), Localization::Select(e, L"Pay", L"Lohn")};
         const std::wstring* val[4] = {&v.remaining, &v.distance, &v.eta, &v.income};
         int fy = ry + U(96);
         for (int k = 0; k < 4; ++k) {
@@ -1787,7 +1791,7 @@ std::shared_ptr<OverlayImage> RenderPhone(const PhoneView& v, int screenH, std::
             y = cy + U(44);
         }
         if (!v.musicFolders.empty()) {
-            DrawText(mask, px, fSmall, e ? L"FOLDERS" : L"ORDNER", RECT{sx0 + U(24), y, sx1, y + U(20)}, MR, MG, MB);
+            DrawText(mask, px, fSmall, Localization::Select(e, L"FOLDERS", L"ORDNER"), RECT{sx0 + U(24), y, sx1, y + U(20)}, MR, MG, MB);
             y += U(24);
             const int rowH = U(48);
             for (int i = 0; i < (int)v.musicFolders.size() && y + rowH < contentBot - U(10); ++i, y += rowH) {

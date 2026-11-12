@@ -3,6 +3,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "Config.h"
+#include "Localization.h"
 #include <cmath>
 #include "Logger.h"
 #include "json.hpp"
@@ -689,5 +690,5 @@ std::wstring Config::ButtonText(int b, bool en) const {
         if (n.size() > 10) n = n.substr(0, 10);
         return n + L" " + t;
     }
-    return (btn >= 128 ? L"" : std::wstring(en ? L"Button " : L"Knopf ")) + t;
+    return (btn >= 128 ? L"" : std::wstring(Localization::Select(en, L"Button ", L"Knopf "))) + t;
 }

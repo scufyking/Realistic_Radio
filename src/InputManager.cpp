@@ -4,6 +4,7 @@
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #define DIRECTINPUT_VERSION 0x0800
 #include "InputManager.h"
+#include <cstdlib>
 #include "Logger.h"
 #include <mmsystem.h>
 #include <dinput.h>

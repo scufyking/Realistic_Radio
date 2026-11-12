@@ -3,6 +3,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "MediaLibrary.h"
+#include "Localization.h"
 #include "Logger.h"
 #include <shlwapi.h>
 #include <algorithm>
@@ -314,6 +315,6 @@ std::string MediaTypeId(const std::string& s) {
     return "";
 }
 std::wstring MediaTypeLabel(const std::string& id, bool en) {
-    for (auto& t : MediaTypes()) if (id == t.id) return Utf8ToWide(en ? t.en : t.de);
+    for (auto& t : MediaTypes()) if (id == t.id) return Localization::Text(Utf8ToWide(en ? t.en : t.de));
     return Utf8ToWide(id);
 }
