@@ -11,7 +11,8 @@
 
 namespace Speech {
 using Clip = std::shared_ptr<const std::vector<float>>;
-// lang: "de" or "en" (a voice of that language is preferred when Windows has one). id identifies the result.
+// lang: Windows language id of the voice ("407" German, "409" English, "419" Russian; empty: default voice).
+// A voice of that language is preferred when Windows has one. id identifies the result.
 void Request(int id, const std::wstring& text, const std::string& lang);
 bool Take(int& id, Clip& clip);   // a finished request (clip == nullptr: no voice available)
 void Shutdown();

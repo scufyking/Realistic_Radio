@@ -3,6 +3,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "MediaLibrary.h"
+#include "L10n.h"
 #include "Logger.h"
 #include <shlwapi.h>
 #include <algorithm>
@@ -231,7 +232,17 @@ void MediaLibrary::Scan(const std::wstring& folder, bool folderPerDisc) {
                 "In the game the \"Home\" key steps through: radio -> USB 1 -> USB 2 -> ... -> radio.\r\n"
                 "Left/Right arrow = previous/next track, End = pause.\r\n"
                 "Title and artist come from the MP3 tags, otherwise from the file name (\"Artist - Title.mp3\").\r\n"
-                "A cover is shown if it is embedded in the MP3 or saved as cover.jpg / folder.jpg in the folder.\r\n";
+                "A cover is shown if it is embedded in the MP3 or saved as cover.jpg / folder.jpg in the folder.\r\n\r\n"
+                "РУССКИЙ\r\n"
+                "Скопируйте сюда свои музыкальные файлы.\r\n"
+                "Каждая подпапка - отдельная USB-флешка / отдельный компакт-диск, например:\r\n"
+                "  usb\\Rock Music\\   usb\\Rap Music\\   usb\\YouTube Playlist\\\r\n"
+                "Файлы прямо в этой папке образуют ещё одну USB-флешку.\r\n"
+                "Поддерживаются: MP3, WAV, FLAC, M4A, AAC, WMA.\r\n"
+                "Во время игры клавиша \"Home\" переключает: радио -> USB 1 -> USB 2 -> ... -> радио.\r\n"
+                "Стрелка влево/вправо = предыдущий/следующий трек, End = пауза.\r\n"
+                "Название и исполнитель берутся из тегов MP3, иначе из имени файла (\"Исполнитель - Название.mp3\").\r\n"
+                "Обложка показывается, если она встроена в MP3 или лежит в папке как cover.jpg / folder.jpg.\r\n";
             DWORD w = 0; WriteFile(f, text, (DWORD)strlen(text), &w, nullptr); CloseHandle(f);
         }
         Log::Write("Created USB folder %s", WideToUtf8(folder).c_str());
@@ -314,6 +325,6 @@ std::string MediaTypeId(const std::string& s) {
     return "";
 }
 std::wstring MediaTypeLabel(const std::string& id, bool en) {
-    for (auto& t : MediaTypes()) if (id == t.id) return Utf8ToWide(en ? t.en : t.de);
+    for (auto& t : MediaTypes()) if (id == t.id) return Utf8ToWide(L10n::PickA(t.de, t.en, en));
     return Utf8ToWide(id);
 }

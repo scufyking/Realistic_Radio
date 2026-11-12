@@ -32,6 +32,7 @@ struct OverlayInfo {
     bool paused = false;
     int posSec = -1, lenSec = -1;   // track position / length in seconds (-1 = unknown)
     std::wstring song;       // live song title of the station (scrolls on the in-cab screen when it is too long)
+    std::wstring frequency;  // 1.7.0: "94,3 MHz" / "560 kHz AM" (FM band only) - shown under the signal bars of the on-screen window
     // 1.5.0 designs: station buttons and position
     int button = 0;              // station button (1..9) of the current station, 0 = none
     std::wstring buttonText;     // "Taste 3" / "Button 3"
@@ -47,7 +48,7 @@ struct OverlayInfo {
     std::string noticeIcon;      // phone (connected) | message
     std::wstring noticeApp, noticeTitle, noticeText, noticeTime;
     bool operator==(const OverlayInfo& o) const { return headline == o.headline && title == o.title && subtitle == o.subtitle && bars == o.bars && favourite == o.favourite && lcd == o.lcd && volume == o.volume && muted == o.muted &&
-                                                         source == o.source && mediaType == o.mediaType && detail == o.detail && media == o.media && paused == o.paused && posSec == o.posSec && lenSec == o.lenSec && song == o.song &&
+                                                         source == o.source && mediaType == o.mediaType && detail == o.detail && media == o.media && paused == o.paused && posSec == o.posSec && lenSec == o.lenSec && song == o.song && frequency == o.frequency &&
                                                          button == o.button && buttonText == o.buttonText && position == o.position && tiles == o.tiles &&
                                                          notice == o.notice && noticeIcon == o.noticeIcon && noticeApp == o.noticeApp && noticeTitle == o.noticeTitle && noticeText == o.noticeText; }
 };
@@ -108,8 +109,8 @@ std::shared_ptr<OverlayImage> RenderScreenNotice(const OverlayInfo& info, int wi
 // Card + song strip, shifted left by `offset` pixels (wraps around with a gap when the title is wider than its line)
 std::shared_ptr<OverlayImage> ComposeSongLine(const OverlayImage& card, const SongLine& song, int offset);
 // ---- virtual phone (1.6.0): a smartphone in the corner of the screen ----
-enum class PhoneScreen { Home, Messages, Thread, Calls, CallDetail, Incoming, InCall, Job, Music };
-enum PhoneAct { PA_None, PA_Back, PA_App, PA_Item, PA_Accept, PA_Decline, PA_Hangup, PA_Replay, PA_Prev, PA_PlayPause, PA_Next, PA_Close, PA_Folder };
+enum class PhoneScreen { Home, Messages, Thread, Calls, CallDetail, Incoming, InCall, Job, Music, App, AddonList };
+enum PhoneAct { PA_None, PA_Back, PA_App, PA_Item, PA_Accept, PA_Decline, PA_Hangup, PA_Replay, PA_Prev, PA_PlayPause, PA_Next, PA_Close, PA_Folder, PA_AppArea, PA_Home };
 struct PhoneSpot { RECT r; int action = PA_None; int index = -1; };
 struct PhoneListItem { std::wstring title, text, time; int kind = 0; bool unread = false; };   // calls: kind 0 missed, 1 answered, 2 declined
 struct PhoneMapPoint { float x = 0, y = 0; std::wstring name; int kind = 0; };                // 0..1 in the map; kind 0 city, 1 destination, 2 start
@@ -131,6 +132,12 @@ struct PhoneView {
     // music (folders marked as Bluetooth)
     bool musicActive = false, musicPaused = false; std::wstring musicTitle, musicArtist, musicFolder; int musicPos = -1, musicLen = -1;
     std::vector<std::wstring> musicFolders; int musicFolderPlaying = -1;
+    // apps of add-ons (1.7.0): more icons on the home screen
+    struct AddonTile { std::wstring label; float color[3] = {0.52f, 0.34f, 0.96f}; std::shared_ptr<const OverlayImage> icon; };
+    std::vector<AddonTile> addonApps;
+    bool appHasFrame = false, appTablet = false;   // App screen (the add-on draws): picture there yet / landscape tablet
+    struct UiRow { std::string type; std::wstring title, text, value; bool arrow = false, enabled = true; };
+    std::vector<UiRow> ui;                      // AddonList screen: rows described by the add-on (title in `title`, hint in `hint`)
     std::wstring hint;                          // small help line at the bottom
 };
 // The phone picture (portrait, about 60 % of the screen height); spots: where to click (image pixels)

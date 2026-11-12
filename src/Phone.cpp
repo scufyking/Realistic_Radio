@@ -3,6 +3,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "Phone.h"
+#include "L10n.h"
+#include "Addons.h"
 #include "D3D11Overlay.h"
 #include "InputBlock.h"
 #include "MenuInput.h"
@@ -32,7 +34,8 @@ std::wstring Phone::TimeText(unsigned t) const {
     if (now && now / 1440 != t / 1440) {   // another day: weekday in front
         static const wchar_t* de[] = {L"Mo", L"Di", L"Mi", L"Do", L"Fr", L"Sa", L"So"}, *en[] = {L"Mon", L"Tue", L"Wed", L"Thu", L"Fri", L"Sat", L"Sun"};
         bool e = host_.english && host_.english();
-        return std::wstring(e ? en[(t / 1440) % 7] : de[(t / 1440) % 7]) + L" " + b;
+        unsigned d = (t / 1440) % 7;
+        return std::wstring(L10n::Pick(de[d], en[d], e)) + L" " + b;
     }
     return b;
 }
@@ -45,14 +48,14 @@ void Phone::AddMessage(const std::wstring& from, const std::wstring& text) {
 
 void Phone::Call(const std::wstring& from, const std::wstring& text) {
     if (call_.state != CallState::None) {   // busy: the second caller leaves a message
-        AddMessage(from, (host_.english() ? L"Voicemail: " : L"Mailbox: ") + text);
+        AddMessage(from, (L10n::Pick(L"Mailbox: ", L"Voicemail: ", host_.english())) + text);
         calls_.push_front({from, text, host_.gameTime(), 0});
         return;
     }
     call_ = Call_{};
     call_.state = CallState::Ringing; call_.from = from; call_.text = text; call_.time = host_.gameTime(); call_.at = GetTickCount64();
     const PhoneConfig& ph = host_.settings();
-    if (ph.voice) { call_.speechId = nextSpeechId_++; Speech::Request(call_.speechId, text, host_.english() ? "en" : "de"); }   // ready when answered
+    if (ph.voice) { call_.speechId = nextSpeechId_++; Speech::Request(call_.speechId, text, L10n::Voice()); }   // ready when answered
     host_.play(Speech::Ringtone(), true, 0.32f);
     host_.callBanner(from, text);
     if (open_) { screen_ = PhoneScreen::Incoming; sel_ = 0; }
@@ -75,7 +78,7 @@ void Phone::EndCall(int kind) {
     host_.stopSound();
     calls_.push_front({call_.from, call_.text, call_.time, kind});
     while (calls_.size() > kMaxCalls) calls_.pop_back();
-    if (kind != 1) AddMessage(call_.from, (host_.english() ? L"Voicemail: " : L"Mailbox: ") + call_.text);   // not answered: the text is not lost
+    if (kind != 1) AddMessage(call_.from, (L10n::Pick(L"Mailbox: ", L"Voicemail: ", host_.english())) + call_.text);   // not answered: the text is not lost
     Log::Write(kind == 0 ? "Phone: missed call" : kind == 1 ? "Phone: call ended" : "Phone: call declined");
     call_ = Call_{};
     if (screen_ == PhoneScreen::Incoming || screen_ == PhoneScreen::InCall) { screen_ = PhoneScreen::Home; sel_ = 0; }
@@ -111,6 +114,29 @@ void Phone::Update(ULONGLONG now) {
         std::wstring stamp = v.clock + v.callState;
         if (stamp != lastClock_) { lastClock_ = stamp; dirty_ = true; }
         if (screen_ == PhoneScreen::Music && now - lastRender_ > 1000) dirty_ = true;   // running time
+        if (screen_ == PhoneScreen::App) {   // a new picture of the add-on; the mouse position for hovering
+            unsigned fs = 0; Addons::Frame(appId_, &fs);
+            if (fs != frameSerial_) { frameSerial_ = fs; frameDirty_ = true; }
+            int x, y;
+            if (AppPoint(x, y) && (x != lastAppX_ || y != lastAppY_)) {
+                lastAppX_ = x; lastAppY_ = y;
+                PushEvent("{\"type\":\"move\",\"x\":" + std::to_string(x) + ",\"y\":" + std::to_string(y) + "}");
+            }
+        }
+        if (screen_ == PhoneScreen::AddonList) {   // the add-on changed its screen
+            unsigned us = 0; Addons::Ui(appId_, &us);
+            if (us != uiSerial_) { uiSerial_ = us; ParseUi(); dirty_ = true; }
+        }
+    }
+    {   // an add-on came or went, or its app is called differently now
+        unsigned as = Addons::Serial();
+        if (as != appSerial_) {
+            appSerial_ = as;
+            if (open_ && screen_ == PhoneScreen::Home) dirty_ = true;
+            if (screen_ == PhoneScreen::Home && sel_ >= Apps()) sel_ = 0;
+            Addons::App tmp;
+            if ((screen_ == PhoneScreen::App || screen_ == PhoneScreen::AddonList) && !Addons::Find(appId_, tmp)) SetScreen(PhoneScreen::Home);   // the add-on is gone
+        }
     }
     if (saveDue_ && now >= saveAt_) { saveDue_ = false; saveAt_ = now + 5000; Save(); }
 }
@@ -123,7 +149,8 @@ std::vector<std::wstring> Phone::Senders() const {
 
 int Phone::ItemCount() const {
     switch (screen_) {
-    case PhoneScreen::Home: return 4;
+    case PhoneScreen::Home: return Apps();
+    case PhoneScreen::AddonList: return (int)uiItems_.size();
     case PhoneScreen::Messages: return (int)Senders().size();
     case PhoneScreen::Calls: return (int)calls_.size();
     case PhoneScreen::Music: { PhoneView v; v.en = host_.english(); host_.fillMusic(v); return (int)v.musicFolders.size(); }
@@ -143,16 +170,28 @@ PhoneView Phone::View() const {
         wchar_t b[16]; swprintf(b, 16, L"%02u:%02u", (t / 60) % 24, t % 60); v.clock = b;
         static const wchar_t* de[] = {L"Montag", L"Dienstag", L"Mittwoch", L"Donnerstag", L"Freitag", L"Samstag", L"Sonntag"};
         static const wchar_t* en[] = {L"Monday", L"Tuesday", L"Wednesday", L"Thursday", L"Friday", L"Saturday", L"Sunday"};
-        v.day = v.en ? en[(t / 1440) % 7] : de[(t / 1440) % 7];
+        unsigned d = (t / 1440) % 7;
+        v.day = L10n::Pick(de[d], en[d], v.en);
     } else v.clock = L"--:--";
     for (auto& m : msgs_) if (!m.read) ++v.unreadMessages;
     for (auto& c : calls_) if (c.kind == 0) ++v.missedCalls;
     v.screen = screen_; v.sel = sel_; v.scroll = scroll_;
     const bool e = v.en;
     switch (screen_) {
-    case PhoneScreen::Home: v.hint = e ? L"Esc: close  •  1-4: app" : L"Esc: schließen  •  1-4: App"; break;
+    case PhoneScreen::Home:
+        for (auto& a : Addons::Apps()) {
+            if (v.addonApps.size() >= 5) break;
+            PhoneView::AddonTile t;
+            t.label = e && !a.nameEn.empty() ? a.nameEn : a.name;
+            memcpy(t.color, a.color, sizeof t.color);
+            t.icon = a.icon;
+            v.addonApps.push_back(t);
+        }
+        v.hint = !v.addonApps.empty() ? L10n::Fill(L10n::Pick(L"Esc: schließen  •  1-{n}: App", L"Esc: close  •  1-{n}: app", e), {{L"{n}", std::to_wstring(4 + v.addonApps.size())}})
+                                      : L10n::Pick(L"Esc: schließen  •  1-4: App", L"Esc: close  •  1-4: app", e);
+        break;
     case PhoneScreen::Messages:
-        v.title = e ? L"Messages" : L"Nachrichten";
+        v.title = L10n::Pick(L"Nachrichten", L"Messages", e);
         for (auto& s : Senders()) {
             for (auto& m : msgs_) if (m.from == s) {
                 bool unread = false; for (auto& k : msgs_) if (k.from == s && !k.read) unread = true;
@@ -160,7 +199,7 @@ PhoneView Phone::View() const {
                 break;
             }
         }
-        if (v.items.empty()) v.hint = e ? L"No messages" : L"Keine Nachrichten";
+        if (v.items.empty()) v.hint = L10n::Pick(L"Keine Nachrichten", L"No messages", e);
         break;
     case PhoneScreen::Thread: {
         auto s = Senders();
@@ -170,27 +209,27 @@ PhoneView Phone::View() const {
         }
         break; }
     case PhoneScreen::Calls:
-        v.title = e ? L"Phone" : L"Telefon";
+        v.title = L10n::Pick(L"Telefon", L"Phone", e);
         for (auto& c : calls_) {   // kind 3 = missed, already seen
-            std::wstring st = (c.kind == 0 || c.kind == 3) ? (e ? L"Missed" : L"Verpasst") : c.kind == 1 ? (e ? L"Incoming" : L"Eingehend") : (e ? L"Declined" : L"Abgelehnt");
+            std::wstring st = (c.kind == 0 || c.kind == 3) ? (L10n::Pick(L"Verpasst", L"Missed", e)) : c.kind == 1 ? (L10n::Pick(L"Eingehend", L"Incoming", e)) : (L10n::Pick(L"Abgelehnt", L"Declined", e));
             v.items.push_back({c.from, st, TimeText(c.time), c.kind == 3 ? 0 : c.kind, c.kind == 0});
         }
-        if (v.items.empty()) v.hint = e ? L"No calls yet" : L"Noch keine Anrufe";
+        if (v.items.empty()) v.hint = L10n::Pick(L"Noch keine Anrufe", L"No calls yet", e);
         break;
     case PhoneScreen::CallDetail:
         if (detail_ >= 0 && detail_ < (int)calls_.size()) {
-            v.title = e ? L"Call" : L"Anruf";
+            v.title = L10n::Pick(L"Anruf", L"Call", e);
             v.caller = calls_[detail_].from; v.callText = calls_[detail_].text; v.callState = TimeText(calls_[detail_].time);
         }
         break;
     case PhoneScreen::Incoming:
         v.caller = call_.from;
-        v.callState = e ? L"Incoming call …" : L"Eingehender Anruf …";
-        v.hint = e ? L"Enter: answer  •  Backspace: decline" : L"Enter: annehmen  •  Rücktaste: ablehnen";
+        v.callState = L10n::Pick(L"Eingehender Anruf …", L"Incoming call …", e);
+        v.hint = L10n::Pick(L"Enter: annehmen  •  Rücktaste: ablehnen", L"Enter: answer  •  Backspace: decline", e);
         break;
     case PhoneScreen::InCall: {
         v.caller = call_.from;
-        if (call_.state == CallState::Connecting) v.callState = e ? L"Connecting …" : L"Verbinde …";
+        if (call_.state == CallState::Connecting) v.callState = L10n::Pick(L"Verbinde …", L"Connecting …", e);
         else {
             unsigned s = (unsigned)((GetTickCount64() - call_.talkAt) / 1000);
             wchar_t b[16]; swprintf(b, 16, L"%02u:%02u", s / 60, s % 60); v.callState = b;
@@ -198,13 +237,33 @@ PhoneView Phone::View() const {
         }
         break; }
     case PhoneScreen::Job:
-        v.title = e ? L"Job" : L"Auftrag";
+        v.title = L10n::Pick(L"Auftrag", L"Job", e);
         host_.fillJob(v);
         break;
     case PhoneScreen::Music:
         v.title = L"Bluetooth Audio";
         host_.fillMusic(v);
-        if (v.musicFolders.empty()) v.hint = e ? L"Settings menu → USB / CD: set a music folder to Bluetooth" : L"Einstellungsmenü → USB / CD: einen Musikordner auf Bluetooth stellen";
+        if (v.musicFolders.empty()) v.hint = L10n::Pick(L"Einstellungsmenü → USB / CD: einen Musikordner auf Bluetooth stellen", L"Settings menu → USB / CD: set a music folder to Bluetooth", e);
+        break;
+    case PhoneScreen::App: {
+        Addons::App a;
+        bool there = Addons::Find(appId_, a);
+        v.appTablet = there && a.mode == "tablet";
+        v.appHasFrame = Addons::Frame(appId_) != nullptr;
+        v.hint = L10n::Fill(L10n::Pick(L"{app} wird geladen \u2026", L"Loading {app} \u2026", e), {{L"{app}", e && !a.nameEn.empty() ? a.nameEn : a.name}});
+        break; }
+    case PhoneScreen::AddonList:
+        v.title = uiTitle_; v.hint = uiHint_;
+        for (auto& it : uiItems_) {
+            PhoneView::UiRow r;
+            r.type = it.type; r.title = it.title; r.text = it.type == "search" ? uiSearch_ : it.text; r.value = it.value; r.arrow = it.arrow; r.enabled = it.enabled;
+            v.ui.push_back(r);
+        }
+        if (uiItems_.empty()) {
+            Addons::App a; Addons::Find(appId_, a);
+            v.title = e && !a.nameEn.empty() ? a.nameEn : a.name;
+            PhoneView::UiRow r; r.type = "text"; r.text = L10n::Pick(L"Wird geladen \u2026", L"Loading \u2026", e); v.ui.push_back(r);
+        }
         break;
     }
     return v;
@@ -230,6 +289,7 @@ void Phone::Open() {
 }
 void Phone::Close() {
     if (!open_) return;
+    Addons::SetOpen("");
     MenuInput::Stop();
     InputBlock::SetMouseBlocked(false);
     D3D11Overlay::SetCursorVisible(false);
@@ -242,6 +302,10 @@ void Phone::Back() {
     case PhoneScreen::Thread: screen_ = PhoneScreen::Messages; sel_ = std::max(0, thread_); break;
     case PhoneScreen::CallDetail: screen_ = PhoneScreen::Calls; sel_ = std::max(0, detail_); break;
     case PhoneScreen::Home: Close(); return;
+    case PhoneScreen::AddonList:
+        if (uiBack_) { PushEvent("{\"type\":\"back\"}"); return; }   // the add-on goes back within its own screens
+        SetScreen(PhoneScreen::Home); sel_ = 0; break;
+    case PhoneScreen::App: SetScreen(PhoneScreen::Home); sel_ = 0; break;
     case PhoneScreen::Incoming: Decline(); return;
     case PhoneScreen::InCall: screen_ = PhoneScreen::Home; sel_ = 0; break;   // the call goes on in the background
     default: screen_ = PhoneScreen::Home; sel_ = 0; break;
@@ -256,10 +320,17 @@ void Phone::Act(int action, int index) {
     case PA_Close: Close(); break;
     case PA_App: {
         static const PhoneScreen apps[] = {PhoneScreen::Messages, PhoneScreen::Calls, PhoneScreen::Job, PhoneScreen::Music};
-        if (index >= 0 && index < 4) { screen_ = apps[index]; sel_ = 0; scroll_ = 0; }
+        if (index >= 0 && index < 4) { SetScreen(apps[index]); sel_ = 0; scroll_ = 0; }
+        else if (index >= 4 && index < Apps()) OpenAddon(index - 4);
         break; }
     case PA_Item:
-        if (screen_ == PhoneScreen::Messages) {
+        if (screen_ == PhoneScreen::AddonList) {
+            if (index >= 0 && index < (int)uiItems_.size()) {
+                sel_ = index;
+                const UiItem& it = uiItems_[index];
+                if (it.type != "search" && it.enabled && !it.id.empty()) PushEvent(json{{"type", "click"}, {"id", it.id}}.dump());
+            }
+        } else if (screen_ == PhoneScreen::Messages) {
             auto s = Senders();
             if (index >= 0 && index < (int)s.size()) {
                 thread_ = index; screen_ = PhoneScreen::Thread;
@@ -276,12 +347,13 @@ void Phone::Act(int action, int index) {
     case PA_Replay:
         if (detail_ >= 0 && detail_ < (int)calls_.size()) {
             replayId_ = nextSpeechId_++;
-            Speech::Request(replayId_, calls_[detail_].text, host_.english() ? "en" : "de");
+            Speech::Request(replayId_, calls_[detail_].text, L10n::Voice());
         }
         break;
     case PA_Prev: host_.musicControl(-1); break;
     case PA_PlayPause: host_.musicControl(0); break;
     case PA_Next: host_.musicControl(1); break;
+    case PA_Home: SetScreen(PhoneScreen::Home); sel_ = Apps() - 1; break;
     default: break;
     }
 }
@@ -293,6 +365,41 @@ void Phone::Tick(InputManager&) {
     while (open_ && MenuInput::Pop(e)) {
         if (e.type == MenuInput::Event::Key) {
             if (e.vk == k.vk && e.ctrl == k.ctrl && e.shift == k.shift && e.alt == k.alt) { Close(); break; }   // the phone key closes it
+            if (screen_ == PhoneScreen::App) {   // the add-on's app gets the keys (Esc closes the phone)
+                if (e.vk == VK_ESCAPE) { Close(); break; }
+                PushEvent(json{{"type", "key"}, {"vk", e.vk}, {"ctrl", e.ctrl}, {"shift", e.shift}, {"alt", e.alt}}.dump());
+                if (e.ch >= 32) PushEvent(json{{"type", "char"}, {"text", WideToUtf8(std::wstring(1, e.ch))}}.dump());
+                continue;
+            }
+            if (screen_ == PhoneScreen::AddonList) {   // list screen: arrows choose, Enter clicks, typing goes into the search field
+                int n = (int)uiItems_.size(), search = -1;
+                for (int i = 0; i < n; ++i) if (uiItems_[i].type == "search") { search = i; break; }
+                auto sendText = [&] { PushEvent(json{{"type", "text"}, {"id", uiItems_[search].id}, {"text", WideToUtf8(uiSearch_)}}.dump()); dirty_ = true; };
+                if (e.vk == VK_ESCAPE) { Close(); break; }
+                if (e.vk == VK_UP || e.vk == VK_DOWN) {
+                    for (int k = 0, i = sel_; k < n; ++k) {
+                        i = (i + (e.vk == VK_UP ? n - 1 : 1)) % std::max(1, n);
+                        if (Selectable(i)) { sel_ = i; break; }
+                    }
+                    if (sel_ < scroll_) scroll_ = sel_;
+                    if (sel_ > scroll_ + 7) scroll_ = sel_ - 7;
+                    dirty_ = true;
+                } else if (e.vk == VK_RETURN) {
+                    if (sel_ >= 0 && sel_ < n && uiItems_[sel_].type != "search") Act(PA_Item, sel_);
+                } else if (e.vk == VK_BACK) {
+                    if (search >= 0 && !uiSearch_.empty()) { uiSearch_.pop_back(); sendText(); }
+                    else Back();
+                } else if (e.vk == VK_LEFT && (search < 0 || uiSearch_.empty())) Back();
+                else if (search >= 0 && e.ctrl && e.vk == 'V') {
+                    if (OpenClipboard(nullptr)) {
+                        if (HANDLE h = GetClipboardData(CF_UNICODETEXT)) if (auto* p = (const wchar_t*)GlobalLock(h)) { uiSearch_ += p; GlobalUnlock(h); }
+                        CloseClipboard();
+                    }
+                    if (uiSearch_.size() > 60) uiSearch_.resize(60);
+                    sendText();
+                } else if (search >= 0 && e.ch >= 32 && uiSearch_.size() < 60) { uiSearch_ += e.ch; sendText(); }
+                continue;
+            }
             int n = ItemCount();
             switch (e.vk) {
             case VK_ESCAPE: Close(); break;
@@ -309,10 +416,18 @@ void Phone::Tick(InputManager&) {
             case VK_DELETE: if (screen_ == PhoneScreen::Incoming || screen_ == PhoneScreen::InCall) Decline(); break;
             case 'P': if (screen_ == PhoneScreen::Music) Act(PA_PlayPause, 0); break;
             default:
-                if (screen_ == PhoneScreen::Home && e.vk >= '1' && e.vk <= '4') Act(PA_App, e.vk - '1');
+                if (screen_ == PhoneScreen::Home && e.vk >= '1' && e.vk < '1' + Apps()) Act(PA_App, e.vk - '1');
                 break;
             }
             continue;
+        }
+        if (screen_ == PhoneScreen::App && e.type != MenuInput::Event::Key && !(e.type == MenuInput::Event::MouseDown && e.button == 1)) {
+            int x, y;
+            bool in = AppPoint(x, y);
+            std::string pos = ",\"x\":" + std::to_string(x) + ",\"y\":" + std::to_string(y);
+            if (e.type == MenuInput::Event::MouseUp) { PushEvent("{\"type\":\"up\",\"button\":" + std::to_string(e.button) + pos + "}"); continue; }   // also outside: ends a drag
+            if (in && e.type == MenuInput::Event::MouseDown) { PushEvent("{\"type\":\"down\",\"button\":" + std::to_string(e.button) + pos + "}"); continue; }
+            if (in && e.type == MenuInput::Event::Wheel) { PushEvent("{\"type\":\"wheel\",\"delta\":" + std::to_string(e.wheel * 120) + pos + "}"); continue; }
         }
         if (e.type != MenuInput::Event::MouseDown || e.button != 0) {
             if (e.type == MenuInput::Event::MouseDown && e.button == 1) Back();   // right click: back
@@ -327,15 +442,126 @@ void Phone::Tick(InputManager&) {
     }
 }
 
+
+void Phone::SetScreen(PhoneScreen s) {
+    screen_ = s; dirty_ = true;
+    Addons::SetOpen(open_ && (screen_ == PhoneScreen::App || screen_ == PhoneScreen::AddonList) ? appId_ : std::string());
+}
+
+// ---- apps of add-ons
+int Phone::Apps() const { return 4 + (int)std::min<size_t>(Addons::Apps().size(), 5); }
+
+void Phone::OpenAddon(int index) {
+    auto apps = Addons::Apps();
+    if (index < 0 || index >= (int)apps.size()) return;
+    appId_ = apps[index].id;
+    uiSearch_.clear(); uiScreen_.clear(); uiItems_.clear(); uiTitle_.clear(); uiHint_.clear(); uiSerial_ = 0; frameSerial_ = 0;
+    base_.reset();
+    sel_ = 0; scroll_ = 0;
+    SetScreen(apps[index].mode == "list" ? PhoneScreen::AddonList : PhoneScreen::App);
+    if (screen_ == PhoneScreen::AddonList) { Addons::Ui(appId_, &uiSerial_); ParseUi(); }
+    Log::Write("Phone: app '%s' opened", appId_.c_str());
+}
+
+void Phone::PushEvent(const std::string& ev) const { if (!appId_.empty()) Addons::Push(appId_, ev); }
+
+bool Phone::Selectable(int i) const {
+    if (i < 0 || i >= (int)uiItems_.size()) return false;
+    const UiItem& it = uiItems_[i];
+    return it.enabled && (it.type == "row" || it.type == "button" || it.type == "search");
+}
+
+// The add-on's screen: {"screen": "...", "title": "...", "back": true, "hint": "...", "items": [{"type": "row" | "button" | "search" |
+// "section" | "text", "id": "...", "title": "...", "text": "...", "value": "...", "placeholder": "...", "arrow": true, "enabled": true}]}
+void Phone::ParseUi() {
+    json j = json::parse(Addons::Ui(appId_), nullptr, false);
+    uiItems_.clear(); uiTitle_.clear(); uiHint_.clear(); uiBack_ = false;
+    if (!j.is_object()) return;
+    auto str = [](const json& o, const char* k) { return o.contains(k) && o[k].is_string() ? Utf8ToWide(o[k].get<std::string>()) : std::wstring(); };
+    uiTitle_ = str(j, "title"); uiHint_ = str(j, "hint");
+    uiBack_ = j.value("back", false);
+    std::string screen = j.value("screen", std::string());
+    if (j.contains("items") && j["items"].is_array())
+        for (auto& o : j["items"]) {
+            if (!o.is_object() || uiItems_.size() >= 400) continue;
+            UiItem it;
+            it.type = o.value("type", std::string("row"));
+            if (it.type != "row" && it.type != "button" && it.type != "search" && it.type != "section" && it.type != "text") it.type = "row";
+            it.id = o.value("id", std::string());
+            it.title = str(o, "title"); it.text = str(o, "text"); it.value = it.type == "search" ? str(o, "placeholder") : str(o, "value");
+            it.arrow = o.value("arrow", false); it.enabled = o.value("enabled", true);
+            if (it.type == "search" && screen != uiScreen_) uiSearch_ = str(o, "text");   // a new screen: the add-on sets the text
+            uiItems_.push_back(it);
+        }
+    if (screen != uiScreen_) {   // a new screen: start at the top, first selectable row
+        uiScreen_ = screen; scroll_ = 0; sel_ = 0;
+        while (sel_ < (int)uiItems_.size() && !Selectable(sel_)) ++sel_;
+        int sel = j.value("select", -1);
+        if (Selectable(sel)) sel_ = sel;
+    }
+    if (sel_ >= (int)uiItems_.size()) sel_ = std::max(0, (int)uiItems_.size() - 1);
+}
+
+// cursor -> pixel of the add-on's picture; false when the cursor is not on the app's screen (x / y are clamped then)
+bool Phone::AppPoint(int& x, int& y) const {
+    x = y = 0;
+    float cx, cy, ix, iy, iw, ih;
+    D3D11Overlay::CursorPos(cx, cy);
+    if (!D3D11Overlay::ImageRect(ix, iy, iw, ih) || appRect_.right <= appRect_.left || appRect_.bottom <= appRect_.top) return false;
+    float px = (cx - ix) * (iw > 0 && imgW_ ? imgW_ / iw : 1.f), py = (cy - iy) * (ih > 0 && imgH_ ? imgH_ / ih : 1.f);
+    int fw = appRect_.right - appRect_.left, fh = appRect_.bottom - appRect_.top;
+    if (auto f = Addons::Frame(appId_)) { fw = f->width; fh = f->height; }
+    float rx = (px - appRect_.left) / (appRect_.right - appRect_.left), ry = (py - appRect_.top) / (appRect_.bottom - appRect_.top);
+    bool in = rx >= 0 && rx < 1 && ry >= 0 && ry < 1;
+    rx = std::clamp(rx, 0.f, 0.9999f); ry = std::clamp(ry, 0.f, 0.9999f);
+    x = (int)(rx * fw); y = (int)(ry * fh);
+    return in;
+}
+
+namespace {
+// the add-on's picture into the phone's screen area (stretched when the sizes differ)
+void Blit(OverlayImage& dst, const RECT& r, const OverlayImage& src) {
+    const int w = r.right - r.left, h = r.bottom - r.top;
+    if (w <= 0 || h <= 0 || src.width <= 0 || src.height <= 0) return;
+    for (int y = 0; y < h; ++y) {
+        int dy = r.top + y;
+        if (dy < 0 || dy >= dst.height) continue;
+        int sy = (int)((y + 0.5f) * src.height / h); if (sy >= src.height) sy = src.height - 1;
+        const uint32_t* srow = &src.pixels[(size_t)sy * src.width];
+        uint32_t* drow = &dst.pixels[(size_t)dy * dst.width];
+        for (int x = 0; x < w; ++x) {
+            int dx = r.left + x;
+            if (dx < 0 || dx >= dst.width) continue;
+            int sx = (int)((x + 0.5f) * src.width / w); if (sx >= src.width) sx = src.width - 1;
+            drow[dx] = srow[sx] | 0xFF000000u;   // web pages are opaque
+        }
+    }
+}
+}
+
 std::shared_ptr<OverlayImage> Phone::TakeImage() {
-    if (!open_ || !dirty_) return nullptr;
-    dirty_ = false; lastRender_ = GetTickCount64();
-    PhoneView v = View();
-    std::vector<PhoneSpot> spots;
-    auto img = RenderPhone(v, renderH_, &spots);
-    spots_ = spots;
-    if (img) { imgW_ = (float)img->width; imgH_ = (float)img->height; }
-    return img;
+    Addons::SetOpen(open_ && (screen_ == PhoneScreen::App || screen_ == PhoneScreen::AddonList) ? appId_ : std::string());
+    if (!open_) return nullptr;
+    const bool app = screen_ == PhoneScreen::App;
+    if (!dirty_ && !(app && frameDirty_)) return nullptr;
+    if (dirty_ || !base_) {
+        dirty_ = false; lastRender_ = GetTickCount64();
+        PhoneView v = View();
+        std::vector<PhoneSpot> spots;
+        auto img = RenderPhone(v, renderH_, &spots);
+        spots_ = spots;
+        if (img) { imgW_ = (float)img->width; imgH_ = (float)img->height; }
+        if (!app) { base_.reset(); return img; }
+        base_ = img;
+        appRect_ = RECT{};
+        for (auto& s : spots_) if (s.action == PA_AppArea) appRect_ = s.r;
+        Addons::SetArea(appId_, appRect_.right - appRect_.left, appRect_.bottom - appRect_.top);
+    }
+    frameDirty_ = false;
+    if (!base_) return nullptr;
+    auto out = std::make_shared<OverlayImage>(*base_);
+    if (auto f = Addons::Frame(appId_)) Blit(*out, appRect_, *f);
+    return out;
 }
 
 void Phone::Load() {

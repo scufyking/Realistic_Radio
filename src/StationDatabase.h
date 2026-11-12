@@ -7,13 +7,14 @@
 #include "Common.h"
 
 struct City { std::string gameName, realName, country; double x, z; double relRadius = 1, relWhitenoise = 1; };
-struct Station { std::string name, url, logo; double relativeRadius = -1; int freq = 0; };   // freq: FM frequency in 0.1 MHz (947 = 94.7 MHz)
+struct Station { std::string name, url, logo; double relativeRadius = -1; int freq = 0; int am = 0; };   // freq: FM frequency in 0.1 MHz (947 = 94.7 MHz); am: AM station in kHz (frequencies file)
 struct CountryInfo { std::string name, nativeName; double relativeRadius = 1; };
 
 class StationDatabase {
 public:
     bool Load(const std::wstring& file);
     void LoadCustom(const std::wstring& file);   // custom-stations.json, same idea as stations_custom in the original custom.js
+    void LoadFrequencies(const std::wstring& file, const std::string& gameName);   // frequencies-<game>.json (1.7.0), after LoadCustom
     std::vector<City> cities;
     std::map<std::string, CountryInfo> countries;
     std::map<std::string, std::vector<Station>> stations;

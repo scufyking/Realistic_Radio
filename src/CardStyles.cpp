@@ -106,6 +106,8 @@ const char* kTemplate =
     "//     Strg + 0 -> Navi-Bildschirm -> Design. Aenderungen an der Datei wirken sofort (nach ein paar Sekunden).\r\n"
     "// EN: Copy this file, rename it (without the _ at the start, e.g. my-style.json) and edit it. Then in the game:\r\n"
     "//     Ctrl + 0 -> Navigation screen -> Design. Changes to the file apply at once (after a few seconds).\r\n"
+    "// RU: Скопируйте файл, переименуйте его (без _ в начале, например my-style.json) и измените. Затем в игре:\r\n"
+    "//     Ctrl + 0 -> Экран навигатора -> Дизайн. Изменения в файле действуют сразу (через несколько секунд).\r\n"
     "{\r\n"
     "  \"name\": \"Mein Style\",            // Name im Menue / name in the menu\r\n"
     "  \"layout\": \"smart\",               // standard | classic (altes LKW-Radio) | smart (Smart-Dashboard) | presets (Senderliste)\r\n"

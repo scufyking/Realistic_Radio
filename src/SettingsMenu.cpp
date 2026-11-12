@@ -3,6 +3,9 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "SettingsMenu.h"
+#include "L10n.h"
+#include "ExternalMedia.h"
+#include "Addons.h"
 #include "GameAudio.h"
 #include "CardStyles.h"
 #include "MenuInput.h"
@@ -26,7 +29,9 @@ struct Page { const char *de, *en, *sde, *sen; std::vector<D> defs; bool keys; }
 std::wstring Num(double v, int decimals, bool en) {
     wchar_t b[32]; swprintf(b, 32, L"%.*f", decimals, v);
     std::wstring s = b;
-    if (!en) for (auto& c : s) if (c == L'.') c = L',';
+    (void)en;
+    const wchar_t d = L10n::Decimal();
+    if (d != L'.') for (auto& c : s) if (c == L'.') c = d;
     return s;
 }
 D Button(const char* de, const char* en, const char* hde, const char* hen, const char* bde, const char* ben, int cmd) {
@@ -94,17 +99,17 @@ const std::vector<Page>& Pages() {
                    {"ignition", "engine", "always"}, {{"Zündung", "Ignition"}, {"Motor läuft", "Engine running"}, {"Immer", "Always"}}),
             Toggle("Automatisch starten", "Start automatically", "Beim Spielstart sofort spielen", "Play as soon as the game starts", [](Config& c) -> bool& { return c.autoPlay; }),
             Choice("Sprache des Menüs", "Menu language", "", "", [](Config& c) -> std::string& { return c.menuLanguage; },
-                   {"de", "en"}, {{"Deutsch", "Deutsch"}, {"English", "English"}}),
+                   {"de", "en", "ru"}, {{"Deutsch", "Deutsch"}, {"English", "English"}, {"\u0420\u0443\u0441\u0441\u043a\u0438\u0439", "\u0420\u0443\u0441\u0441\u043a\u0438\u0439"}}),
             Heading("Ton", "Sound"),
             [] {
                 D d = Choice("Ton ausgeben", "Sound output", "", "", [](Config& c) -> std::string& { return c.audioOutput; },
                              {"device", "cabin"}, {{"Windows-Ger\u00e4t", "Windows device"}, {"Kabine des Spiels (Beta)", "The game's cab (beta)"}});
                 d.hintFn = [](bool en) -> std::wstring {
                     switch (GameAudio::State()) {
-                    case 2: return en ? L"Plays in the cab: windows, game volume, quieter outside" : L"Spielt in der Kabine: Fenster, Spiel-Lautst\u00e4rke, drau\u00dfen leiser";
-                    case 1: return en ? L"Waiting for the game's sound system \u2026" : L"Wartet auf den Sound des Spiels \u2026";
-                    case -1: return en ? L"Not possible here - plays on the Windows device (see log)" : L"Hier nicht m\u00f6glich \u2013 l\u00e4uft \u00fcber Windows (siehe Log)";
-                    default: return en ? L"Cab: sounds like the game's radio (cab acoustics, windows)" : L"Kabine: klingt wie das Spielradio (Kabinen-Akustik, Fenster)";
+                    case 2: return L10n::Pick(L"Spielt in der Kabine: Fenster, Spiel-Lautst\u00e4rke, drau\u00dfen leiser", L"Plays in the cab: windows, game volume, quieter outside", en);
+                    case 1: return L10n::Pick(L"Wartet auf den Sound des Spiels \u2026", L"Waiting for the game's sound system \u2026", en);
+                    case -1: return L10n::Pick(L"Hier nicht m\u00f6glich \u2013 l\u00e4uft \u00fcber Windows (siehe Log)", L"Not possible here - plays on the Windows device (see log)", en);
+                    default: return L10n::Pick(L"Kabine: klingt wie das Spielradio (Kabinen-Akustik, Fenster)", L"Cab: sounds like the game's radio (cab acoustics, windows)", en);
                     }
                 };
                 return d;
@@ -145,7 +150,7 @@ const std::vector<Page>& Pages() {
                    [](Config& c) -> double& { return c.threshold; }, 0, 1, 0.05, [](double v, bool en) { return Num(v, 2, en); }),
             Slider("Auto-Lautst\u00e4rke", "Auto volume", "Lauter bei h\u00f6herem Tempo (ab 30 km/h, voll bei 90 km/h)",
                    "Louder at higher speed (from 30 km/h, full at 90 km/h)", [](Config& c) -> double& { return c.autoVolume; }, 0, 1, 0.1,
-                   [](double v, bool en) { return v < 0.05 ? std::wstring(en ? L"Off" : L"Aus") : L"+" + Num(20 * std::log10(1 + v), 1, en) + L" dB"; }),
+                   [](double v, bool en) { return v < 0.05 ? std::wstring(L10n::Pick(L"Aus", L"Off", en)) : L"+" + Num(20 * std::log10(1 + v), 1, en) + L" dB"; }),
             Choice("Region wechseln", "Change region", "Wann das Radio einen Sender einer anderen Region w\u00e4hlt",
                    "When the radio picks a station of another region", [](Config& c) -> std::string& { return c.switchMode; },
                    {"lost", "better"}, {{"Erst wenn der Sender weg ist", "Only when the station is lost"}, {"Bei besserem Empfang", "On better reception"}}),
@@ -200,9 +205,9 @@ const std::vector<Page>& Pages() {
                 };
                 d.hintFn = [](bool en) {
                     int n = D3D11Overlay::ScreenTargetsSeen();
-                    std::wstring s = n > 0 ? (en ? L"Found: " : L"Gefunden: ") + std::to_wstring(n) + (en ? L" with this size" : L" mit dieser Gr\u00f6\u00dfe")
-                                           : std::wstring(en ? L"Shows up twice? Draw into one only" : L"Doppelt zu sehen? Nur in eine zeichnen");
-                    return s + (en ? L" \u2022 per truck in the preset" : L" \u2022 je LKW im Preset");
+                    std::wstring s = n > 0 ? L10n::Fill(L10n::Pick(L"Gefunden: {n} mit dieser Gr\u00f6\u00dfe", L"Found: {n} with this size", en), {{L"{n}", std::to_wstring(n)}})
+                                           : std::wstring(L10n::Pick(L"Doppelt zu sehen? Nur in eine zeichnen", L"Shows up twice? Draw into one only", en));
+                    return s + (L10n::Pick(L" \u2022 je LKW im Preset", L" \u2022 per truck in the preset", en));
                 };
                 return d;
             }(),
@@ -244,6 +249,22 @@ const std::vector<Page>& Pages() {
             TextRow("Nachricht", "Message", "{city} {company} {cargo} {time} werden ersetzt", "{city} {company} {cargo} {time} are filled in",
                     [](Config& c) -> std::string& { return c.screen.phone.text; }, 160),
             Button("Test", "Test", "Schickt die Nachricht jetzt aufs Navi", "Sends the message to the screen now", "Senden", "Send", SettingsMenu::PhoneTest),
+            Heading("Spotify & Co. (Zusatz-Plugin Web-App)", "Spotify & co. (add-on Web-App)"),
+            [] {
+                D d = Toggle("Titel auf dem Navi", "Title on the navigation screen", "", "", [](Config& c) -> bool& { return c.screen.phone.mediaCard; });
+                d.hintFn = [](bool en) {   // is the add-on there, and what plays
+                    auto m = ExternalMedia::Get();
+                    Addons::App wa;
+                    if (!Addons::Find("webapp", wa)) return std::wstring(L10n::Pick(L"Braucht das Zusatz-Plugin Web-App (realistic-radio-webapp.dll)",
+                                                                             L"Needs the add-on Web-App (realistic-radio-webapp.dll)", en));
+                    if (!m.session) return std::wstring(L10n::Pick(L"Zusatz-Plugin verbunden \u2022 gerade spielt nichts", L"Add-on connected \u2022 nothing plays right now", en));
+                    return L10n::Fill(L10n::Pick(L"Zusatz-Plugin verbunden \u2022 {app}: {title}", L"Add-on connected \u2022 {app}: {title}", en),
+                                      {{L"{app}", m.app}, {L"{title}", m.title}});
+                };
+                return d;
+            }(),
+            Toggle("Radio aus, solange sie spielt", "Radio off while it plays", "Das Radio blendet aus und kommt danach wieder", "The radio fades out and comes back afterwards",
+                   [](Config& c) -> bool& { return c.screen.phone.mediaDuck; }),
             [] { D d = Heading("Je LKW", "Per truck"); d.hde = "Gespeichert im aktiven LKW-Preset (Seite LKW)"; d.hen = "Kept in the active truck preset (page Trucks)"; return d; }(),
         }, false});
         p.push_back({"LKW", "Trucks", "Radio und Navi-Presets je LKW", "Radio and screen presets per truck", {}, false});   // rows: BuildPresetDefs
@@ -357,7 +378,7 @@ const char* LabelEn(Action a) {
 }
 } // namespace
 
-std::wstring SettingsMenu::T(const char* de, const char* en) const { return Utf8ToWide(edit_.menuLanguage == "en" ? en : de); }
+std::wstring SettingsMenu::T(const char* de, const char* en) const { return Utf8ToWide(L10n::PickA(de, en, edit_.menuLanguage != "de")); }
 
 std::wstring SettingsMenu::KeyText(const KeyBinding& b) const {
     if (!b.vk) return L"–";
@@ -502,7 +523,7 @@ void SettingsMenu::PresetCommand(int cmd, int index) {
         if (index < 0 || index >= (int)all.size()) break;
         edit_.activePreset = all[index]->name;
         ApplyPreset(edit_.screen, *all[index]);
-        status_ = T("Preset ", "Preset ") + quoted(edit_.activePreset) + T(" geladen", " loaded");
+        status_ = L10n::Fill(T("Preset {name} geladen", "Preset {name} loaded"), {{L"{name}", quoted(edit_.activePreset)}});
         break; }
     case PresetNew: {
         std::string base = !truckName_.empty() ? truckName_ : !truckId_.empty() ? truckId_ : std::string("Preset");
@@ -512,7 +533,7 @@ void SettingsMenu::PresetCommand(int cmd, int index) {
         if (!truckId_.empty()) { unlinkEverywhere(truckId_); np.trucks.push_back(truckId_); }
         edit_.presets.push_back(np);
         edit_.activePreset = name;
-        status_ = T("Preset ", "Preset ") + quoted(name) + T(" angelegt", " created");
+        status_ = L10n::Fill(T("Preset {name} angelegt", "Preset {name} created"), {{L"{name}", quoted(name)}});
         break; }
     case PresetLink: {
         if (truckId_.empty()) { status_ = T("Kein LKW erkannt \u2013 erst einsteigen", "No truck detected - get into a truck first"); break; }
@@ -542,10 +563,10 @@ void SettingsMenu::PresetCommand(int cmd, int index) {
         edit_.presets.erase(edit_.presets.begin() + (own - edit_.presets.data()));
         if (const TruckPreset* base = LookupPreset(edit_, active)) {   // was a changed standard preset: back to the standard values
             ApplyPreset(edit_.screen, *base);
-            status_ = T("Preset ", "Preset ") + quoted(active) + T(" auf Standard zur\u00fcckgesetzt", " reset to the standard values");
+            status_ = L10n::Fill(T("Preset {name} auf Standard zur\u00fcckgesetzt", "Preset {name} reset to the standard values"), {{L"{name}", quoted(active)}});
         } else {
             edit_.activePreset.clear();
-            status_ = T("Preset ", "Preset ") + quoted(active) + T(" gel\u00f6scht (Navi-Werte bleiben)", " deleted (screen values stay)");
+            status_ = L10n::Fill(T("Preset {name} gel\u00f6scht (Navi-Werte bleiben)", "Preset {name} deleted (screen values stay)"), {{L"{name}", quoted(active)}});
         }
         break; }
     default: break;
@@ -582,8 +603,8 @@ static SettingsMenu::Def DesignChoice(bool en) {
                                 {"smart", L"Smart-Dashboard", L"Smart dashboard"}, {"presets", L"Senderliste", L"Station list"}};
     std::vector<std::string> ids;
     D d; d.kind = MenuItemKind::Choice; d.de = "Design"; d.en = "Design"; d.hde = "Aussehen der Anzeige im LKW"; d.hen = "Look of the display in the truck";
-    for (auto& b : builtin) { ids.push_back(b.id); d.names.push_back(en ? b.en : b.de); }
-    for (auto& s : ListCustomStyles()) { ids.push_back(s.id); d.names.push_back(s.name + (en ? L"  (own style)" : L"  (eigener Style)")); }
+    for (auto& b : builtin) { ids.push_back(b.id); d.names.push_back(L10n::Pick(b.de, b.en, en)); }
+    for (auto& s : ListCustomStyles()) { ids.push_back(s.id); d.names.push_back(s.name + (L10n::Pick(L"  (eigener Style)", L"  (own style)", en))); }
     d.mx = (double)ids.size() - 1;
     d.get = [ids](const Config& c) {
         for (size_t i = 0; i < ids.size(); ++i) if (c.screen.design == ids[i]) return (double)i;
@@ -593,10 +614,32 @@ static SettingsMenu::Def DesignChoice(bool en) {
     return d;
 }
 
+// Menu language: German, English, Russian and the language files in languages\ (1.7.0)
+static SettingsMenu::Def LanguageChoice(const SettingsMenu::Def& base) {
+    SettingsMenu::Def d = base;
+    std::vector<std::string> ids;
+    d.names.clear();
+    for (auto& l : L10n::Languages()) {
+        ids.push_back(l.code);
+        std::wstring n = l.name;
+        if (l.code != "de" && l.code != "en" && l.texts < L10n::Catalogue()) n += L"  (" + std::to_wstring(l.texts * 100 / std::max(1, L10n::Catalogue())) + L" %)";
+        d.names.push_back(n);
+    }
+    d.mx = (double)ids.size() - 1;
+    d.get = [ids](const Config& c) {
+        for (size_t i = 0; i < ids.size(); ++i) if (c.menuLanguage == ids[i]) return (double)i;
+        return 1.0;   // unknown code: English
+    };
+    d.set = [ids](Config& c, double v) { c.menuLanguage = ids[std::clamp((int)std::lround(v), 0, (int)ids.size() - 1)]; };
+    return d;
+}
+
 void SettingsMenu::BuildDefs() {
     defs_ = Pages()[page_].defs;
-    for (auto& d : defs_)
-        if (d.kind == MenuItemKind::Choice && std::string(d.de) == "Design") d = DesignChoice(edit_.menuLanguage == "en");
+    for (auto& d : defs_) {
+        if (d.kind == MenuItemKind::Choice && std::string(d.de) == "Design") d = DesignChoice(edit_.menuLanguage != "de");
+        else if (d.kind == MenuItemKind::Choice && std::string(d.de) == "Sprache des Men\u00fcs") d = LanguageChoice(d);
+    }
     if (PresetsPage()) { BuildPresetDefs(); return; }
     if (std::string(Pages()[page_].de) != "USB / CD" || folders_.empty()) return;
     D h = Heading("Musikordner und ihr Typ", "Music folders and their type");
@@ -632,8 +675,7 @@ void SettingsMenu::SetScreenArea(const float r[4]) {
     edit_.screen.areaW = in(std::max(0.05, x1 - x0)); edit_.screen.areaH = in(std::max(0.05, y1 - y0));
     edit_.screen.grid = true;   // show the frame right away so the result can be checked
     wchar_t b[160];
-    swprintf(b, 160, edit_.menuLanguage == "en" ? L"Detected: X %.2f  Y %.2f  W %.2f  H %.2f - check the frame in the truck, adjust if needed"
-                                                : L"Erkannt: X %.2f  Y %.2f  B %.2f  H %.2f \u2013 Rahmen im LKW pr\u00fcfen, bei Bedarf nachstellen",
+    swprintf(b, 160, L10n::Pick(L"Erkannt: X %.2f  Y %.2f  B %.2f  H %.2f \u2013 Rahmen im LKW pr\u00fcfen, bei Bedarf nachstellen", L"Detected: X %.2f  Y %.2f  W %.2f  H %.2f - check the frame in the truck, adjust if needed", edit_.menuLanguage != "de"),
              edit_.screen.areaX, edit_.screen.areaY, edit_.screen.areaW, edit_.screen.areaH);
     status_ = b;
     Edited_();
@@ -747,7 +789,7 @@ void SettingsMenu::BindKey(int row, const KeyBinding& b) {
         }
     std::wstring moved;
     for (int i = 0; i < (int)Action::Count; ++i)
-        if (i != (int)a && edit_.keys[i] == b) { edit_.keys[i] = KeyBinding{}; moved = Utf8ToWide(edit_.menuLanguage == "en" ? LabelEn((Action)i) : LabelDe((Action)i)); }
+        if (i != (int)a && edit_.keys[i] == b) { edit_.keys[i] = KeyBinding{}; moved = Utf8ToWide(L10n::PickA(LabelDe((Action)i), LabelEn((Action)i), edit_.menuLanguage != "de")); }
     edit_.keys[(int)a] = b;
     status_ = moved.empty() ? L"" : T("Taste war vorher bei „", "Key was used by \"") + moved + T("“ – dort entfernt", "\" - removed there");
     Edited_();
@@ -759,7 +801,7 @@ void SettingsMenu::BindButton(int row, int btn, const std::string& device) {
     const int button = edit_.ButtonSlot(device) * Config::kPadSlot + btn;   // the controller it came from (wheel, button box, ...)
     std::wstring moved;
     for (int i = 0; i < (int)Action::Count; ++i)
-        if (i != (int)a && edit_.buttons[i] == button) { edit_.buttons[i] = -1; moved = Utf8ToWide(edit_.menuLanguage == "en" ? LabelEn((Action)i) : LabelDe((Action)i)); }
+        if (i != (int)a && edit_.buttons[i] == button) { edit_.buttons[i] = -1; moved = Utf8ToWide(L10n::PickA(LabelDe((Action)i), LabelEn((Action)i), edit_.menuLanguage != "de")); }
     edit_.buttons[(int)a] = button;
     status_ = moved.empty() ? L"" : T("Knopf war vorher bei „", "Button was used by \"") + moved + T("“ – dort entfernt", "\" - removed there");
     Edited_();
@@ -917,14 +959,15 @@ SettingsMenu::Result SettingsMenu::Tick(InputManager& input) {
 }
 
 MenuView SettingsMenu::View() const {
-    const bool en = edit_.menuLanguage == "en";
+    L10n::SetLanguage(edit_.menuLanguage);   // the menu shows the language being chosen right away
+    const bool en = edit_.menuLanguage != "de";
     const Page& pg = Pages()[page_];
     MenuView v;
     v.title = L"Realistic Radio";
     v.subtitle = T("Einstellungen", "Settings") + L"  •  by ScufyKing  •  v" REALISTIC_RADIO_VERSION_W;
-    for (const Page& p : Pages()) v.pages.push_back(Utf8ToWide(en ? p.en : p.de));
+    for (const Page& p : Pages()) v.pages.push_back(Utf8ToWide(L10n::PickA(p.de, p.en, en)));
     v.page = page_;
-    v.section = Utf8ToWide(en ? pg.sen : pg.sde);
+    v.section = Utf8ToWide(L10n::PickA(pg.sde, pg.sen, en));
     if (std::string(pg.de) == "Navi-Bildschirm" && !edit_.activePreset.empty())
         v.section += T("  \u2022  Preset: ", "  \u2022  preset: ") + Utf8ToWide(edit_.activePreset);
     v.keyHeader = T("Taste", "Key"); v.buttonHeader = L"Controller";
@@ -933,7 +976,7 @@ MenuView SettingsMenu::View() const {
         for (int r = 0; r < kRowCount; ++r) {
             Action a = kRows[r];
             MenuItem it; it.kind = MenuItemKind::Key;
-            it.label = Utf8ToWide(en ? LabelEn(a) : LabelDe(a));
+            it.label = Utf8ToWide(L10n::PickA(LabelDe(a), LabelEn(a), en));
             it.key = KeyText(edit_.keys[(int)a]);
             it.button = edit_.ButtonText(edit_.buttons[(int)a], en);
             v.items.push_back(it);
@@ -941,7 +984,7 @@ MenuView SettingsMenu::View() const {
     } else {
         for (const D& d : defs_) {
             MenuItem it; it.kind = d.kind; it.restart = d.restart;
-            it.label = Utf8ToWide(en ? d.en : d.de); it.hint = Utf8ToWide(en ? d.hen : d.hde);
+            it.label = Utf8ToWide(L10n::PickA(d.de, d.en, en)); it.hint = Utf8ToWide(L10n::PickA(d.hde, d.hen, en));
             if (!d.wlabel.empty()) it.label = d.wlabel;
             if (!d.whint.empty()) it.hint = d.whint;
             if (d.hintFn) it.hint = d.hintFn(en);
@@ -951,7 +994,7 @@ MenuView SettingsMenu::View() const {
             }
             if (d.kind == MenuItemKind::Heading) { v.items.push_back(it); continue; }
             if (d.kind == MenuItemKind::Button) {
-                it.button = Utf8ToWide(en ? d.btnEn : d.btnDe);
+                it.button = Utf8ToWide(L10n::PickA(d.btnDe, d.btnEn, en));
                 if (d.command == ClearLogos)
                     it.value = Num(cacheBytes_ / 1048576.0, 1, en) + L" MB  \u2022  " + std::to_wstring(cacheFiles_) + T(" Dateien", " files");
                 v.items.push_back(it);
@@ -968,7 +1011,7 @@ MenuView SettingsMenu::View() const {
             if (d.kind == MenuItemKind::Toggle) it.on = val > 0.5;
             else if (d.kind == MenuItemKind::Slider) { it.frac = (float)((val - d.mn) / (d.mx - d.mn)); it.value = d.fmt ? d.fmt(val, en) : Num(val, 1, en); }
             else if (d.kind == MenuItemKind::Choice && !d.names.empty()) it.value = d.names[std::clamp((int)std::lround(val), 0, (int)d.names.size() - 1)];
-            else if (d.kind == MenuItemKind::Choice) { auto& l = d.labels[std::clamp((int)std::lround(val), 0, (int)d.labels.size() - 1)]; it.value = Utf8ToWide(en ? l.second : l.first); }
+            else if (d.kind == MenuItemKind::Choice) { auto& l = d.labels[std::clamp((int)std::lround(val), 0, (int)d.labels.size() - 1)]; it.value = Utf8ToWide(L10n::PickA(l.first, l.second, en)); }
             v.items.push_back(it);
         }
     }

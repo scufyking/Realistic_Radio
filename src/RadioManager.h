@@ -34,6 +34,7 @@ public:
     void Shutdown();
     void Tick(double x, double z, bool positionValid, bool electric, bool engine, float speed = 0.f);   // speed in m/s   // called ~4x per second from the radio thread
     void OnAction(Action a, bool hold = false);   // hold: station button held long enough (= save)
+    void ShowHint(const std::wstring& text) { ShowCurrent(text); }   // a short text on the screen / pop-up (e.g. a key another plugin uses)
     // key menu (Ctrl+0)
     bool MenuOpen() const { return menu_.IsOpen(); }
     bool MenuTick(InputManager& input);   // true = menu closed and new bindings applied (re-init the input)
@@ -76,6 +77,11 @@ private:
     void OpenPhone();
     void FillPhoneJob(PhoneView& v);
     void FillPhoneMusic(PhoneView& v);
+    void TickAddons(ULONGLONG now);         // add-ons: game state for them, their notifications
+    void TickExternalMedia(ULONGLONG now);   // music of the add-on (Web-App): fade the radio, show new titles
+    bool extDucked_ = false;
+    unsigned extTrack_ = 0, extCover_ = 0;
+    ULONGLONG extCardAt_ = 0;
     std::vector<int> BluetoothDiscs() const;
     std::wstring Money(long long amount) const;
     unsigned gameTime_ = 0;
@@ -162,7 +168,9 @@ private:
     void GoSilent();                                    // nothing on the frequency: static only
     void SeekFreq(int dir);                             // Next / Previous: next frequency with a station
     std::wstring FreqText(int freq) const;              // "94,7 MHz"
+    std::wstring AmText(int khz) const;                 // "560 kHz AM"
     int tuned_ = 0;                                     // 0.1 MHz
+    std::map<std::string, int> regionCities_;           // cities per region: the more local region wins a tie
     ULONGLONG flipUntil_ = 0;                           // two stations on one frequency: the weaker one for a moment
     bool silent_ = false;
     int AutoStore(bool overwrite);   // station buttons from the best received stations here; returns how many were set

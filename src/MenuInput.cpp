@@ -3,6 +3,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "MenuInput.h"
+#include "KeyState.h"
 #include "D3D11Overlay.h"
 #include "Logger.h"
 #include <deque>
@@ -55,7 +56,7 @@ LRESULT CALLBACK KeyboardProc(int code, WPARAM wp, LPARAM lp) {
                     if (g_shift) ks[VK_SHIFT] = ks[VK_LSHIFT] = 0x80;
                     if (g_ctrl) ks[VK_CONTROL] = ks[VK_LCONTROL] = 0x80;
                     if (g_alt) ks[VK_MENU] = ks[VK_RMENU] = 0x80;
-                    if (GetKeyState(VK_CAPITAL) & 1) ks[VK_CAPITAL] = 0x01;
+                    if (RealKeyState(VK_CAPITAL) & 1) ks[VK_CAPITAL] = 0x01;
                     HWND fg = GetForegroundWindow();
                     HKL hkl = GetKeyboardLayout(fg ? GetWindowThreadProcessId(fg, nullptr) : 0);
                     wchar_t buf[8] = {0};
@@ -119,7 +120,7 @@ DWORD WINAPI Thread(LPVOID) {
 }
 
 void PollKeys() {   // g_mtx held
-    auto down = [](int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; };
+    auto down = [](int vk) { return (RealAsyncKeyState(vk) & 0x8000) != 0; };
     for (int vk = 0x08; vk < 0xFF; ++vk) {
         if ((vk >= VK_SHIFT && vk <= VK_MENU) || (vk >= VK_LSHIFT && vk <= VK_RMENU) || vk == VK_LWIN || vk == VK_RWIN) continue;
         bool d = down(vk);
@@ -134,9 +135,9 @@ bool Start(float cx, float cy) {
     {
         std::lock_guard<std::mutex> l(g_mtx);
         g_queue.clear(); g_swallowed.clear();
-        g_ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-        g_shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
-        g_alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+        g_ctrl = (RealAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+        g_shift = (RealAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+        g_alt = (RealAsyncKeyState(VK_MENU) & 0x8000) != 0;
     }
     g_cx = cx; g_cy = cy;
     D3D11Overlay::SetCursorPos(cx, cy);
@@ -155,7 +156,7 @@ bool Start(float cx, float cy) {
     Stop();
     std::lock_guard<std::mutex> l(g_mtx);
     g_poll = true;
-    for (int vk = 0; vk < 256; ++vk) g_prev[vk] = (GetAsyncKeyState(vk) & 0x8000) != 0;   // keys held now do not count
+    for (int vk = 0; vk < 256; ++vk) g_prev[vk] = (RealAsyncKeyState(vk) & 0x8000) != 0;   // keys held now do not count
     return false;
 }
 

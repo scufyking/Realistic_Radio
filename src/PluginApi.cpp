@@ -15,6 +15,11 @@
 // thread (never from DllMain or a game callback). rr_api_version() is raised only for incompatible changes; new
 // functions may be added - look each one up and treat a missing one as "not supported".
 #include "D3D11Overlay.h"
+#include "ExternalMedia.h"
+#include "Addons.h"
+#include <string>
+#include "Logger.h"
+#include "Common.h"
 #include <cstdint>
 #include <cstring>
 
@@ -30,7 +35,7 @@ std::shared_ptr<const OverlayImage> Copy(const uint32_t* px, int w, int h, int f
 }
 }
 
-RR_API int rr_api_version() { return 1; }
+RR_API int rr_api_version() { return 2; }   // 2: add-on apps (1.7.0); the functions of version 1 are unchanged
 RR_API int rr_attach() { return D3D11Overlay::Install() ? 1 : 0; }   // makes sure the hook is in place (idempotent)
 RR_API void rr_detach() { D3D11Overlay::SetChatAlpha(0.f); D3D11Overlay::SetLayerScreenAlpha(1, 0.f); }   // the hook stays (the radio's)
 RR_API void rr_enable_screen_hook(int on) { if (on) D3D11Overlay::EnableScreenHook(true); }   // never switches the radio's screen off
@@ -70,3 +75,46 @@ RR_API int rr_radio_screen(int* w, int* h, int* format, float* x, float* y, floa
     return ok ? 1 : 0;
 }
 RR_API int rr_radio_card_showing() { return D3D11Overlay::RadioCardShowing() ? 1 : 0; }   // a radio card is on the screen now (not pinned)
+
+// ---- phone media (Realistic Radio 1.7.0): music of another app on the PC, from the add-on realistic-radio-media.dll.
+// The add-on calls rr_media_register about every second (also while nothing plays), rr_media_set when something plays
+// or is paused, rr_media_none when nothing plays, rr_media_cover with the cover of the current title (premultiplied BGRA,
+// top-down; 0 x 0 = none) and asks rr_media_command for the buttons pressed on the phone.
+// status: 1 stopped, 2 paused, 3 playing, 4 changing. caps: 1 play / pause, 2 next, 4 previous. Times in ms, -1 = unknown.
+RR_API void rr_media_register(const wchar_t* addonName) { ExternalMedia::Register(addonName ? addonName : L""); }
+RR_API void rr_media_set(const wchar_t* app, const wchar_t* title, const wchar_t* artist, const wchar_t* album, int status, long long posMs, long long lenMs, int caps) {
+    ExternalMedia::Set(app ? app : L"", title ? title : L"", artist ? artist : L"", album ? album : L"", status, posMs, lenMs, caps);
+}
+RR_API void rr_media_cover(const uint32_t* px, int w, int h) {
+    if (!px || w <= 0 || h <= 0 || w > 4096 || h > 4096) { ExternalMedia::SetCover(nullptr); return; }
+    auto img = std::make_shared<OverlayImage>();
+    img->width = w; img->height = h; img->renderedForScreenHeight = 1080;
+    img->pixels.assign(px, px + (size_t)w * h);
+    ExternalMedia::SetCover(img);
+}
+RR_API void rr_media_none() { ExternalMedia::Clear(); }
+RR_API int rr_media_command() { return ExternalMedia::TakeCommand(); }   // 0 none, 1 play / pause, 2 next, 3 previous
+// a line in realistic-radio.log (UTF-8)
+RR_API void rr_log(const char* line) { if (line) Log::Write("%s", line); }
+
+// ---- add-ons with their own apps on the phone (Realistic Radio 1.7.0, interface version 2). Documentation and a
+// header for add-on authors: sdk/addon/ (rr_addon.h, README). Texts are UTF-8, data is JSON.
+RR_API int rr_app_register(const char* appJson) { return appJson && Addons::Register(appJson) ? 1 : 0; }
+RR_API void rr_app_ui(const char* id, const char* uiJson) { if (id && uiJson) Addons::SetUi(id, uiJson); }
+RR_API int rr_app_area(const char* id, int* w, int* h) { int W = 0, H = 0; bool open = id && Addons::Area(id, W, H); if (w) *w = W; if (h) *h = H; return open ? 1 : 0; }
+RR_API void rr_app_frame(const char* id, const uint32_t* px, int w, int h) {
+    if (!id || !px || w <= 0 || h <= 0 || w > 4096 || h > 4096) return;
+    auto img = std::make_shared<OverlayImage>();
+    img->width = w; img->height = h; img->renderedForScreenHeight = 1080;
+    img->pixels.assign(px, px + (size_t)w * h);
+    Addons::SetFrame(id, img);
+}
+RR_API int rr_app_events(const char* id, char* buf, int size) { return id ? Addons::TakeEvents(id, buf, size) : 0; }
+static int CopyOut(const std::string& s, char* buf, int size) {
+    if (!buf || (int)s.size() + 1 > size) return -(int)(s.size() + 1);
+    memcpy(buf, s.c_str(), s.size() + 1);
+    return (int)s.size();
+}
+RR_API int rr_state(char* buf, int size) { return CopyOut(Addons::State(), buf, size); }
+RR_API int rr_city(const char* token, char* buf, int size) { std::string j; if (!token || !Addons::City(token, j)) return 0; return CopyOut(j, buf, size); }
+RR_API void rr_notify(const char* noticeJson) { if (noticeJson) Addons::Notify(noticeJson); }

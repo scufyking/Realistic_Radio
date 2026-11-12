@@ -21,3 +21,17 @@ EXPORTS
     rr_take_target_stats
     rr_radio_screen
     rr_radio_card_showing
+    rr_media_register
+    rr_media_set
+    rr_media_cover
+    rr_media_none
+    rr_media_command
+    rr_log
+    rr_app_register
+    rr_app_area
+    rr_app_frame
+    rr_app_ui
+    rr_app_events
+    rr_state
+    rr_city
+    rr_notify

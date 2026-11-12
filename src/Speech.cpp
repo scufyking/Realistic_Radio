@@ -60,8 +60,9 @@ Speech::Clip Render(ISpVoice* voice, const Job& j) {
         wf.nBlockAlign = 2; wf.nAvgBytesPerSec = 96000;
         if (FAILED(sp->SetBaseStream(mem, kWaveFormatEx, &wf))) break;
         if (FAILED(voice->SetOutput(sp, TRUE))) break;
-        // prefer a voice of the language (German 407, English 409); without one Windows' default voice speaks
-        std::wstring xml = std::wstring(L"<voice optional=\"Language=") + (j.lang == "en" ? L"409" : L"407") + L"\">" + Escape(j.text) + L"</voice>";
+        // prefer a voice of the language (Windows language id: German 407, English 409, Russian 419, from a language
+        // file e.g. 415); without one, or without an id, Windows' default voice speaks
+        std::wstring xml = j.lang.empty() ? Escape(j.text) : std::wstring(L"<voice optional=\"Language=") + Utf8ToWide(j.lang) + L"\">" + Escape(j.text) + L"</voice>";
         if (FAILED(voice->Speak(xml.c_str(), SPF_IS_XML, nullptr))) break;
         voice->SetOutput(nullptr, TRUE);
         HGLOBAL h = nullptr;

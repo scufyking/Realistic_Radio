@@ -10,6 +10,7 @@
 #include <cmath>
 #include "Logger.h"
 #include "RadioManager.h"
+#include "ForeignKeys.h"
 #include "InputManager.h"
 #include "EmbeddedData.h"
 #include <scssdk_telemetry.h>
@@ -157,9 +158,25 @@ DWORD WINAPI RadioThread(LPVOID) {
         return 1;
     }
     { Config c; c.Load(dir + L"realistic-radio.json"); input.Init(c); }
+    // keys of other plugins (MotionCab and other SPF Framework plugins): read now and every 20 s (they can be changed in the game)
+    std::wstring pluginsDir = dir;
+    while (!pluginsDir.empty() && (pluginsDir.back() == L'\\' || pluginsDir.back() == L'/')) pluginsDir.pop_back();
+    if (size_t cut = pluginsDir.find_last_of(L"\\/"); cut != std::wstring::npos) pluginsDir.resize(cut + 1);
+    std::string foreignLog;
+    auto scanForeign = [&] {
+        std::map<int, std::string> foreign;
+        for (auto& k : ForeignKeys::Scan(pluginsDir)) foreign.emplace(k.vk, k.owner);
+        std::string list;
+        for (auto& [vk, owner] : foreign) { KeyBinding b; b.vk = vk; list += (list.empty() ? "" : ", ") + KeyBindingName(b) + " (" + owner + ")"; }
+        if (list != foreignLog) { foreignLog = list; if (!list.empty()) Log::Write("Keys: used by other plugins, left to them: %s", list.c_str()); }
+        input.SetForeignKeys(foreign);
+    };
+    scanForeign();
+    ULONGLONG foreignAt = GetTickCount64() + 20000;
     Log::Write("Radio thread running");
     int truckVersion = 0, jobVersion = 0;
     while (!g_quit) {
+        if (GetTickCount64() >= foreignAt) { foreignAt = GetTickCount64() + 20000; scanForeign(); }
         if (radio.MenuOpen()) {   // key menu: keys go to the menu, no radio actions
             if (radio.MenuTick(input)) { input.Init(radio.Settings()); input.Resync(); }
         } else if (radio.PhoneOpen()) {   // the phone has keyboard and mouse; a controller button can still close it
@@ -167,6 +184,7 @@ DWORD WINAPI RadioThread(LPVOID) {
             input.Poll([&](Action a, bool) { if (a == Action::Phone && radio.PhoneOpen()) radio.OnAction(a, false); });
             if (!radio.PhoneOpen()) input.Resync();
         } else input.Poll([&](Action a, bool hold) { Log::Write("Action: %s%s", ActionName(a), hold ? " (held)" : ""); radio.OnAction(a, hold); });
+        if (std::wstring n = input.TakeNotice(); !n.empty()) radio.ShowHint(n);   // a radio key that belongs to another plugin
         if (int v = g_truckVersion.load(); v != truckVersion) {
             truckVersion = v;
             std::string id, name, brandId, brand, model;

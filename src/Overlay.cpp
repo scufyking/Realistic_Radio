@@ -3,6 +3,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "Overlay.h"
+#include "ExternalMedia.h"
 #include "CardStyles.h"
 #include "D3D11Overlay.h"
 #include "Logger.h"
@@ -264,6 +265,11 @@ void Overlay::RequestLogo(const std::string& logoPath) {
     logoKey_ = logoPath; logo_.reset();
     auto it = logoCache_.find(logoPath);
     if (it != logoCache_.end()) { logo_ = it->second; return; }
+    if (logoPath.rfind("mem:", 0) == 0) {    // cover from the add-on Phone Media (ExternalMedia)
+        auto m = ExternalMedia::Get();
+        if (m.cover && "mem:" + std::to_string(m.coverSerial) == logoPath) { logo_ = ShrinkImage(m.cover, 512); if (logo_) RememberLogo(logoPath, logo_); }
+        return;
+    }
     if (logoPath.rfind("file:", 0) == 0) {   // USB/CD cover: local image file
         logo_ = ShrinkImage(LoadImageFile(Utf8ToWide(logoPath.substr(5))), 512);
         if (logo_) RememberLogo(logoPath, logo_);
@@ -618,7 +624,10 @@ void Overlay::ShowPhone(std::shared_ptr<OverlayImage> img) {
     if (!img) return;
     menuImg_ = img;
     menu_ = true;
-    D3D11Overlay::SetPlacement(5, 0.03f, 0.04f);   // bottom right, a small margin (fractions of the screen height)
+    if (img->width > img->height) {   // tablet (app of an add-on): centred
+        float sh = (float)std::max(1, D3D11Overlay::ScreenHeight());
+        D3D11Overlay::SetPlacement(4, 0.f, std::max(0.f, (1.f - img->height / sh) / 2.f));
+    } else D3D11Overlay::SetPlacement(5, 0.03f, 0.04f);   // bottom right, a small margin (fractions of the screen height)
     D3D11Overlay::SetImage(menuImg_);
     if (window_) { image_ = menuImg_; lastImg_ = nullptr; }
     D3D11Overlay::SetAlpha(d3d_ && !window_ ? 1.f : 0.f);

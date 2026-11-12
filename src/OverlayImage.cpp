@@ -3,6 +3,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "OverlayImage.h"
+#include "L10n.h"
 #include "Logger.h"
 #include <wincodec.h>
 #include <algorithm>
@@ -105,9 +106,13 @@ std::shared_ptr<OverlayImage> RenderOverlay(const OverlayInfo& info, int screenH
         logoW = std::max(1, (int)(logo->width * k)); logoH = std::max(1, (int)(logo->height * k));
     }
     const int barsW = info.bars >= 0 ? S(5 * 6 + 4 * 3) : 0;
+    int freqW = 0;   // 1.7.0: the frequency under the signal bars ("94,3 MHz")
+    if (!info.frequency.empty()) { HDC d = CreateCompatibleDC(nullptr); freqW = Measure(d, fSub, info.frequency).cx + S(2); DeleteDC(d); }
+    const int colW = std::max(barsW, freqW);
     const int accent = S(4);
-    const int W = accent + pad + (logoW ? logoW + pad : 0) + textW + (barsW ? pad + barsW : 0) + pad;
-    const int H = std::max(textH, logoH) + 2 * pad;
+    const int W = accent + pad + (logoW ? logoW + pad : 0) + textW + (colW ? pad + colW : 0) + pad;
+    int H = std::max(textH, logoH) + 2 * pad;
+    if (freqW) H = std::max(H, 2 * pad + (barsW ? S(28) + S(4) : 0) + lineSub);   // room for bars above the frequency
 
     auto img = std::make_shared<OverlayImage>();
     img->width = W; img->height = H; img->renderedForScreenHeight = screenH; img->pixels.assign((size_t)W * H, 0u);
@@ -141,8 +146,14 @@ std::shared_ptr<OverlayImage> RenderOverlay(const OverlayInfo& info, int screenH
     if (!info.headline.empty()) { DrawText(mask, px, fHead, info.headline, RECT{x0, y, x0 + textW, y + lineHead}, 0.92f, 0.92f, 0.92f); y += lineHead; }
     DrawText(mask, px, fTitle, info.title, RECT{x0, y, x0 + textW, y + lineTitle}, 1.f, 0.682f, 0.f); y += lineTitle;
     if (!sub.empty()) DrawText(mask, px, fSub, sub, RECT{x0, y, x0 + textW, y + lineSub}, 0.75f, 0.75f, 0.78f);
+    const int colX = x0 + textW + pad;
+    int freqTop = H;
+    if (freqW) {   // frequency at the bottom right, on the line of the country / city
+        freqTop = H - pad - lineSub;
+        DrawText(mask, px, fSub, info.frequency, RECT{colX, freqTop, colX + colW, freqTop + lineSub}, 0.75f, 0.75f, 0.78f, DT_RIGHT);
+    }
     if (barsW) {   // 5 signal bars
-        int bx = x0 + textW + pad, base = H / 2 + S(14);
+        int bx = colX + colW - barsW, base = std::min(H / 2 + S(14), freqTop - S(4));
         for (int i = 0; i < 5; ++i) {
             int bh = S(8 + i * 5), bw = S(6), xs = bx + i * S(9);
             bool on = i < info.bars;
@@ -1500,7 +1511,8 @@ std::shared_ptr<OverlayImage> RenderPhone(const PhoneView& v, int screenH, std::
     FontScope fontScope(th.font.c_str());
     const float u = std::max(0.3f, screenH * 0.62f / 840.f);
     auto U = [&](float x) { return (int)std::lround(x * u); };
-    const int W = U(400), H = U(840);
+    const bool tablet = v.screen == PhoneScreen::App && v.appTablet;   // an add-on app in tablet mode (e.g. a web page): landscape tablet
+    const int W = tablet ? U(1500) : U(400), H = tablet ? U(1000) : U(840);
     auto img = NewCard(W, H);
     img->renderedForScreenHeight = screenH;   // drawn 1:1 on this screen height (not stretched to it)
     auto& px = img->pixels;
@@ -1562,8 +1574,8 @@ std::shared_ptr<OverlayImage> RenderPhone(const PhoneView& v, int screenH, std::
         DrawText(mask, px, f, Initials(name), RECT{(int)(cx - r), (int)(cy - r), (int)(cx + r), (int)(cy + r)}, 0.97f, 0.97f, 0.98f, DT_CENTER);
         DeleteObject(f);
     };
-    auto appIcon = [&](int k, int x, int y, int s) {   // 0 messages, 1 phone, 2 job, 3 music
-        const float col[4][3] = {{0.20f, 0.78f, 0.35f}, {0.20f, 0.60f, 0.98f}, {1.f, 0.62f, 0.04f}, {0.98f, 0.25f, 0.38f}};
+    auto appIcon = [&](int k, int x, int y, int s) {   // 0 messages, 1 phone, 2 job, 3 music, 4 media (other apps)
+        const float col[5][3] = {{0.20f, 0.78f, 0.35f}, {0.20f, 0.60f, 0.98f}, {1.f, 0.62f, 0.04f}, {0.98f, 0.25f, 0.38f}, {0.52f, 0.34f, 0.96f}};
         cv.Round(x, y, s, s, s * 0.24f, col[k][0], col[k][1], col[k][2]);
         cv.Round(x, y, s, s / 2, s * 0.24f, 1.f, 1.f, 1.f, 0.10f);
         float cx = x + s / 2.f, cy = y + s / 2.f;
@@ -1575,6 +1587,9 @@ std::shared_ptr<OverlayImage> RenderPhone(const PhoneView& v, int screenH, std::
             cv.Round((int)(cx - s * 0.28f), (int)(cy - s * 0.22f), (int)(s * 0.56f), (int)(s * 0.46f), s * 0.05f, 1.f, 1.f, 1.f);
             cv.Round((int)(cx - s * 0.28f), (int)(cy - s * 0.22f), (int)(s * 0.56f), (int)(s * 0.08f), 0.f, col[2][0] * 0.8f, col[2][1] * 0.8f, col[2][2] * 0.8f);
             cv.Round((int)(cx - s * 0.04f), (int)(cy - s * 0.22f), (int)(s * 0.08f), (int)(s * 0.20f), 0.f, col[2][0] * 0.8f, col[2][1] * 0.8f, col[2][2] * 0.8f);
+        } else if (k == 4) {  // equalizer bars
+            const float h[4] = {0.30f, 0.52f, 0.40f, 0.22f};
+            for (int i = 0; i < 4; ++i) cv.Round((int)(cx - s * 0.27f + i * s * 0.15f), (int)(cy + s * 0.24f - s * h[i]), (int)(s * 0.09f), (int)(s * h[i]), s * 0.03f, 1.f, 1.f, 1.f);
         } else {             // note
             cv.Circle(cx - s * 0.10f, cy + s * 0.16f, s * 0.12f, 1.f, 1.f, 1.f);
             cv.Round((int)(cx - s * 0.01f), (int)(cy - s * 0.26f), (int)(s * 0.07f), (int)(s * 0.44f), 1.f, 1.f, 1.f, 1.f);
@@ -1590,12 +1605,37 @@ std::shared_ptr<OverlayImage> RenderPhone(const PhoneView& v, int screenH, std::
         DrawText(mask, px, fClock, v.clock, RECT{sx0, contentTop + U(48), sx1, contentTop + U(140)}, 0.98f, 0.98f, 0.99f, DT_CENTER);
         if (!v.device.empty()) DrawText(mask, px, fSmall, v.device, RECT{sx0, contentTop + U(140), sx1, contentTop + U(164)}, 0.80f, 0.82f, 0.86f, DT_CENTER);
         const wchar_t* lde[] = {L"Nachrichten", L"Telefon", L"Auftrag", L"Musik"}, *len[] = {L"Messages", L"Phone", L"Job", L"Music"};
-        const int s = U(86);
-        for (int k = 0; k < 4; ++k) {
-            int cx = sx0 + sw / 2 + (k % 2 ? U(70) : -U(70)), y = contentTop + U(230) + (k / 2) * U(150), x = cx - s / 2;
-            if (k == v.sel) cv.Round(x - U(8), y - U(8), s + U(16), s + U(44), (float)U(26), 1.f, 1.f, 1.f, 0.14f);
-            appIcon(k, x, y, s);
-            DrawText(mask, px, fLabel, e ? len[k] : lde[k], RECT{x - U(30), y + s + U(6), x + s + U(30), y + s + U(28)}, 0.96f, 0.96f, 0.97f, DT_CENTER);
+        const int apps = 4 + (int)std::min<size_t>(v.addonApps.size(), 5);   // at most 5 apps of add-ons (9 icons)
+        const bool grid3 = apps > 4;                                         // with add-ons: 3 per row
+        const int s = grid3 ? U(74) : U(86), cols = grid3 ? 3 : 2;
+        const int top = contentTop + (grid3 ? U(196) : U(230)), step = grid3 ? U(124) : U(150), colGap = grid3 ? U(112) : U(140);
+        for (int k = 0; k < apps; ++k) {
+            int row = k / cols, col = k % cols, inRow = std::min(cols, apps - row * cols);
+            int cx = sx0 + sw / 2 + (int)((col - (inRow - 1) / 2.f) * colGap), y = top + row * step, x = cx - s / 2;
+            if (k == v.sel) cv.Round(x - U(8), y - U(8), s + U(16), s + U(44), (float)U(24), 1.f, 1.f, 1.f, 0.14f);
+            std::wstring label;
+            if (k < 4) { appIcon(k, x, y, s); label = L10n::Pick(lde[k], len[k], e); }
+            else {   // app of an add-on: its picture, else its first letter on its colour
+                const auto& t = v.addonApps[k - 4];
+                cv.Round(x, y, s, s, s * 0.24f, t.color[0], t.color[1], t.color[2]);
+                if (t.icon) {
+                    BlitLogo(px, W, t.icon.get(), x, y, s, s);
+                    const float rad = s * 0.24f;   // round the corners over the picture
+                    for (int yy = 0; yy < s; ++yy) for (int xx = 0; xx < s; ++xx) {
+                        if ((xx >= rad && xx < s - rad) || (yy >= rad && yy < s - rad)) continue;
+                        float cov = RoundedCoverage(xx, yy, s, s, rad);
+                        if (cov < 1.f) { uint32_t& p = px[(size_t)(y + yy) * W + x + xx]; float k2 = cov; uint32_t a = (uint32_t)(((p >> 24) & 255) * k2), r = (uint32_t)(((p >> 16) & 255) * k2), g = (uint32_t)(((p >> 8) & 255) * k2), bb = (uint32_t)((p & 255) * k2); p = (a << 24) | (r << 16) | (g << 8) | bb; }
+                    }
+                } else {
+                    cv.Round(x, y, s, s / 2, s * 0.24f, 1.f, 1.f, 1.f, 0.10f);
+                    HFONT fl = MakeFont((int)(s * 0.48f), FW_BOLD);
+                    std::wstring letter = t.label.empty() ? L"?" : t.label.substr(0, 1);
+                    DrawText(mask, px, fl, letter, RECT{x, y, x + s, y + s}, 1.f, 1.f, 1.f, DT_CENTER);
+                    DeleteObject(fl);
+                }
+                label = t.label;
+            }
+            DrawText(mask, px, fLabel, label, RECT{x - U(30), y + s + U(6), x + s + U(30), y + s + U(28)}, 0.96f, 0.96f, 0.97f, DT_CENTER);
             int badge = k == 0 ? v.unreadMessages : k == 1 ? v.missedCalls : 0;
             if (badge > 0) {
                 float bx = x + s - U(6), by = y + U(6);
@@ -1656,7 +1696,7 @@ std::shared_ptr<OverlayImage> RenderPhone(const PhoneView& v, int screenH, std::
         DrawWrap(mask, px, fText, v.callText, RECT{sx0 + U(38), ty + U(14), sx1 - U(38), ty + th2 - U(10)}, TR, TG, TB);
         int by = contentBot - U(86);
         cv.Round(sx0 + U(60), by, sw - U(120), U(48), (float)U(24), AR, AG, AB);
-        DrawText(mask, px, fTitle, e ? L"Play again" : L"Nochmal anhören", RECT{sx0 + U(60), by, sx1 - U(60), by + U(48)}, th.chipText[0], th.chipText[1], th.chipText[2], DT_CENTER);
+        DrawText(mask, px, fTitle, L10n::Pick(L"Nochmal anhören", L"Play again", e), RECT{sx0 + U(60), by, sx1 - U(60), by + U(48)}, th.chipText[0], th.chipText[1], th.chipText[2], DT_CENTER);
         spot(sx0 + U(60), by, sx1 - U(60), by + U(48), PA_Replay);
         break; }
     case PhoneScreen::Incoming: case PhoneScreen::InCall: {
@@ -1678,16 +1718,16 @@ std::shared_ptr<OverlayImage> RenderPhone(const PhoneView& v, int screenH, std::
             spot(cx - bs / 2 - U(8), by - U(8), cx + bs / 2 + U(8), by + bs + U(28), act);
         };
         if (v.screen == PhoneScreen::Incoming) {
-            button(sx0 + sw / 4, false, 0.f, e ? L"Decline" : L"Ablehnen", PA_Decline, v.sel == 1);
-            button(sx0 + sw * 3 / 4, true, -0.75f, e ? L"Answer" : L"Annehmen", PA_Accept, v.sel == 0);
-        } else button(sx0 + sw / 2, false, 0.f, e ? L"End" : L"Auflegen", PA_Hangup, false);
+            button(sx0 + sw / 4, false, 0.f, L10n::Pick(L"Ablehnen", L"Decline", e), PA_Decline, v.sel == 1);
+            button(sx0 + sw * 3 / 4, true, -0.75f, L10n::Pick(L"Annehmen", L"Answer", e), PA_Accept, v.sel == 0);
+        } else button(sx0 + sw / 2, false, 0.f, L10n::Pick(L"Auflegen", L"End", e), PA_Hangup, false);
         DeleteObject(fName);
         break; }
     case PhoneScreen::Job: {
         int y = header(v.title);
         if (!v.jobActive) {
-            DrawText(mask, px, fHead, e ? L"No job" : L"Kein Auftrag", RECT{sx0, y + U(120), sx1, y + U(160)}, TR, TG, TB, DT_CENTER);
-            DrawText(mask, px, fText, e ? L"Take a job and it shows up here" : L"Nimm einen Auftrag an – er erscheint hier", RECT{sx0 + U(20), y + U(164), sx1 - U(20), y + U(190)}, MR, MG, MB, DT_CENTER);
+            DrawText(mask, px, fHead, L10n::Pick(L"Kein Auftrag", L"No job", e), RECT{sx0, y + U(120), sx1, y + U(160)}, TR, TG, TB, DT_CENTER);
+            DrawText(mask, px, fText, L10n::Pick(L"Nimm einen Auftrag an – er erscheint hier", L"Take a job and it shows up here", e), RECT{sx0 + U(20), y + U(164), sx1 - U(20), y + U(190)}, MR, MG, MB, DT_CENTER);
             break;
         }
         DrawText(mask, px, fHead, v.cargo, RECT{sx0 + U(24), y + U(6), sx1 - U(24), y + U(38)}, TR, TG, TB);
@@ -1701,7 +1741,7 @@ std::shared_ptr<OverlayImage> RenderPhone(const PhoneView& v, int screenH, std::
         DrawText(mask, px, fTitle, v.to, RECT{sx0 + U(50), ry + U(44), sx1 - U(20), ry + U(68)}, TR, TG, TB);
         DrawText(mask, px, fSmall, v.toCompany, RECT{sx0 + U(50), ry + U(66), sx1 - U(20), ry + U(84)}, MR, MG, MB);
         // facts: 2 x 2
-        const wchar_t* lab[4] = {e ? L"Time left" : L"Restzeit", e ? L"Distance" : L"Entfernung", e ? L"Arrival" : L"Ankunft", e ? L"Pay" : L"Lohn"};
+        const wchar_t* lab[4] = {L10n::Pick(L"Restzeit", L"Time left", e), L10n::Pick(L"Entfernung", L"Distance", e), L10n::Pick(L"Ankunft", L"Arrival", e), L10n::Pick(L"Lohn", L"Pay", e)};
         const std::wstring* val[4] = {&v.remaining, &v.distance, &v.eta, &v.income};
         int fy = ry + U(96);
         for (int k = 0; k < 4; ++k) {
@@ -1787,7 +1827,7 @@ std::shared_ptr<OverlayImage> RenderPhone(const PhoneView& v, int screenH, std::
             y = cy + U(44);
         }
         if (!v.musicFolders.empty()) {
-            DrawText(mask, px, fSmall, e ? L"FOLDERS" : L"ORDNER", RECT{sx0 + U(24), y, sx1, y + U(20)}, MR, MG, MB);
+            DrawText(mask, px, fSmall, L10n::Pick(L"ORDNER", L"FOLDERS", e), RECT{sx0 + U(24), y, sx1, y + U(20)}, MR, MG, MB);
             y += U(24);
             const int rowH = U(48);
             for (int i = 0; i < (int)v.musicFolders.size() && y + rowH < contentBot - U(10); ++i, y += rowH) {
@@ -1798,6 +1838,76 @@ std::shared_ptr<OverlayImage> RenderPhone(const PhoneView& v, int screenH, std::
                 spot(sx0, y, sx1, y + rowH, PA_Folder, i);
             }
         } else DrawWrap(mask, px, fText, v.hint, RECT{sx0 + U(30), y + U(40), sx1 - U(30), y + U(140)}, MR, MG, MB);
+        break; }
+    case PhoneScreen::AddonList: {   // list screen of an add-on app: rows, buttons, a search field and texts it describes
+        int y = header(v.title);
+        const int x0 = sx0 + U(16), x1 = sx1 - U(16), bottom = contentBot - (v.hint.empty() ? U(10) : U(32));
+        for (int i = std::max(0, v.scroll); i < (int)v.ui.size(); ++i) {
+            const auto& r = v.ui[i];
+            const bool selected = i == v.sel;
+            const float dim = r.enabled ? 1.f : 0.45f;
+            if (r.type == "section") {
+                if (y + U(30) > bottom) break;
+                DrawText(mask, px, fSmall, r.title, RECT{x0 + U(8), y + U(10), x1, y + U(28)}, MR, MG, MB);
+                y += U(32);
+            } else if (r.type == "search") {
+                const int h = U(44);
+                if (y + h > bottom) break;
+                cv.Round(x0, y + U(4), x1 - x0, h - U(8), (float)U(12), 1.f, 1.f, 1.f, selected ? 0.16f : 0.09f);
+                bool empty = r.text.empty();
+                std::wstring t = empty ? r.value : r.text + L"|";   // value = placeholder
+                {   // magnifier
+                    float mx = (float)x0 + U(22), my = y + h / 2.f - U(1);
+                    cv.Circle(mx, my, (float)U(7), MR, MG, MB); cv.Circle(mx, my, (float)U(4.5f), 0.12f, 0.12f, 0.14f);
+                    cv.Line(mx + U(5), my + U(5), mx + U(10), my + U(10), (float)U(2.5f), MR, MG, MB);
+                }
+                DrawText(mask, px, fText, t, RECT{x0 + U(40), y + U(4), x1 - U(10), y + h - U(4)}, empty ? MR : TR, empty ? MG : TG, empty ? MB : TB);
+                spot(x0, y, x1, y + h, PA_Item, i);
+                y += h + U(4);
+            } else if (r.type == "button") {
+                const int h = U(46);
+                if (y + h > bottom) break;
+                cv.Round(x0 + U(4), y + U(6), x1 - x0 - U(8), h - U(8), (float)U(14), AR * dim, AG * dim, AB * dim, selected ? 1.f : 0.85f);
+                if (selected) cv.Round(x0 + U(4), y + U(6), x1 - x0 - U(8), h - U(8), (float)U(14), 1.f, 1.f, 1.f, 0.12f);
+                DrawText(mask, px, fTitle, r.title, RECT{x0, y + U(6), x1, y + h - U(2)}, th.chipText[0], th.chipText[1], th.chipText[2], DT_CENTER);
+                if (r.enabled) spot(x0, y, x1, y + h, PA_Item, i);
+                y += h + U(4);
+            } else if (r.type == "text") {   // a paragraph
+                int lines = std::max(1, (int)((r.text.size() * 7.4f * u) / std::max(1, x1 - x0 - U(16))) + 1);
+                int h = (r.title.empty() ? 0 : U(22)) + lines * U(19) + U(10);
+                if (y + std::min(h, U(60)) > bottom) break;
+                int ty = y + U(4);
+                if (!r.title.empty()) { DrawText(mask, px, fTitle, r.title, RECT{x0 + U(8), ty, x1 - U(8), ty + U(22)}, TR, TG, TB); ty += U(22); }
+                DrawWrap(mask, px, fText, r.text, RECT{x0 + U(8), ty, x1 - U(8), std::min(bottom, ty + lines * U(19) + U(4))}, MR, MG, MB);
+                y += h;
+            } else {   // "row": title, value on the right, maybe an arrow; text below in grey
+                const int h = r.text.empty() ? U(48) : U(60);
+                if (y + h > bottom) break;
+                if (selected) cv.Round(x0, y + U(2), x1 - x0, h - U(4), (float)U(12), 1.f, 1.f, 1.f, 0.08f);
+                int vx1 = x1 - (r.arrow ? U(26) : U(10));
+                int titleBottom = r.text.empty() ? y + h : y + U(32);
+                DrawText(mask, px, fTitle, r.title, RECT{x0 + U(12), r.text.empty() ? y : y + U(8), r.value.empty() ? vx1 : (x0 + x1) / 2 + U(30), titleBottom}, TR * dim, TG * dim, TB * dim,
+                         0u);
+                if (!r.text.empty()) DrawText(mask, px, fSmall, r.text, RECT{x0 + U(12), y + U(32), vx1, y + U(52)}, MR, MG, MB);
+                if (!r.value.empty()) DrawText(mask, px, fText, r.value, RECT{(x0 + x1) / 2 - U(40), y, vx1, r.text.empty() ? y + h : y + U(34)}, AR, AG, AB, DT_RIGHT | (0u));
+                if (r.arrow) {
+                    float cx = (float)x1 - U(14), cy = y + h / 2.f;
+                    cv.Line(cx - U(4), cy - U(6), cx + U(2), cy, (float)U(2.5f), MR, MG, MB);
+                    cv.Line(cx + U(2), cy, cx - U(4), cy + U(6), (float)U(2.5f), MR, MG, MB);
+                }
+                cv.Round(x0 + U(12), y + h - 1, x1 - x0 - U(12), std::max(1, U(1)), 0, 1.f, 1.f, 1.f, 0.06f);
+                if (r.enabled) spot(x0, y, x1, y + h, PA_Item, i);
+                y += h;
+            }
+        }
+        if (!v.hint.empty()) hint(v.hint);
+        break; }
+    case PhoneScreen::App: {   // app of an add-on: its picture fills the screen between status bar and home bar
+        const int ax0 = sx0, ay0 = sy0 + U(52), ax1 = sx1, ay1 = sy1 - U(40);
+        FillRect(px, W, H, ax0, ay0, ax1, ay1, 1.f, 0.f, 0.f, 0.f);
+        if (!v.appHasFrame) DrawText(mask, px, fTitle, v.hint, RECT{sx0, (ay0 + ay1) / 2 - U(16), sx1, (ay0 + ay1) / 2 + U(16)}, MR, MG, MB, DT_CENTER);
+        spot(ax0, ay0, ax1, ay1, PA_AppArea);
+        spot(W / 2 - U(90), sy1 - U(34), W / 2 + U(90), sy1, PA_Home);   // home bar: back to the home screen
         break; }
     }
     if (v.screen == PhoneScreen::Home && !v.hint.empty()) hint(v.hint);

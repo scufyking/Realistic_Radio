@@ -3,6 +3,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "Config.h"
+#include "L10n.h"
 #include <cmath>
 #include "Logger.h"
 #include "json.hpp"
@@ -19,10 +20,12 @@ static void LoadPhone(const json& p, PhoneConfig& c) {
     c.sender = p.value("sender", c.sender); c.text = p.value("text", c.text);
     c.minutes = std::clamp(p.value("minutes", c.minutes), 5.0, 600.0); c.sound = p.value("sound", c.sound);
     c.calls = p.value("calls", c.calls); c.voice = p.value("voice", c.voice); c.fines = p.value("fines", c.fines); c.dispatcher = p.value("dispatcher", c.dispatcher);
+    c.mediaCard = p.value("mediaCard", c.mediaCard); c.mediaDuck = p.value("mediaDuck", c.mediaDuck);
 }
 static json PhoneJson(const PhoneConfig& c) {
     return {{"enabled", c.enabled}, {"name", c.name}, {"messages", c.messages}, {"sender", c.sender}, {"text", c.text}, {"minutes", c.minutes}, {"sound", c.sound},
-            {"calls", c.calls}, {"voice", c.voice}, {"fines", c.fines}, {"dispatcher", c.dispatcher}};
+            {"calls", c.calls}, {"voice", c.voice}, {"fines", c.fines}, {"dispatcher", c.dispatcher},
+            {"mediaCard", c.mediaCard}, {"mediaDuck", c.mediaDuck}};
 }
 
 static const char* kActionNames[] = {"next", "previous", "stop", "volumeUp", "volumeDown", "makeFavourite", "goToFavourite", "mute", "showOverlay", "source", "nextDisc", "previousDisc", "screenPage", "menu",
@@ -240,6 +243,7 @@ bool Config::Load(const std::wstring& path) {
         if (j.contains("stationButtons") && j["stationButtons"].is_object())
             for (auto& [k, v] : j["stationButtons"].items()) if (v.is_string()) stationButtons[k] = v.get<std::string>();
         menuLanguage = j.value("menuLanguage", menuLanguage);
+        if (!L10n::ValidCode(menuLanguage)) menuLanguage = "de";   // de, en, ru or a language file (1.7.0)
         activePreset = j.value("activePreset", activePreset);
         presetAuto = j.value("presetAuto", presetAuto);
         truckMemory = j.value("truckMemory", truckMemory);
@@ -689,5 +693,5 @@ std::wstring Config::ButtonText(int b, bool en) const {
         if (n.size() > 10) n = n.substr(0, 10);
         return n + L" " + t;
     }
-    return (btn >= 128 ? L"" : std::wstring(en ? L"Button " : L"Knopf ")) + t;
+    return (btn >= 128 ? L"" : std::wstring(L10n::Pick(L"Knopf ", L"Button ", en))) + t;
 }

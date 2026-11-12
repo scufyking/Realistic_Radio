@@ -70,6 +70,25 @@ private:
     Call_ call_;
     bool open_ = false, dirty_ = true, mouse_ = false, saveDue_ = false;
     PhoneScreen screen_ = PhoneScreen::Home;
+    // apps of add-ons (Addons.h)
+    unsigned appSerial_ = 0, frameSerial_ = 0, uiSerial_ = 0;
+    std::string appId_;                                 // the add-on app on the screen (App / AddonList)
+    struct UiItem { std::string type, id; std::wstring title, text, value; bool arrow = false, enabled = true; };
+    std::vector<UiItem> uiItems_;
+    std::wstring uiTitle_, uiHint_, uiSearch_;
+    std::string uiScreen_;                              // the add-on's name for its current screen: a new one resets the search text
+    bool uiBack_ = false;
+    void ParseUi();
+    void PushEvent(const std::string& json) const;
+    bool Selectable(int i) const;
+    void OpenAddon(int index);
+    int Apps() const;                                   // 4 built-in apps + the apps of add-ons (at most 5)
+    void SetScreen(PhoneScreen s);                      // tells the add-on when its app opens / closes
+    bool AppPoint(int& x, int& y) const;                // cursor -> pixel of the add-on's picture (false: outside)
+    std::shared_ptr<OverlayImage> base_;                // App screen: the phone without the add-on's picture
+    RECT appRect_{};                                    // where the picture goes (phone image pixels)
+    int lastAppX_ = -1, lastAppY_ = -1;
+    bool frameDirty_ = false;
     int sel_ = 0, scroll_ = 0, thread_ = -1, detail_ = -1, renderH_ = 1080, nextSpeechId_ = 1, replayId_ = -1;
     std::vector<PhoneSpot> spots_;
     float imgW_ = 0, imgH_ = 0;

@@ -5,6 +5,7 @@
 #pragma once
 #include "Config.h"
 #include <functional>
+#include <map>
 
 // Polls keyboard (GetAsyncKeyState) and every game controller (DirectInput 8: all wheels, button boxes, pads with up to
 // 128 buttons and 4 hat switches; WinMM only as a fallback) from the radio thread.
@@ -23,7 +24,13 @@ public:
     // key menu: a controller button pressed since the last call (button -1 = none); device = its product name
     struct NewButton { int button = -1; std::string device; };
     NewButton PollNewButton();
+    // 1.7.0: keys another plugin uses (MotionCab / SPF Framework): radio keys on them do nothing; the first press shows a hint
+    void SetForeignKeys(const std::map<int, std::string>& vkOwner) { foreign_ = vkOwner; }
+    std::wstring TakeNotice() { std::wstring n; n.swap(notice_); return n; }
 private:
+    std::map<int, std::string> foreign_;
+    std::map<int, bool> foreignNoticed_;
+    std::wstring notice_;
     bool GameFocused() const;
     Config cfg_;
     bool keyDown_[(int)Action::Count] = {};

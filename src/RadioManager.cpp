@@ -4,6 +4,9 @@
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 // Station selection, reception and favourite logic derived from MPL-2.0 licensed code (see NOTICE.md).
 #include "RadioManager.h"
+#include "L10n.h"
+#include "ExternalMedia.h"
+#include "Addons.h"
 #include "EmbeddedData.h"
 #include "D3D11Overlay.h"
 #include "GameAudio.h"
@@ -20,9 +23,13 @@
 bool RadioManager::Init(const std::wstring& dir, const std::string& game) {
     dir_ = dir; cfgPath_ = dir + L"realistic-radio.json";
     cfg_.Load(cfgPath_);
+    L10n::SetLanguage(cfg_.menuLanguage);
+    L10n::Init(dir);   // languages\*.txt of the players (1.7.0)
     std::string file = cfg_.dataFile.empty() ? game + ".json" : cfg_.dataFile;
     if (!db_.Load(dir + Utf8ToWide(file))) return false;
     db_.LoadCustom(dir + L"custom-stations-" + Utf8ToWide(game) + L".json");
+    for (auto& c : db_.cities) ++regionCities_[c.country];
+    db_.LoadFrequencies(dir + L"frequencies-" + Utf8ToWide(game) + L".json", game == "ats" ? "American Truck Simulator" : "Euro Truck Simulator 2");
     BuildFamilies();
     db_.AssignFrequencies();
     tunnels_.Init(dir, game);
@@ -72,7 +79,17 @@ bool RadioManager::Init(const std::wstring& dir, const std::string& game) {
                  "  - mod trucks: a folder named after the mod's brand id or truck id (see the \"Start logo\" line in\r\n"
                  "    realistic-radio.log); a truck id folder is used for that model only.\r\n"
                  "With several pictures choose one in the settings menu (Ctrl + 0), page Trucks, \"Start logo\"; the choice is\r\n"
-                 "stored in the truck preset. Without a picture the brand name is shown.\r\n";
+                 "stored in the truck preset. Without a picture the brand name is shown.\r\n\r\n"
+                 "RU: При включении зажигания навигатор на мгновение показывает логотип производителя. Изображения кладите сюда\r\n"
+                 "(PNG, JPG или BMP). Логотипы DAF, Iveco, MAN, Mercedes-Benz (8 цветов), Scania и Volvo уже входят в плагин;\r\n"
+                 "удалённые или заменённые логотипы не восстанавливаются. Тёмный фон автоматически становится прозрачным, а изображение\r\n"
+                 "обрезается по логотипу, так что подойдут и обои для телефона.\r\n"
+                 "  - одна папка на каждый ID производителя: man\\, scania\\, volvo\\, daf\\, mercedes\\, iveco\\, renault\\ (любое число изображений)\r\n"
+                 "  - или файлы прямо здесь: scania.png, scania-neon.png\r\n"
+                 "  - грузовики из модов: папка с ID производителя или ID грузовика из мода (см. строку \"Start logo\" в\r\n"
+                 "    realistic-radio.log); папка с ID грузовика действует только для этой модели.\r\n"
+                 "Если изображений несколько, выберите нужное в меню настроек (Ctrl + 0), страница \"Грузовики\", \"Логотип запуска\";\r\n"
+                 "выбор сохраняется в предустановке грузовика. Без изображения показывается название производителя.\r\n";
         }
     }
     display_.Start(cfg_.display);
@@ -115,13 +132,13 @@ bool RadioManager::EnterMedia(int disc, bool rescan) {
     if (n == 0) {
         cfg_.source = "radio";
         // no music in the folder: like a car radio without a medium ("no media detected")
-        const bool en = cfg_.menuLanguage == "en";
-        OverlayInfo i; i.source = en ? L"Media" : L"Medien"; i.media = true; i.mediaType = "none"; i.paused = true;
-        i.title = Utf8ToWide(cfg_.media.textEmpty); i.lcd = i.title;
-        i.subtitle = (en ? L"Add music to realistic-radio\\" : L"Musik in realistic-radio\\") + Utf8ToWide(cfg_.media.folder) + (en ? L"" : L" ablegen");
+        const bool en = cfg_.menuLanguage != "de";
+        OverlayInfo i; i.source = L10n::Pick(L"Medien", L"Media", en); i.media = true; i.mediaType = "none"; i.paused = true;
+        i.title = L10n::Ov(cfg_.media.textEmpty); i.lcd = i.title;
+        i.subtitle = L10n::Fill(L10n::Pick(L"Musik in realistic-radio\\{folder} ablegen", L"Add music to realistic-radio\\{folder}", en), {{L"{folder}", Utf8ToWide(cfg_.media.folder)}});
         std::wstring menuKey = Utf8ToWide(KeyBindingName(cfg_.keys[(int)Action::Menu]));
         if (!en && menuKey.rfind(L"Ctrl+", 0) == 0) menuKey = L"Strg+" + menuKey.substr(5);
-        if (!menuKey.empty()) i.detail = menuKey + (en ? L" \u2192 USB / CD \u2192 Music folder" : L" \u2192 USB / CD \u2192 Musikordner \u00f6ffnen");
+        if (!menuKey.empty()) i.detail = menuKey + (L10n::Pick(L" \u2192 USB / CD \u2192 Musikordner \u00f6ffnen", L" \u2192 USB / CD \u2192 Music folder", en));
         overlay_.Show(i, "");
         return false;
     }
@@ -208,7 +225,7 @@ void RadioManager::TickMedia(ULONGLONG now) {
             if (++mediaFailStreak_ >= (int)order_.size()) {   // nothing in the folder can be played
                 mediaPaused_ = true; audio_.StopStream();
                 Log::Write("USB: none of the files could be played");
-                ShowCurrent(Utf8ToWide(cfg_.overlay.textUnavailable));
+                ShowCurrent(L10n::Ov(cfg_.overlay.textUnavailable));
                 return;
             }
             PlayTrack(orderPos_ + 1, true);
@@ -241,7 +258,7 @@ std::string RadioManager::DiscType(int disc) const {
 std::wstring RadioManager::DiscChip(int disc, std::string* typeOut) const {
     std::string t = DiscType(disc);
     if (typeOut) *typeOut = t.empty() ? "usb" : t;
-    std::wstring chip = t.empty() ? Utf8ToWide(cfg_.media.label) : MediaTypeLabel(t, cfg_.menuLanguage == "en");
+    std::wstring chip = t.empty() ? Utf8ToWide(cfg_.media.label) : MediaTypeLabel(t, cfg_.menuLanguage != "de");
     int same = 0, nr = 0;
     for (int k = 0; k < (int)lib_.Discs().size(); ++k) if (DiscType(k) == t) { ++same; if (k == disc) nr = same; }
     if (same > 1 && nr > 0) chip += L" " + std::to_wstring(nr);
@@ -254,18 +271,18 @@ OverlayInfo RadioManager::MediaInfo(const std::wstring& sub) {
     const int discs = (int)lib_.Discs().size();
     i.source = DiscChip(disc_, &i.mediaType);   // "USB 2", "CD", "KASSETTE" ...
     std::wstring discName = disc_ >= 0 && disc_ < discs ? lib_.Discs()[disc_].name : L"";
-    if (track_ < 0 || track_ >= (int)lib_.Tracks().size()) { i.title = Utf8ToWide(cfg_.media.textEmpty); i.lcd = i.title; return i; }
+    if (track_ < 0 || track_ >= (int)lib_.Tracks().size()) { i.title = L10n::Ov(cfg_.media.textEmpty); i.lcd = i.title; return i; }
     const MediaTrack& t = lib_.Tracks()[track_];
     i.title = t.title; i.subtitle = t.artist; i.detail = t.album;
-    i.headline = Utf8ToWide(cfg_.media.textTrack) + L" " + std::to_wstring(orderPos_ + 1) + L" / " + std::to_wstring(order_.size());
+    i.headline = L10n::Ov(cfg_.media.textTrack) + L" " + std::to_wstring(orderPos_ + 1) + L" / " + std::to_wstring(order_.size());
     if (!discName.empty()) i.headline = discName + L"  \u2022  " + i.headline;   // folder name of the USB / CD
     if (!discName.empty() && i.detail == discName) i.detail.clear();              // album fallback = folder name: shown once
-    if (mediaPaused_) i.headline += L"  \u2022  " + Utf8ToWide(cfg_.media.textPaused);
+    if (mediaPaused_) i.headline += L"  \u2022  " + L10n::Ov(cfg_.media.textPaused);
     auto ts = audio_.Track();
     if (ts.active) { i.posSec = (int)ts.pos; i.lenSec = ts.len > 0 ? (int)(ts.len + 0.5) : -1; }
     else { i.posSec = 0; i.lenSec = -1; }
     i.lcd = t.artist.empty() ? t.title : t.artist + L" - " + t.title;
-    if (mediaPaused_) i.lcd = Utf8ToWide(cfg_.media.textPaused) + L": " + i.lcd;
+    if (mediaPaused_) i.lcd = L10n::Ov(cfg_.media.textPaused) + L": " + i.lcd;
     if (!sub.empty()) { i.subtitle = sub; i.lcd = sub; }
     return i;
 }
@@ -289,21 +306,19 @@ bool RadioManager::MenuTick(InputManager& input) {
         CreateDirectoryW(f.c_str(), nullptr);
         HINSTANCE r = ShellExecuteW(nullptr, L"open", f.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
         Log::Write("Open music folder %s (%s)", WideToUtf8(f).c_str(), (INT_PTR)r > 32 ? "ok" : "failed");
-        menu_.SetStatus(Utf8ToWide(cfg_.menuLanguage == "en" ? "Folder opened in Explorer - new music appears when you switch to USB"
-                                                             : "Ordner im Explorer ge\u00f6ffnet \u2013 neue Musik erscheint beim Umschalten auf USB"));
+        menu_.SetStatus(Utf8ToWide(L10n::PickA("Ordner im Explorer ge\u00f6ffnet \u2013 neue Musik erscheint beim Umschalten auf USB", "Folder opened in Explorer - new music appears when you switch to USB", cfg_.menuLanguage != "de")));
         break; }
     case SettingsMenu::AutoStoreButtons: {
         int n = AutoStore(true);
-        const bool en = cfg_.menuLanguage == "en";
-        menu_.SetStatus(n > 0 ? (en ? L"Station buttons 1-" : L"Stationstasten 1\u2013") + std::to_wstring(n) +
-                                    (en ? L" stored with the stations received here" : L" mit den Sendern in Reichweite belegt")
-                              : std::wstring(en ? L"No stations in range here" : L"Hier sind keine Sender in Reichweite"));
+        const bool en = cfg_.menuLanguage != "de";
+        menu_.SetStatus(n > 0 ? L10n::Fill(L10n::Pick(L"Stationstasten 1\u2013{n} mit den Sendern in Reichweite belegt", L"Station buttons 1-{n} stored with the stations received here", en),
+                                               {{L"{n}", std::to_wstring(n)}})
+                              : std::wstring(L10n::Pick(L"Hier sind keine Sender in Reichweite", L"No stations in range here", en)));
         break; }
     case SettingsMenu::PhoneTest: PhoneTest(); break;
     case SettingsMenu::PhoneTestCall: {
-        const bool en = cfg_.menuLanguage == "en";
-        dispatchText_ = en ? L"Hello, dispatch here. This is a test call - the phone works. Drive safely!"
-                           : L"Hallo, hier ist die Disposition. Das ist ein Testanruf \u2013 das Handy funktioniert. Gute Fahrt!";
+        const bool en = cfg_.menuLanguage != "de";
+        dispatchText_ = L10n::Pick(L"Hallo, hier ist die Disposition. Das ist ein Testanruf \u2013 das Handy funktioniert. Gute Fahrt!", L"Hello, dispatch here. This is a test call - the phone works. Drive safely!", en);
         dispatchAt_ = GetTickCount64() + 3000;
         menu_.SetStatus("Anruf kommt in 3 Sekunden \u2013 Men\u00fc schlie\u00dfen, dann Handy-Taste", "Call comes in 3 seconds - close the menu, then press the phone key");
         break;
@@ -339,8 +354,7 @@ bool RadioManager::MenuTick(InputManager& input) {
         overlay_.ClearLogoCache();
         uint64_t b = 0; int n = 0; overlay_.LogoCacheUsage(b, n);
         menu_.SetCacheInfo(b, n);
-        menu_.SetStatus(Utf8ToWide(cfg_.menuLanguage == "en" ? "Logo storage cleared - logos are downloaded again when needed"
-                                                             : "Logo-Speicher geleert \u2013 Logos werden bei Bedarf neu geladen"));
+        menu_.SetStatus(Utf8ToWide(L10n::PickA("Logo-Speicher geleert \u2013 Logos werden bei Bedarf neu geladen", "Logo storage cleared - logos are downloaded again when needed", cfg_.menuLanguage != "de")));
         break; }
     default: break;
     }
@@ -477,6 +491,7 @@ void RadioManager::ApplySettings(const Config& e) {
     bool oldSong = cfg_.songTitle;
     std::string oldOutput = cfg_.audioOutput; bool oldMuteGame = cfg_.muteGameRadio;
     CopyMenuSettings(cfg_, e);
+    L10n::SetLanguage(cfg_.menuLanguage);
     if (cfg_.audioOutput != oldOutput || cfg_.muteGameRadio != oldMuteGame) {
         GameAudio::Configure(cfg_.audioOutput == "cabin", cfg_.muteGameRadio, cfg_.gameBus,
                              [](float* o, unsigned n, void* u) { ((AudioEngine*)u)->PullMix(o, n); }, &audio_);
@@ -534,50 +549,55 @@ void RadioManager::FillTiles(OverlayInfo& i) const {
 OverlayInfo RadioManager::CurrentInfo(const std::wstring& sub) {
     if (source_ == Source::Media) return MediaInfo(sub);
     OverlayInfo i;
-    i.source = Utf8ToWide(cfg_.overlay.textRadio) + (Dab() ? L" DAB+" : L" FM");
+    i.source = L10n::Ov(cfg_.overlay.textRadio) + (Dab() ? L" DAB+" : L" FM");
     auto* st = db_.StationsOf(currentCountry_);
     if (FreqMode() && tuned_ > 0 && (!st || currentIndex_ < 0 || currentIndex_ >= (int)st->size())) {   // dial on an empty frequency
-        const bool en = cfg_.menuLanguage == "en";
-        i.headline = playing_ ? Utf8ToWide(cfg_.overlay.textNowPlaying) : Utf8ToWide(cfg_.overlay.textStopped);
+        const bool en = cfg_.menuLanguage != "de";
+        i.headline = playing_ ? L10n::Ov(cfg_.overlay.textNowPlaying) : L10n::Ov(cfg_.overlay.textStopped);
         i.title = FreqText(tuned_);
-        i.subtitle = sub.empty() ? std::wstring(en ? L"No station on this frequency" : L"Kein Sender auf dieser Frequenz") : sub;
+        i.subtitle = sub.empty() ? std::wstring(L10n::Pick(L"Kein Sender auf dieser Frequenz", L"No station on this frequency", en)) : sub;
         i.bars = playing_ ? 0 : -1;
-        if (int b = CurrentButton()) { i.button = b; i.buttonText = std::wstring(en ? L"Button " : L"Taste ") + std::to_wstring(b); i.detail = i.buttonText; }
+        if (int b = CurrentButton()) { i.button = b; i.buttonText = std::wstring(L10n::Pick(L"Taste ", L"Button ", en)) + std::to_wstring(b); i.detail = i.buttonText; }
         FillTiles(i);
         i.lcd = FreqText(tuned_);
         return i;
     }
     if (!st || currentIndex_ < 0 || currentIndex_ >= (int)st->size()) {
-        i.title = L"Realistic Radio"; i.subtitle = sub.empty() ? Utf8ToWide(cfg_.overlay.textConnecting) : sub; return i;
+        i.title = L"Realistic Radio"; i.subtitle = sub.empty() ? L10n::Ov(cfg_.overlay.textConnecting) : sub; return i;
     }
     const Station& s = (*st)[currentIndex_];
-    i.headline = playing_ ? Utf8ToWide(cfg_.overlay.textNowPlaying) : Utf8ToWide(cfg_.overlay.textStopped);
+    i.headline = playing_ ? L10n::Ov(cfg_.overlay.textNowPlaying) : L10n::Ov(cfg_.overlay.textStopped);
     i.title = Utf8ToWide(s.name);
     auto it = last_.available.find(currentCountry_);
     i.bars = playing_ ? (it == last_.available.end() || inTunnel_ ? 0 : ReceptionBars(it->second.whitenoise)) : -1;
     i.favourite = FavGet(currentCountry_) == s.name;
     for (size_t k = 0; k < list_.size(); ++k)   // "Sender 3 / 12" (position in the Next/Previous order)
         if (list_[k].country == currentCountry_ && (int)list_[k].index == currentIndex_) {
-            i.detail = Utf8ToWide(cfg_.overlay.textStations) + L" " + std::to_wstring(k + 1) + L" / " + std::to_wstring(list_.size());
+            i.detail = L10n::Ov(cfg_.overlay.textStations) + L" " + std::to_wstring(k + 1) + L" / " + std::to_wstring(list_.size());
             i.position = std::to_wstring(k + 1) + L" / " + std::to_wstring(list_.size());
             break;
         }
     if (FreqMode() && s.freq > 0) i.detail = FreqText(s.freq);   // the dial instead of "station 3 / 12"
     if (int b = CurrentButton()) {
-        i.button = b; i.buttonText = std::wstring(cfg_.menuLanguage == "en" ? L"Button " : L"Taste ") + std::to_wstring(b);
+        i.button = b; i.buttonText = std::wstring(L10n::Pick(L"Taste ", L"Button ", cfg_.menuLanguage != "de")) + std::to_wstring(b);
         i.detail += (i.detail.empty() ? L"" : L"  \u2022  ") + i.buttonText;
     }
     FillTiles(i);
+    if (!Dab()) {   // the frequency under the signal bars of the on-screen window: the real one from the station name where known
+        if (FreqMode() && tuned_ > 0) i.frequency = FreqText(tuned_);
+        else if (s.am > 0) i.frequency = AmText(s.am);
+        else if (s.freq > 0) i.frequency = FreqText(s.freq);
+    }
     i.lcd = i.title;
     if (FreqMode() && s.freq > 0) i.lcd = i.title + L" " + FreqText(s.freq);
     if (playing_ && cfg_.songTitle && !song_.empty()) { i.song = song_; i.lcd = i.title + L"  \u266A " + song_; }
-    if (!playing_) i.lcd = Utf8ToWide(cfg_.overlay.textStopped);
+    if (!playing_) i.lcd = L10n::Ov(cfg_.overlay.textStopped);
     if (!sub.empty()) { i.subtitle = sub; i.lcd = sub; }
     else {
         i.subtitle = Utf8ToWide(db_.CountryDisplayName(currentCountry_));
-        if (playing_ && audio_.StreamFailures() > 0) i.subtitle += L"  \u2022  " + Utf8ToWide(cfg_.overlay.textUnavailable);
-        if (playing_ && audio_.StreamFailures() > 0) i.lcd = i.title + L" - " + Utf8ToWide(cfg_.overlay.textUnavailable);
-        else if (playing_ && audio_.IsBuffering()) i.subtitle += L"  \u2022  " + Utf8ToWide(cfg_.overlay.textConnecting);
+        if (playing_ && audio_.StreamFailures() > 0) i.subtitle += L"  \u2022  " + L10n::Ov(cfg_.overlay.textUnavailable);
+        if (playing_ && audio_.StreamFailures() > 0) i.lcd = i.title + L" - " + L10n::Ov(cfg_.overlay.textUnavailable);
+        else if (playing_ && audio_.IsBuffering()) i.subtitle += L"  \u2022  " + L10n::Ov(cfg_.overlay.textConnecting);
     }
     return i;
 }
@@ -588,7 +608,7 @@ void RadioManager::ShowCurrent(const std::wstring& sub, bool volumeMessage) {
     OverlayInfo info = CurrentInfo(sub);
     if (volumeMessage) {   // the in-cab screen shows a volume bar instead of the station
         info.volume = (int)std::lround(cfg_.volume * 100); info.muted = cfg_.muted;
-        info.volumeLabel = Utf8ToWide(cfg_.muted ? cfg_.overlay.textMuted : cfg_.overlay.textVolume);
+        info.volumeLabel = L10n::Ov(cfg_.muted ? cfg_.overlay.textMuted : cfg_.overlay.textVolume);
     }
     overlay_.Show(info, logo);
 }
@@ -629,6 +649,7 @@ void RadioManager::UpdateSpeedVolume(float speed, ULONGLONG now) {
 }
 
 void RadioManager::Tick(double x, double z, bool valid, bool electric, bool engine, float speed) {
+    if (!menu_.IsOpen()) L10n::SetLanguage(cfg_.menuLanguage);   // the menu may have shown another language while it was open
     ULONGLONG now = GetTickCount64();
     UpdateSpeedVolume(speed, now);
     if (valid) { lastX_ = x; lastZ_ = z; }
@@ -655,6 +676,8 @@ void RadioManager::Tick(double x, double z, bool valid, bool electric, bool engi
         noiseAllowed_ = true;
     }
     PhoneTick(GetTickCount64());
+    TickExternalMedia(GetTickCount64());
+    TickAddons(GetTickCount64());
     phone_.Update(GetTickCount64());
     audio_.SetExternal(GameAudio::Playing());   // cab output: the game plays the mix, the Windows device stays silent
     GameAudio::SetRadioAudible(powered_ && !cfg_.muted && (source_ == Source::Media ? !mediaPaused_ : playing_));
@@ -695,7 +718,7 @@ void RadioManager::UpdateDisplay() {
     if (source_ == Source::Media) {
         OverlayInfo i = MediaInfo(L"");
         d.playing = !mediaPaused_; d.headline = i.headline; d.title = i.title; d.country = i.subtitle; d.bars = -1;
-        if (mediaPaused_) d.status = Utf8ToWide(cfg_.media.textPaused);
+        if (mediaPaused_) d.status = L10n::Ov(cfg_.media.textPaused);
         int n = (int)order_.size();
         if (n > 1 && orderPos_ >= 0) {
             d.prevName = lib_.Tracks()[order_[(orderPos_ - 1 + n) % n]].title;
@@ -710,12 +733,12 @@ void RadioManager::UpdateDisplay() {
     auto* st = db_.StationsOf(currentCountry_);
     if (st && currentIndex_ >= 0) {
         d.country = Utf8ToWide(db_.CountryDisplayName(currentCountry_));
-        if (!playing_) d.status = Utf8ToWide(cfg_.overlay.textStopped);
-        else if (audio_.StreamFailures() > 0) d.status = Utf8ToWide(cfg_.overlay.textUnavailable);
-        else if (audio_.IsBuffering() || swapAt_) d.status = Utf8ToWide(cfg_.overlay.textConnecting);
+        if (!playing_) d.status = L10n::Ov(cfg_.overlay.textStopped);
+        else if (audio_.StreamFailures() > 0) d.status = L10n::Ov(cfg_.overlay.textUnavailable);
+        else if (audio_.IsBuffering() || swapAt_) d.status = L10n::Ov(cfg_.overlay.textConnecting);
     } else {
         d.title = L"Realistic Radio"; d.headline.clear(); d.bars = -1;
-        d.status = Utf8ToWide(cfg_.overlay.textConnecting);
+        d.status = L10n::Ov(cfg_.overlay.textConnecting);
     }
     // neighbours in the same order as Next/Previous
     if (!list_.empty()) {
@@ -726,7 +749,8 @@ void RadioManager::UpdateDisplay() {
             d.prevName = name(idx - 1); d.nextName = name(idx + 1);
         }
     }
-    d.footer = d.favourite ? L"\u2665  Favorit" : std::to_wstring(list_.size()) + L" Sender in Reichweite";
+    d.footer = d.favourite ? std::wstring(L"\u2665  ") + L10n::Pick(L"Favorit", L"Favourite", cfg_.menuLanguage != "de")
+                             : L10n::Fill(L10n::Pick(L"{n} Sender in Reichweite", L"{n} stations in range", cfg_.menuLanguage != "de"), {{L"{n}", std::to_wstring(list_.size())}});
     display_.Update(d, overlay_.CurrentLogo());
 }
 
@@ -751,7 +775,10 @@ void RadioManager::Refresh(double x, double z) {
         Entry& kept = list_[it->second];
         bool isCur = k == currentCountry_ && (int)i == currentIndex_;
         bool keptCur = kept.country == currentCountry_ && (int)kept.index == currentIndex_;
-        if (isCur || (!keptCur && e.whitenoise < kept.whitenoise)) kept = e;
+        // about the same reception: the more local region wins (Stuttgart's own SWR1 frequency over the one of all of BW)
+        auto cities = [&](const std::string& r) { auto c = regionCities_.find(r); return c == regionCities_.end() ? 1 << 20 : c->second; };
+        bool better = e.whitenoise < kept.whitenoise - 0.02 || (e.whitenoise <= kept.whitenoise + 0.02 && cities(k) < cities(kept.country));
+        if (isCur || (!keptCur && better)) kept = e;
     }
 
     if (!autoStoreChecked_ && !list_.empty()) {   // first start (or a new truck): station buttons come pre-stored
@@ -808,9 +835,10 @@ std::vector<RadioManager::OnFreq> RadioManager::StationsOn(int f) const {
     return v;
 }
 std::wstring RadioManager::FreqText(int f) const {
-    wchar_t b[32]; swprintf(b, 32, L"%d%lc%d MHz", f / 10, cfg_.menuLanguage == "en" ? L'.' : L',', f % 10);
+    wchar_t b[32]; swprintf(b, 32, L"%d%lc%d MHz", f / 10, L10n::Decimal(), f % 10);
     return b;
 }
+std::wstring RadioManager::AmText(int khz) const { return std::to_wstring(khz) + L" kHz AM"; }
 void RadioManager::GoSilent() {
     bool was = silent_ && currentIndex_ < 0;
     currentCountry_.clear(); currentIndex_ = -1;
@@ -834,7 +862,7 @@ void RadioManager::SeekFreq(int dir) {
         while (g < 875) g += 206;
         if (!StationsOn(g).empty()) { SetTuned(g); return; }
     }
-    ShowCurrent(cfg_.menuLanguage == "en" ? L"No station found" : L"Kein Sender gefunden");
+    ShowCurrent(L10n::Pick(L"Kein Sender gefunden", L"No station found", cfg_.menuLanguage != "de"));
 }
 void RadioManager::RefreshFreq(const ReceptionResult& r) {
     if (tuned_ <= 0) {   // first time: the station the radio would pick anyway, then stay on its frequency
@@ -1037,12 +1065,12 @@ int RadioManager::CurrentButton() const {
     return 0;
 }
 void RadioManager::StationButton(int n, bool hold) {
-    const bool en = cfg_.menuLanguage == "en";
+    const bool en = cfg_.menuLanguage != "de";
     std::wstring num = std::to_wstring(n);
     if (hold && FreqMode() && source_ == Source::Radio && tuned_ > 0) {   // frequency radio: the button keeps the frequency
         ButtonSet(n, "f:" + std::to_string(tuned_));
         Log::Write("Station button %d: %.1f MHz", n, tuned_ / 10.0);
-        ShowCurrent((en ? L"Saved on button " : L"Auf Taste ") + num + (en ? L": " : L" gespeichert: ") + FreqText(tuned_));
+        ShowCurrent(L10n::Fill(L10n::Pick(L"Auf Taste {n} gespeichert: {station}", L"Saved on button {n}: {station}", en), {{L"{n}", num}, {L"{station}", FreqText(tuned_)}}));
         return;
     }
     if (hold) {   // save the current station
@@ -1050,7 +1078,7 @@ void RadioManager::StationButton(int n, bool hold) {
         if (source_ != Source::Radio || !st || currentIndex_ < 0 || currentIndex_ >= (int)st->size()) return;
         ButtonSet(n, currentCountry_ + "|" + (*st)[currentIndex_].name);
         Log::Write("Station button %d: %s [%s]", n, (*st)[currentIndex_].name.c_str(), currentCountry_.c_str());
-        ShowCurrent((en ? L"Saved on button " : L"Auf Taste ") + num + (en ? L"" : L" gespeichert"));
+        ShowCurrent(L10n::Fill(L10n::Pick(L"Auf Taste {n} gespeichert", L"Saved on button {n}", en), {{L"{n}", num}}));
         return;
     }
     std::string v = ButtonGet(n);
@@ -1059,7 +1087,7 @@ void RadioManager::StationButton(int n, bool hold) {
         if (f < 875 || f > 1080) return;
         if (!FreqMode()) {   // station list: the best station on that frequency here
             auto on = StationsOn(f);
-            if (on.empty()) { if (source_ == Source::Radio) ShowCurrent((en ? L"Button " : L"Taste ") + num + L": " + FreqText(f) + (en ? L" - nothing received" : L" \u2013 kein Empfang")); return; }
+            if (on.empty()) { if (source_ == Source::Radio) ShowCurrent(L10n::Fill(L10n::Pick(L"Taste {n}: {station} \u2013 kein Empfang", L"Button {n}: {station} - nothing received", en), {{L"{n}", num}, {L"{station}", FreqText(f)}})); return; }
             if (source_ == Source::Media) EnterRadio();
             SetRadioStation(on[0].region, (size_t)on[0].index, on[0].w);
             return;
@@ -1070,14 +1098,14 @@ void RadioManager::StationButton(int n, bool hold) {
     }
     size_t bar = v.find('|');
     if (bar == std::string::npos) {
-        if (source_ == Source::Radio) ShowCurrent((en ? L"Button " : L"Taste ") + num + (en ? L" is empty - hold it to save" : L" ist leer \u2013 gedr\u00fcckt halten zum Speichern"));
+        if (source_ == Source::Radio) ShowCurrent(L10n::Fill(L10n::Pick(L"Taste {n} ist leer \u2013 gedr\u00fcckt halten zum Speichern", L"Button {n} is empty - hold it to save", en), {{L"{n}", num}}));
         return;
     }
     std::string region = v.substr(0, bar), name = v.substr(bar + 1);
     int idx = last_.available.count(region) ? StationIndexByName(region, name) : -1;
     if (idx < 0 && !FindVariant(FamilyKey(region, name), region, idx)) idx = -1;
     if (idx < 0) {   // out of range here
-        if (source_ == Source::Radio) ShowCurrent((en ? L"Button " : L"Taste ") + num + L": " + Utf8ToWide(name) + (en ? L" - out of range" : L" \u2013 nicht in Reichweite"));
+        if (source_ == Source::Radio) ShowCurrent(L10n::Fill(L10n::Pick(L"Taste {n}: {station} \u2013 nicht in Reichweite", L"Button {n}: {station} - out of range", en), {{L"{n}", num}, {L"{station}", Utf8ToWide(name)}}));
         return;
     }
     if (source_ == Source::Media) EnterRadio();
@@ -1205,16 +1233,16 @@ void RadioManager::OnAction(Action a, bool hold) {
         return;
     }
     if (!powered_ && a != Action::VolumeUp && a != Action::VolumeDown && a != Action::Mute) {
-        overlay_.Show(OverlayInfo{L"", L"Realistic Radio", Utf8ToWide(cfg_.overlay.textPowerOff), -1, false, Utf8ToWide(cfg_.overlay.textPowerOff)}, "");
+        overlay_.Show(OverlayInfo{L"", L"Realistic Radio", L10n::Ov(cfg_.overlay.textPowerOff), -1, false, L10n::Ov(cfg_.overlay.textPowerOff)}, "");
         return;
     }
     if (a == Action::Source) { ToggleSource(); return; }
     if (a == Action::Band) { ToggleBand(); return; }
-    if (a == Action::TunnelMark) { ShowCurrent(tunnels_.Mark(lastX_, lastZ_, cfg_.menuLanguage == "en")); return; }
+    if (a == Action::TunnelMark) { ShowCurrent(tunnels_.Mark(lastX_, lastZ_, cfg_.menuLanguage != "de")); return; }
     if (IsMemoryAction(a)) { if (cfg_.memoryButtons) StationButton((int)a - (int)Action::Memory1 + 1, hold); return; }
     if (a == Action::TuneUp || a == Action::TuneDown) {   // FM dial, 0.1 MHz
         if (!FreqMode()) {
-            if (!Dab()) ShowCurrent(cfg_.menuLanguage == "en" ? L"Tuning by frequency: settings menu \u2192 Radio" : L"Frequenzwahl: Einstellungsmen\u00fc \u2192 Radio \u2192 Senderwahl");
+            if (!Dab()) ShowCurrent(L10n::Pick(L"Frequenzwahl: Einstellungsmen\u00fc \u2192 Radio \u2192 Senderwahl", L"Tuning by frequency: settings menu \u2192 Radio", cfg_.menuLanguage != "de"));
             return;
         }
         if (source_ == Source::Media) EnterRadio();
@@ -1252,17 +1280,17 @@ void RadioManager::OnAction(Action a, bool hold) {
         double v = std::round(cfg_.volume * 20.0) + (a == Action::VolumeUp ? 1 : -1);   // 5 % steps
         cfg_.volume = std::clamp(v, 0.0, 20.0) / 20.0; audio_.SetMaster((float)cfg_.volume);
         Log::Write("Volume %.0f%%", cfg_.volume * 100);
-        ShowCurrent(Utf8ToWide(cfg_.overlay.textVolume) + L" " + std::to_wstring((int)std::lround(cfg_.volume * 100)) + L" %", true);
+        ShowCurrent(L10n::Ov(cfg_.overlay.textVolume) + L" " + std::to_wstring((int)std::lround(cfg_.volume * 100)) + L" %", true);
         break; }
     case Action::Mute: cfg_.muted = !cfg_.muted; audio_.SetMuted(cfg_.muted); Log::Write(cfg_.muted ? "Muted" : "Unmuted");
-        ShowCurrent(cfg_.muted ? Utf8ToWide(cfg_.overlay.textMuted) : Utf8ToWide(cfg_.overlay.textVolume) + L" " + std::to_wstring((int)std::lround(cfg_.volume * 100)) + L" %", true);
+        ShowCurrent(cfg_.muted ? L10n::Ov(cfg_.overlay.textMuted) : L10n::Ov(cfg_.overlay.textVolume) + L" " + std::to_wstring((int)std::lround(cfg_.volume * 100)) + L" %", true);
         break;
     case Action::MakeFavourite:
         if (auto* st = db_.StationsOf(currentCountry_); st && currentIndex_ >= 0) {
             if (UseMemory()) { mem_[truckId_].favourites[currentCountry_] = (*st)[currentIndex_].name; SaveMemory(); }
             else fav_.Set(currentCountry_, (*st)[currentIndex_].name);
             Log::Write("Favourite for %s: %s", currentCountry_.c_str(), (*st)[currentIndex_].name.c_str());
-            ShowCurrent(Utf8ToWide(cfg_.overlay.textFavourite));
+            ShowCurrent(L10n::Ov(cfg_.overlay.textFavourite));
         }
         break;
     case Action::GoToFavourite: {   // port of the "goToFavourite" command: cycles through favourites of countries in range
@@ -1358,12 +1386,12 @@ void RadioManager::SetPose(bool valid, const double truck[3], const double head[
     }
 }
 std::wstring RadioManager::OutsideStatus(bool en) const {
-    if (!cfg_.outsideFade) return en ? L"Walk away from the truck: quieter and muffled, an open window lets more through" : L"Vom LKW weggehen: leiser und dumpfer, offenes Fenster l\u00e4sst mehr durch";
-    if (outsideMap_ < 0) return en ? L"Waiting for the game's sound system \u2026" : L"Wartet auf den Sound des Spiels \u2026";
+    if (!cfg_.outsideFade) return L10n::Pick(L"Vom LKW weggehen: leiser und dumpfer, offenes Fenster l\u00e4sst mehr durch", L"Walk away from the truck: quieter and muffled, an open window lets more through", en);
+    if (outsideMap_ < 0) return L10n::Pick(L"Wartet auf den Sound des Spiels \u2026", L"Waiting for the game's sound system \u2026", en);
     wchar_t b[128];
-    if (!outsideNow_) return en ? L"Active \u2022 you are in the truck" : L"Aktiv \u2022 du bist im LKW";
-    swprintf(b, 128, en ? L"Active \u2022 outside, %.0f m from the cab%s" : L"Aktiv \u2022 drau\u00dfen, %.0f m vom LKW%s", outsideDist_,
-             outsideWindow_ ? (en ? L", window open" : L", Fenster offen") : L"");
+    if (!outsideNow_) return L10n::Pick(L"Aktiv \u2022 du bist im LKW", L"Active \u2022 you are in the truck", en);
+    swprintf(b, 128, L10n::Pick(L"Aktiv \u2022 drau\u00dfen, %.0f m vom LKW%s", L"Active \u2022 outside, %.0f m from the cab%s", en), outsideDist_,
+             outsideWindow_ ? (L10n::Pick(L", Fenster offen", L", window open", en)) : L"");
     return b;
 }
 
@@ -1377,18 +1405,18 @@ std::wstring Fill(std::wstring t, const JobInfo& j, int remaining, bool en) {
     auto rep = [&](const std::wstring& key, const std::wstring& val) {
         for (size_t p = t.find(key); p != std::wstring::npos; p = t.find(key, p + val.size())) t.replace(p, key.size(), val);
     };
-    rep(L"{city}", Utf8ToWide(j.city.empty() ? (en ? "the destination" : "dem Ziel") : j.city));
+    rep(L"{city}", Utf8ToWide(j.city.empty() ? (L10n::PickA("dem Ziel", "the destination", en)) : j.city));
     rep(L"{company}", Utf8ToWide(j.company));
-    rep(L"{cargo}", Utf8ToWide(j.cargo.empty() ? (en ? "the cargo" : "die Ladung") : j.cargo));
+    rep(L"{cargo}", Utf8ToWide(j.cargo.empty() ? (L10n::PickA("die Ladung", "the cargo", en)) : j.cargo));
     rep(L"{time}", tm);
     return t;
 }
 }
 void RadioManager::PhoneNotice(const std::string& icon, const std::wstring& app, const std::wstring& title, const std::wstring& text) {
-    const bool en = cfg_.menuLanguage == "en";
+    const bool en = cfg_.menuLanguage != "de";
     OverlayInfo i;
     i.notice = true; i.noticeIcon = icon; i.noticeApp = app; i.noticeTitle = title; i.noticeText = text;
-    i.noticeTime = en ? L"now" : L"jetzt";
+    i.noticeTime = L10n::Pick(L"jetzt", L"now", en);
     i.headline = app; i.title = title; i.subtitle = text; i.lcd = title + L": " + text;   // pop-up overlay
     overlay_.Show(i, "", 7.0);
     if (cfg_.screen.phone.sound) audio_.PlayChime(icon == "phone" ? 0 : 1);
@@ -1404,13 +1432,13 @@ void RadioManager::SetJob(const JobInfo& j) {
     // a job that comes with loading a save (shortly after the game time appeared) is not a new job
     const bool loadedWithSave = !gameTimeAt_ || GetTickCount64() - gameTimeAt_ < 20000;
     if (newJob && j.active && !loadedWithSave && ph.enabled && ph.calls) {   // a new job was taken
-        const bool en = cfg_.menuLanguage == "en";
+        const bool en = cfg_.menuLanguage != "de";
         unsigned d = j.deliveryTime;
         wchar_t when[48]; swprintf(when, 48, L"%02u:%02u", (d / 60) % 24, d % 60);
-        dispatchText_ = en ? L"Hello, dispatch here. Your new job: " + Utf8ToWide(j.cargo) + L" from " + Utf8ToWide(j.sourceCity) + L" to " + Utf8ToWide(j.city) +
-                                 L", " + Utf8ToWide(j.company) + L". Please deliver by " + when + L". Drive safely!"
-                           : L"Hallo, hier ist die Disposition. Dein neuer Auftrag: " + Utf8ToWide(j.cargo) + L" von " + Utf8ToWide(j.sourceCity) + L" nach " + Utf8ToWide(j.city) +
-                                 L", Firma " + Utf8ToWide(j.company) + L". Lieferung bis " + when + L" Uhr. Gute Fahrt!";
+        const std::wstring cargo = Utf8ToWide(j.cargo), from = Utf8ToWide(j.sourceCity), to = Utf8ToWide(j.city), firm = Utf8ToWide(j.company);
+        dispatchText_ = L10n::Fill(L10n::Pick(L"Hallo, hier ist die Disposition. Dein neuer Auftrag: {cargo} von {from} nach {to}, Firma {company}. Lieferung bis {time} Uhr. Gute Fahrt!",
+                                              L"Hello, dispatch here. Your new job: {cargo} from {from} to {to}, {company}. Please deliver by {time}. Drive safely!", en),
+                                   {{L"{cargo}", cargo}, {L"{from}", from}, {L"{to}", to}, {L"{company}", firm}, {L"{time}", when}});
         dispatchAt_ = GetTickCount64() + 8000;
     }
     if (j.active) Log::Write("Job: %s to %s (%s), delivery window ends at game minute %u%s", j.cargo.c_str(), j.city.c_str(), j.company.c_str(), j.deliveryTime,
@@ -1423,18 +1451,18 @@ void RadioManager::SetGameTime(unsigned minutes) {
     gameTime_ = minutes;
 }
 void RadioManager::PhoneTest() {
-    const bool en = cfg_.menuLanguage == "en";
+    const bool en = cfg_.menuLanguage != "de";
     const PhoneConfig& ph = cfg_.screen.phone;
     JobInfo j = job_;
-    if (!j.active) { j.city = en ? "Berlin" : "Berlin"; j.cargo = en ? "Furniture" : "M\xc3\xb6" "bel"; j.company = "Tradeaux"; }
+    if (!j.active) { j.city = L10n::PickA("Berlin", "Berlin", en); j.cargo = L10n::PickA("M\xc3\xb6" "bel", "Furniture", en); j.company = "Tradeaux"; }
     int remaining = j.active && gameTime_ ? (int)j.deliveryTime - (int)gameTime_ : (int)ph.minutes;
-    std::wstring text = Fill(Utf8ToWide(ph.text), j, remaining, en);
-    PhoneNotice("message", en ? L"Messages" : L"Nachrichten", Utf8ToWide(ph.sender), text);
-    phone_.AddMessage(Utf8ToWide(ph.sender), text);
+    std::wstring text = Fill(L10n::Ov(ph.text), j, remaining, en);
+    PhoneNotice("message", L10n::Pick(L"Nachrichten", L"Messages", en), L10n::Ov(ph.sender), text);
+    phone_.AddMessage(L10n::Ov(ph.sender), text);
 }
 void RadioManager::PhoneTick(ULONGLONG now) {
     const PhoneConfig& ph = cfg_.screen.phone;
-    const bool en = cfg_.menuLanguage == "en";
+    const bool en = cfg_.menuLanguage != "de";
     const bool on = ph.enabled;
     if (!powered_ && wasPowered_) powerOffAt_ = now;
     // "connected" after the start logo - not again when the ignition was off only for a moment (engine start)
@@ -1445,21 +1473,21 @@ void RadioManager::PhoneTick(ULONGLONG now) {
     if (!on || !powered_) { phoneConnectAt_ = 0; return; }
     if (dispatchAt_ && now >= dispatchAt_) {   // the dispatcher calls
         dispatchAt_ = 0;
-        const std::wstring disp = Utf8ToWide(ph.dispatcher.empty() ? std::string(en ? "Dispatch" : "Disposition") : ph.dispatcher);
+        const std::wstring disp = ph.dispatcher.empty() ? std::wstring(L10n::Pick(L"Disposition", L"Dispatch", en)) : L10n::Ov(ph.dispatcher);
         phone_.Call(disp, dispatchText_);
     }
     if (phoneConnectAt_ && now >= phoneConnectAt_) {
         phoneConnectAt_ = 0;
-        PhoneNotice("phone", L"Bluetooth", Utf8ToWide(ph.name.empty() ? "Phone" : ph.name), en ? L"Connected" : L"Verbunden");
+        PhoneNotice("phone", L"Bluetooth", Utf8ToWide(ph.name.empty() ? "Phone" : ph.name), L10n::Pick(L"Verbunden", L"Connected", en));
         return;
     }
     if (!ph.messages || jobMessageSent_ || !job_.active || !job_.loaded || !gameTime_ || phoneConnectAt_) return;
     const int remaining = (int)job_.deliveryTime - (int)gameTime_;
     if (remaining > 0 && remaining <= (int)ph.minutes) {
         jobMessageSent_ = true;
-        std::wstring text = Fill(Utf8ToWide(ph.text), job_, remaining, en);
-        PhoneNotice("message", en ? L"Messages" : L"Nachrichten", Utf8ToWide(ph.sender), text);
-        phone_.AddMessage(Utf8ToWide(ph.sender), text);
+        std::wstring text = Fill(L10n::Ov(ph.text), job_, remaining, en);
+        PhoneNotice("message", L10n::Pick(L"Nachrichten", L"Messages", en), L10n::Ov(ph.sender), text);
+        phone_.AddMessage(L10n::Ov(ph.sender), text);
     }
 }
 
@@ -1467,7 +1495,7 @@ void RadioManager::PhoneTick(ULONGLONG now) {
 // The phone itself (1.6.0): smartphone in the corner of the screen, calls from the dispatcher, messages, job, music
 void RadioManager::InitPhone() {
     PhoneHost h;
-    h.english = [this] { return cfg_.menuLanguage == "en"; };
+    h.english = [this] { return cfg_.menuLanguage != "de"; };
     h.gameTime = [this] { return gameTime_; };
     h.fillJob = [this](PhoneView& v) { FillPhoneJob(v); };
     h.fillMusic = [this](PhoneView& v) { FillPhoneMusic(v); };
@@ -1491,14 +1519,14 @@ void RadioManager::InitPhone() {
     h.stopSound = [this] { audio_.StopPhone(); };
     h.soundPlaying = [this] { return audio_.PhonePlaying(); };
     h.callBanner = [this](const std::wstring& caller, const std::wstring&) {
-        const bool en = cfg_.menuLanguage == "en";
+        const bool en = cfg_.menuLanguage != "de";
         std::wstring key = Utf8ToWide(KeyBindingName(cfg_.keys[(int)Action::Phone]));
         if (!en && key.rfind(L"Shift+", 0) == 0) key = L"Umschalt+" + key.substr(6);
         if (!en && key.rfind(L"Ctrl+", 0) == 0) key = L"Strg+" + key.substr(5);
         OverlayInfo i;
-        i.notice = true; i.noticeIcon = "call"; i.noticeApp = en ? L"Phone" : L"Telefon"; i.noticeTitle = caller;
-        i.noticeText = en ? L"Incoming call • " + key + L" to answer" : L"Eingehender Anruf • " + key + L" zum Annehmen";
-        i.noticeTime = en ? L"now" : L"jetzt";
+        i.notice = true; i.noticeIcon = "call"; i.noticeApp = L10n::Pick(L"Telefon", L"Phone", en); i.noticeTitle = caller;
+        i.noticeText = L10n::Fill(L10n::Pick(L"Eingehender Anruf \u2022 {key} zum Annehmen", L"Incoming call \u2022 {key} to answer", en), {{L"{key}", key}});
+        i.noticeTime = L10n::Pick(L"jetzt", L"now", en);
         i.headline = i.noticeApp; i.title = caller; i.subtitle = i.noticeText; i.lcd = caller;
         overlay_.Show(i, "", 10.0);
     };
@@ -1506,11 +1534,11 @@ void RadioManager::InitPhone() {
 }
 
 void RadioManager::OpenPhone() {
-    const bool en = cfg_.menuLanguage == "en";
+    const bool en = cfg_.menuLanguage != "de";
     if (menu_.IsOpen()) return;
     if (!cfg_.screen.phone.enabled) {
-        PhoneNotice("phone", en ? L"Phone" : L"Handy", en ? L"The phone is off" : L"Das Handy ist aus",
-                    en ? L"Settings menu → Phone → Virtual mobile device" : L"Einstellungsmenü → Handy → Virtuelles Handy");
+        PhoneNotice("phone", L10n::Pick(L"Handy", L"Phone", en), L10n::Pick(L"Das Handy ist aus", L"The phone is off", en),
+                    L10n::Pick(L"Einstellungsmenü → Handy → Virtuelles Handy", L"Settings menu → Phone → Virtual mobile device", en));
         return;
     }
     overlay_.PrepareMenu();
@@ -1526,13 +1554,13 @@ void RadioManager::PhoneUiTick(InputManager& input) {
 
 std::wstring RadioManager::Money(long long amount) const {
     std::wstring n = std::to_wstring(amount < 0 ? -amount : amount), out;
-    for (int i = 0; i < (int)n.size(); ++i) { if (i && (n.size() - i) % 3 == 0) out += cfg_.menuLanguage == "en" ? L"," : L"."; out += n[i]; }
+    for (int i = 0; i < (int)n.size(); ++i) { if (i && (n.size() - i) % 3 == 0) out += L10n::Thousands(); out += n[i]; }
     if (amount < 0) out = L"-" + out;
     return game_ == "ats" ? L"$" + out : out + L" €";
 }
 
 void RadioManager::FillPhoneJob(PhoneView& v) {
-    const bool en = cfg_.menuLanguage == "en";
+    const bool en = cfg_.menuLanguage != "de";
     v.jobActive = job_.active;
     if (!job_.active) return;
     v.cargo = Utf8ToWide(job_.cargo);
@@ -1542,7 +1570,7 @@ void RadioManager::FillPhoneJob(PhoneView& v) {
     if (gameTime_ && job_.deliveryTime) {
         int rem = (int)job_.deliveryTime - (int)gameTime_;
         v.late = rem < 0;
-        v.remaining = rem < 0 ? (en ? L"late " : L"zu spät ") + hm(-rem) : hm(rem);
+        v.remaining = rem < 0 ? L10n::Fill(L10n::Pick(L"{time} zu spät", L"{time} late", en), {{L"{time}", hm(-rem)}}) : hm(rem);
     }
     if (navDist_ > 0) { wchar_t b[32]; swprintf(b, 32, L"%.0f km", navDist_ / 1000.f); v.distance = b; } else v.distance = L"–";
     if (navTime_ > 0 && gameTime_) {
@@ -1605,20 +1633,88 @@ void RadioManager::FillPhoneMusic(PhoneView& v) {
     }
 }
 
+// ---- add-ons (1.7.0): what they may know about the game, city names, their notifications
+namespace { const StationDatabase* g_db = nullptr; }
+static bool CityLookup(const std::string& token, std::string& out) {
+    if (!g_db) return false;
+    for (const auto& c : g_db->cities)
+        if (c.gameName == token) {
+            out = nlohmann::json{{"token", c.gameName}, {"name", c.realName}, {"country", c.country}, {"x", c.x}, {"z", c.z}}.dump();
+            return true;
+        }
+    return false;
+}
+void RadioManager::TickAddons(ULONGLONG now) {
+    static ULONGLONG lastState = 0;
+    if (now - lastState >= 500) {
+        lastState = now;
+        g_db = &db_;
+        Addons::SetCityLookup(CityLookup);
+        nlohmann::json j{{"api", 2}, {"version", REALISTIC_RADIO_VERSION}, {"game", game_}, {"language", L10n::Code()}, {"gameTime", gameTime_},
+               {"x", lastX_}, {"z", lastZ_}, {"country", currentCountry_}, {"powered", powered_}, {"phoneOpen", phone_.IsOpen()}};
+        j["job"] = {{"active", job_.active}, {"cargo", job_.cargo}, {"sourceCity", job_.sourceCity}, {"sourceCityId", job_.sourceCityId},
+                    {"sourceCompany", job_.sourceCompany}, {"city", job_.city}, {"cityId", job_.cityId}, {"company", job_.company},
+                    {"deliveryTime", job_.deliveryTime}, {"income", job_.income}};
+        std::string nearest; double best = 1e18;   // the nearest city (for add-ons that start from where the truck is)
+        for (const auto& c : db_.cities) {
+            double d = (c.x - lastX_) * (c.x - lastX_) + (c.z - lastZ_) * (c.z - lastZ_);
+            if (d < best) { best = d; nearest = c.gameName; }
+        }
+        j["nearestCity"] = nearest;
+        Addons::SetState(j.dump());
+    }
+    Addons::Notice n;
+    while (Addons::TakeNotice(n)) {
+        const PhoneConfig& ph = cfg_.screen.phone;
+        std::wstring app = Utf8ToWide(n.app);
+        if (ph.enabled) PhoneNotice(n.icon.empty() ? "message" : n.icon, app, n.title, n.text);
+        if (n.message) phone_.AddMessage(n.from.empty() ? (n.title.empty() ? app : n.title) : n.from, n.text.empty() ? n.title : n.text);
+    }
+}
+
+// Music of another app on the PC (add-on realistic-radio-media.dll, 1.7.0): while it plays the radio fades out (like a
+// car radio switching to Bluetooth), and every new title shows on the navigation screen with its cover.
+void RadioManager::TickExternalMedia(ULONGLONG now) {
+    const PhoneConfig& ph = cfg_.screen.phone;
+    auto m = ExternalMedia::Get();
+    const bool playing = m.addon && m.session && m.status == ExternalMedia::Playing;
+    const bool duck = playing && ph.enabled && ph.mediaDuck;
+    if (duck != extDucked_) {
+        extDucked_ = duck; audio_.SetDucked(duck);
+        if (duck) Log::Write("Phone media plays (%s): the radio fades out", WideToUtf8(m.app).c_str());
+        else Log::Write("Phone media stopped: the radio comes back");
+    }
+    if (m.trackSerial == extTrack_ && m.coverSerial == extCover_) return;
+    const bool newTrack = m.trackSerial != extTrack_;
+    extTrack_ = m.trackSerial; extCover_ = m.coverSerial;
+    if (!playing || !ph.enabled || !ph.mediaCard || m.title.empty() || !powered_) return;
+    if (!newTrack && !(extCardAt_ && now - extCardAt_ < 4000)) return;   // the cover came a moment after the title: update the card
+    if (newTrack) extCardAt_ = now;
+    OverlayInfo i;
+    i.media = true; i.mediaType = "bluetooth"; i.source = L"Bluetooth";
+    i.headline = m.app.empty() ? std::wstring(L10n::Pick(L"Medien", L"Media", cfg_.menuLanguage != "de")) : m.app;
+    i.title = m.title; i.subtitle = m.artist; i.detail = m.album;
+    i.posSec = m.pos >= 0 ? (int)m.pos : 0; i.lenSec = m.len > 0 ? (int)(m.len + 0.5) : -1;
+    i.lcd = m.artist.empty() ? m.title : m.artist + L" - " + m.title;
+    overlay_.Show(i, m.cover ? "mem:" + std::to_string(m.coverSerial) : "");
+}
+
 void RadioManager::OnGameEvent(const GameEvent& e) {
-    const bool en = cfg_.menuLanguage == "en";
+    const bool en = cfg_.menuLanguage != "de";
     const PhoneConfig& ph = cfg_.screen.phone;
     Log::Write("Game event: %s (%lld)%s%s", e.id.c_str(), e.amount, e.text.empty() ? "" : " ", e.text.c_str());
     if (!ph.enabled) return;
-    const std::wstring disp = Utf8ToWide(ph.dispatcher.empty() ? std::string(en ? "Dispatch" : "Disposition") : ph.dispatcher);
+    const std::wstring disp = ph.dispatcher.empty() ? std::wstring(L10n::Pick(L"Disposition", L"Dispatch", en)) : L10n::Ov(ph.dispatcher);
     if (e.id == "job.delivered" && ph.calls) {
-        std::wstring t = en ? L"Hello, dispatch here. The delivery to " + Utf8ToWide(job_.city) + L" has arrived, thank you! " + Money(e.amount) + L" have been transferred to your account."
-                            : L"Hallo, hier ist die Disposition. Die Lieferung nach " + Utf8ToWide(job_.city) + L" ist angekommen, danke! " + Money(e.amount) + L" sind überwiesen.";
+        const std::wstring city = Utf8ToWide(job_.city), money = Money(e.amount);
+        std::wstring t = L10n::Fill(L10n::Pick(L"Hallo, hier ist die Disposition. Die Lieferung nach {city} ist angekommen, danke! {money} sind \u00fcberwiesen.",
+                                               L"Hello, dispatch here. The delivery to {city} has arrived, thank you! {money} have been transferred to your account.", en),
+                                    {{L"{city}", city}, {L"{money}", money}});
         dispatchText_ = t; dispatchAt_ = GetTickCount64() + 6000;
     } else if (e.id == "job.cancelled") {
-        PhoneNotice("message", en ? L"Messages" : L"Nachrichten", disp,
-                    en ? L"Job cancelled. Penalty: " + Money(e.amount) : L"Auftrag abgebrochen. Vertragsstrafe: " + Money(e.amount));
-        phone_.AddMessage(disp, en ? L"Job cancelled. Penalty: " + Money(e.amount) : L"Auftrag abgebrochen. Vertragsstrafe: " + Money(e.amount));
+        PhoneNotice("message", L10n::Pick(L"Nachrichten", L"Messages", en), disp,
+                    L10n::Pick(L"Auftrag abgebrochen. Vertragsstrafe: ", L"Job cancelled. Penalty: ", en) + Money(e.amount));
+        phone_.AddMessage(disp, L10n::Pick(L"Auftrag abgebrochen. Vertragsstrafe: ", L"Job cancelled. Penalty: ", en) + Money(e.amount));
     } else if (e.id == "player.fined" && ph.fines) {
         static const std::map<std::string, std::pair<const wchar_t*, const wchar_t*>> why = {
             {"crash", {L"Unfall", L"Crash"}}, {"avoid_sleeping", {L"Ruhezeit nicht eingehalten", L"No rest taken"}}, {"wrong_way", {L"Falsche Richtung", L"Wrong way"}},
@@ -1628,10 +1724,10 @@ void RadioManager::OnGameEvent(const GameEvent& e) {
             {"hard_shoulder_violation", {L"Standstreifen befahren", L"Hard shoulder"}}, {"damaged_vehicle_usage", {L"Beschädigtes Fahrzeug", L"Damaged vehicle"}},
             {"generic", {L"Verstoß", L"Offence"}}};
         auto it = why.find(e.text);
-        std::wstring reason = it != why.end() ? (en ? it->second.second : it->second.first) : Utf8ToWide(e.text);
-        std::wstring from = en ? L"Police" : L"Polizei";
-        std::wstring text = (en ? L"Fine: " : L"Bußgeld: ") + Money(e.amount) + L" – " + reason;
-        PhoneNotice("message", en ? L"Messages" : L"Nachrichten", from, text);
+        std::wstring reason = it != why.end() ? std::wstring(L10n::Pick(it->second.first, it->second.second, en)) : Utf8ToWide(e.text);
+        std::wstring from = L10n::Pick(L"Polizei", L"Police", en);
+        std::wstring text = (L10n::Pick(L"Bußgeld: ", L"Fine: ", en)) + Money(e.amount) + L" – " + reason;
+        PhoneNotice("message", L10n::Pick(L"Nachrichten", L"Messages", en), from, text);
         phone_.AddMessage(from, text);
     }
 }

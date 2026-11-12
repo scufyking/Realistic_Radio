@@ -3,6 +3,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "TunnelMap.h"
+#include "L10n.h"
 #include "EmbeddedData.h"
 #include "Logger.h"
 #include "json.hpp"
@@ -107,16 +108,16 @@ bool TunnelMap::Inside(double x, double z) const {
 std::wstring TunnelMap::Mark(double x, double z, bool en) {
     if (!haveEntry_) {
         haveEntry_ = true; entX_ = x; entZ_ = z;
-        return en ? L"Tunnel entry saved - press again at the exit" : L"Tunnel-Anfang gespeichert – am Ende nochmal drücken";
+        return L10n::Pick(L"Tunnel-Anfang gespeichert – am Ende nochmal drücken", L"Tunnel entry saved - press again at the exit", en);
     }
     haveEntry_ = false;
     double len = std::hypot(x - entX_, z - entZ_);
-    if (len < 20 || len > 15000) return en ? L"Tunnel not saved (too short or too long)" : L"Tunnel nicht gespeichert (zu kurz oder zu lang)";
+    if (len < 20 || len > 15000) return L10n::Pick(L"Tunnel nicht gespeichert (zu kurz oder zu lang)", L"Tunnel not saved (too short or too long)", en);
     own_.push_back({(float)entX_, (float)entZ_, (float)x, (float)z, 12.f});
     json j; j["t"] = json::array();
     for (const Seg& s : own_) j["t"].push_back({std::round(s.ax * 10) / 10, std::round(s.az * 10) / 10, std::round(s.bx * 10) / 10, std::round(s.bz * 10) / 10, s.hw});
     std::ofstream o{std::filesystem::path(dir_ + L"tunnels-own.json")}; o << j.dump(1);
     Log::Write("Tunnels: own tunnel saved (%.0f m)", len);
-    wchar_t b[96]; swprintf(b, 96, en ? L"Tunnel saved (%.0f m)" : L"Tunnel gespeichert (%.0f m)", len);
+    wchar_t b[96]; swprintf(b, 96, L10n::Pick(L"Tunnel gespeichert (%.0f m)", L"Tunnel saved (%.0f m)", en), len);
     return b;
 }

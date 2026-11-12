@@ -4,6 +4,8 @@
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #define DIRECTINPUT_VERSION 0x0800
 #include "InputManager.h"
+#include "L10n.h"
+#include "KeyState.h"
 #include "Logger.h"
 #include <mmsystem.h>
 #include <dinput.h>
@@ -22,7 +24,7 @@ static bool ChatMenuInFront() {   // the Trucker Chat menu (separate plugin) is 
     return !wcscmp(cls, L"TruckerChatMenu");   // typing in the chat menu must not change the radio
 }
 
-static bool Down(int vk) { return vk && (GetAsyncKeyState(vk) & 0x8000) != 0; }
+static bool Down(int vk) { return vk && (RealAsyncKeyState(vk) & 0x8000) != 0; }   // past other plugins' hooks (KeyState.h)
 
 void InputManager::Poll(const std::function<void(Action, bool)>& fire) {
     if ((cfg_.onlyWhenGameFocused && !GameFocused()) || ChatMenuInFront()) { for (auto& k : keyDown_) k = false; for (auto& h : holdDone_) h = true; return; }
@@ -30,6 +32,14 @@ void InputManager::Poll(const std::function<void(Action, bool)>& fire) {
     for (int i = 0; i < (int)Action::Count; ++i) {
         const KeyBinding& b = cfg_.keys[i];
         pressed[i] = b.vk && Down(b.vk) && Down(VK_CONTROL) == b.ctrl && Down(VK_SHIFT) == b.shift && Down(VK_MENU) == b.alt;
+        if (pressed[i]) if (auto f = foreign_.find(b.vk); f != foreign_.end()) {   // the key belongs to another plugin
+            pressed[i] = false;
+            if (!foreignNoticed_[b.vk]) {
+                foreignNoticed_[b.vk] = true;
+                Log::Write("Keys: %s is used by %s - %s does nothing; choose another key in the settings menu", KeyBindingName(b).c_str(), f->second.c_str(), ActionName((Action)i));
+                notice_ = Utf8ToWide(KeyBindingName(b) + " \u2192 " + f->second + (L10n::PickA(" (Radio: andere Taste w\u00e4hlen)", " (radio: choose another key)", cfg_.menuLanguage != "de")));
+            }
+        }
     }
     bool anyButton = false;
     for (int b : cfg_.buttons) if (b >= 0) anyButton = true;

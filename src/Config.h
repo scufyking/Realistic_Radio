@@ -35,8 +35,11 @@ struct PhoneConfig {
     bool voice = true;                  // calls are spoken by a Windows voice (else text only)
     bool fines = true;                  // a message for every fine
     std::string dispatcher = "Disposition";   // name of the caller
+    // music of another app on the PC (add-on realistic-radio-media.dll, 1.7.0)
+    bool mediaCard = true;              // every new title on the navigation screen
+    bool mediaDuck = true;              // the radio fades out while that music plays
     bool operator==(const PhoneConfig& o) const { return enabled == o.enabled && name == o.name && messages == o.messages && sender == o.sender && text == o.text && minutes == o.minutes && sound == o.sound &&
-                                                         calls == o.calls && voice == o.voice && fines == o.fines && dispatcher == o.dispatcher; }
+                                                         calls == o.calls && voice == o.voice && fines == o.fines && dispatcher == o.dispatcher && mediaCard == o.mediaCard && mediaDuck == o.mediaDuck; }
 };
 
 struct ScreenConfig {
@@ -127,7 +130,7 @@ struct Config {
     std::string mediaTrack;         // last USB track, relative to the folder (remembered)
     std::map<std::string, std::string> mediaResume;   // last track per USB / CD (folder name -> track), remembered
     std::string screenPage = "navi";   // navi | radio: radio page kept on the in-cab screen (remembered)
-    std::string menuLanguage = "de";   // key menu (Ctrl+0): de | en
+    std::string menuLanguage = "de";   // menus and messages: de | en | ru (1.7.0)
     std::vector<TruckPreset> presets;
     std::string activePreset;          // name, empty = none
     bool presetAuto = true;            // load the preset linked to the truck when the truck changes
