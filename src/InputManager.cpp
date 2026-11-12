@@ -6,6 +6,7 @@
 #include "InputManager.h"
 #include "L10n.h"
 #include "KeyState.h"
+#include <cstdlib>
 #include "Logger.h"
 #include "InputBlock.h"
 #include <mmsystem.h>

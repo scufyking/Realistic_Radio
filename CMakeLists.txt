@@ -5,20 +5,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(realistic-radio SHARED
     src/Plugin.cpp src/Logger.cpp src/Config.cpp src/StationDatabase.cpp src/ReceptionCalculator.cpp
-    src/RadioManager.cpp src/AudioEngine.cpp src/StreamSource.cpp src/InputManager.cpp src/MiniaudioImpl.cpp
+    src/RadioManager.cpp src/AudioEngine.cpp src/StreamSource.cpp src/HlsInput.cpp src/InputManager.cpp src/MiniaudioImpl.cpp
     src/Overlay.cpp src/OverlayImage.cpp src/D3D11Overlay.cpp src/DisplayWindow.cpp src/EmbeddedData.cpp src/MediaLibrary.cpp src/MenuInput.cpp src/SettingsMenu.cpp src/InputBlock.cpp src/TunnelMap.cpp src/PluginApi.cpp
     src/GameAudio.cpp src/CardStyles.cpp src/Phone.cpp src/ScufyOS.cpp src/Speech.cpp src/ForeignKeys.cpp src/L10n.cpp src/ExternalMedia.cpp src/Addons.cpp third_party/minhook/src/buffer.c third_party/minhook/src/hook.c third_party/minhook/src/trampoline.c third_party/minhook/src/hde/hde64.c
     ${CMAKE_BINARY_DIR}/resources.rc
     src/exports.def)
 target_include_directories(realistic-radio PRIVATE src third_party third_party/minhook/include sdk/include)
 target_compile_definitions(realistic-radio PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS)
-target_link_libraries(realistic-radio PRIVATE winhttp mfplat mfreadwrite mfuuid ole32 winmm user32 gdi32 d3d11 dxgi dxguid urlmon windowscodecs shlwapi dinput8 psapi shell32)
+target_link_libraries(realistic-radio PRIVATE winhttp mfplat mfreadwrite mfuuid ole32 oleaut32 uuid winmm user32 gdi32 d3d11 dxgi dxguid urlmon windowscodecs shlwapi dinput8 psapi shell32)
 if(MSVC)
     target_compile_options(realistic-radio PRIVATE /W3 /utf-8 /EHsc)
     set_property(TARGET realistic-radio PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")  # no VC++ redist needed
 else()
     target_link_options(realistic-radio PRIVATE -static -static-libgcc -static-libstdc++)
 endif()
+
 set_target_properties(realistic-radio PROPERTIES PREFIX "" OUTPUT_NAME "realistic-radio")
 
 # Station data and sounds are embedded into the DLL (src/resources.rc.in) and unpacked by the plugin itself.
@@ -78,3 +79,17 @@ if(NOT MSVC)
     target_link_options(realistic-radio-hello PRIVATE -static -static-libgcc -static-libstdc++)
 endif()
 set_target_properties(realistic-radio-hello PROPERTIES PREFIX "" OUTPUT_NAME "realistic-radio-hello")
+option(RR_BUILD_HLS_PROBE "Build standalone native HLS diagnostics" OFF)
+if(RR_BUILD_HLS_PROBE)
+    add_executable(hls-policy-test tests/HlsPolicyTest.cpp)
+    target_include_directories(hls-policy-test PRIVATE src)
+    enable_testing()
+    add_test(NAME hls-startup-policy COMMAND hls-policy-test)
+    add_executable(hls-probe tests/HlsProbe.cpp src/HlsInput.cpp src/Logger.cpp)
+    target_include_directories(hls-probe PRIVATE src)
+    target_compile_definitions(hls-probe PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_link_libraries(hls-probe PRIVATE winhttp mfplat mfreadwrite mfuuid ole32 uuid shlwapi)
+    if(MSVC)
+        target_compile_options(hls-probe PRIVATE /utf-8 /EHsc)
+    endif()
+endif()

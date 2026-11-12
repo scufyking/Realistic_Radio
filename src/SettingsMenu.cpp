@@ -6,6 +6,7 @@
 #include "L10n.h"
 #include "ExternalMedia.h"
 #include "Addons.h"
+#include <algorithm>
 #include "GameAudio.h"
 #include "CardStyles.h"
 #include "MenuInput.h"

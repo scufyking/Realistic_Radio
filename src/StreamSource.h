@@ -13,6 +13,7 @@
 
 constexpr ma_uint32 kRate = 48000;
 constexpr ma_uint32 kChannels = 2;
+class HlsInput;
 
 // One network/file stream. Runs on its own worker thread, decodes to 48 kHz stereo float into a ring buffer.
 // The thread holds a reference on the DLL and leaves via FreeLibraryAndExitThread, so ETS2 can unload
@@ -44,11 +45,12 @@ public:
     std::atomic<HANDLE> req_{nullptr};
     bool Write(const float* frames, ma_uint32 count);   // blocks while ring buffer is full
 private:
+    friend struct StreamSessionTestAccess;
     static DWORD WINAPI ThreadProc(LPVOID p);
     void Run();
     bool PlayOnce(const std::string& url, int depth);
     bool PlayMp3(void* http);
-    bool PlayMediaFoundation(const std::string& url);
+    bool PlayMediaFoundation(const std::string& url, bool hls = false);
     bool PlayLocalFile(const std::string& path);
     std::string url_;
     int reconnectMax_;
@@ -65,4 +67,6 @@ private:
     bool haveTitle_ = false;
     HANDLE thread_ = nullptr;
     HANDLE done_ = nullptr;
+    std::mutex hlsMtx_;
+    std::shared_ptr<HlsInput> hls_;
 };
