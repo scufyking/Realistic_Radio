@@ -2,6 +2,43 @@
 
 **English** · [Deutsch](#changelog-deutsch)
 
+## 1.7.1 – New download, add-ons included
+
+### Fixed
+- **The download of 1.7.0 was faulty.** 1.7.1 is a new, complete download. The radio itself works the same as in 1.7.0.
+
+### Changed
+- **Add-ons in the same download.** The folder `Add-ons` contains **Jobs+** (`realistic-radio-jobs.dll`), **Web-App** (`realistic-radio-webapp.dll`, Spotify on the phone) and the **add-on SDK** for your own apps. Each add-on has its own README. Copy only the add-ons you want into the `plugins` folder, next to `realistic-radio.dll`.
+- **Works with ETS2 1.62.**
+
+### Upgrade notes
+- Replace `realistic-radio.dll`. Your settings stay as they are.
+
+## 1.7.0 – Real frequencies, frequency in the pop-up, Russian and own languages
+
+### New
+- **Russian language.** Settings menu → Radio → menu language: **Русский**. Menu, pop-up, navigation screen, phone, key names and dispatcher calls are in Russian (translation from the community – thank you!). The dispatcher speaks Russian when a Russian Windows voice is installed. The help files in the folders (usb, truck-logos, styles, frequencies) have a Russian part too. Setting: `"menuLanguage": "ru"`.
+- **Add your own language: `realistic-radio\languages\`.** The plugin writes `_Vorlage - template.txt` with all 440 texts (German and English). Copy it, e.g. to `pl.txt`, enter `CODE` and `NAME`, write the translations after `TEXT:` – after a restart the language is in the menu, with the share already translated ("Polski (35 %)"). Empty texts are shown in English. Optional: `VOICE` (Windows voice for the calls), `DECIMAL` and `THOUSANDS` (number format). New texts of later versions are added at the end of the file automatically. A file named after a built-in language (`ru.txt`) corrects single texts of it. Log: `Languages: …`.
+- **Sentences instead of pieces.** Messages like "Button 4 is empty – hold it to save", the dispatcher calls or "Preset … loaded" are now whole sentences with placeholders (`{n}`, `{city}`, …), so every language can use its own word order. Weekdays, the decimal and the thousands separator follow the language too.
+- **Add-ons: own apps on the phone.** Anyone can now build apps for the virtual phone as a separate DLL in the plugins folder – no extra program, no window. The easy way: describe the screens as JSON (rows, buttons, search field, texts) and the phone draws them in its own look; or draw the screen yourself (portrait) or as a large landscape tablet. Add-ons also get the game state (language, position, nearest city, current job), city names, notifications on the navigation screen and the phone's messages. Up to five add-on apps appear on the home screen (three per row). Header, guide (DE/EN) and an example: `sdk/addon/`.
+- **Add-on "Jobs+" (`realistic-radio-jobs.dll`): own jobs from the phone** (single player). Choose cargo, start company and destination, press F5 – the job is put into the quick save – press F9, and it is in the freight market of the start company: a normal job with pay and experience. Works with encrypted, binary and text saves.
+- **Add-on "Web-App" (`realistic-radio-webapp.dll`): Spotify on the phone.** The Spotify web player (or another page) in Microsoft Edge WebView2, part of Windows – login, playlists, search; the phone turns into a large tablet for it. Mouse, wheel and keyboard go to the page; the music keeps playing when the phone is closed.
+- **The pop-up shows the frequency.** On FM the pop-up overlay now shows the frequency at the bottom right under the signal bars, e.g. "94.3 MHz" – on the line of the city. In DAB+ there is no frequency, so the field stays empty.
+- **Enter the real frequencies yourself: `frequencies-ets2.json` / `frequencies-ats.json`.** On the first start the plugin creates this file in the `realistic-radio` folder with every station of the game, sorted by region, each with an empty entry. Enter the real frequency – `"94.3"` for FM in MHz or `"560 AM"` for AM in kHz – and from the next start the station is on that frequency everywhere: pop-up, navigation screen, frequency radio. AM stations are shown as "560 kHz AM". Entries in this file win over everything else; stations without an entry keep the planned frequency as before. New stations are added to the file automatically, your entries are never removed. Log: `Frequencies: … FM and … AM entered`.
+- **Please send me your filled-in files** (SCS forum or GitHub) – the collected frequencies go into the plugin for everyone.
+- **Real frequencies for Germany.** 169 German stations now come with their real FM frequency – SWR, BR, NDR, WDR, MDR, hr, rbb, Radio Bremen and the big private stations, e.g. "Bayern 3 – 97.3 MHz", "Radio Hamburg – 103.6 MHz".
+- **New regions Stuttgart and Karlsruhe** with their local frequencies (SWR1 on 94.7 MHz in Stuttgart, on 93.5 MHz in Karlsruhe) and three new stations: **Freies Radio für Stuttgart** (99.2), **AFN The Eagle** (102.3, Stuttgart) and **Querfunk** (104.8, Karlsruhe). Karlsruhe (ProMods) now also receives the Baden-Württemberg stations.
+- **The local frequency wins.** Is the same programme received about equally well from two regions, the more local one is played – in Stuttgart SWR1 on 94.7 MHz instead of the frequency for all of Baden-Württemberg.
+
+- **Works together with MotionCab (Dynamic Head-Motion) and other SPF Framework plugins.** Keys these plugins use are left to them: by default MotionCab glances left / right on **NumPad 7 / 9** – the radio's station buttons 7 and 9 – so pressing them moved the view *and* switched the station, and holding them overwrote the station button. Now the radio leaves such keys alone and shows once "NumPad7 → MotionCab (radio: choose another key)"; set another key for the station button in the settings menu, or another glance key in MotionCab. The keys are read from the plugins' own settings (`plugins\spfPlugins\…\config\settings.json`, every 20 s, so changes in the game count). Log: `Keys: used by other plugins, left to them: …`.
+- **Keys are read past other plugins' hooks.** SPF Framework hooks Windows' key functions and runs its key logic in every call. The radio now asks Windows directly, so it no longer triggers key events of SPF plugins from its own thread.
+
+### Fixed
+- Stations on 87.5 or 108.0 MHz (from the custom stations file) kept their frequency only between 87.6 and 107.9 MHz; now the whole band counts.
+
+### Upgrade notes
+- Replace `realistic-radio.dll` only; the frequencies file is created on the next start.
+
 ## 1.6.0 – Virtual phone
 
 ### New
@@ -264,6 +301,43 @@
 
 <a id="changelog-deutsch"></a>
 # Changelog (Deutsch)
+
+## 1.7.1 – Neuer Download, Add-ons dabei
+
+### Behoben
+- **Der Download von 1.7.0 war fehlerhaft.** 1.7.1 ist ein neuer, vollständiger Download. Das Radio selbst funktioniert genauso wie in 1.7.0.
+
+### Geändert
+- **Add-ons im selben Download.** Im Ordner `Add-ons` liegen **Jobs+** (`realistic-radio-jobs.dll`), **Web-App** (`realistic-radio-webapp.dll`, Spotify im Handy) und das **Add-on-SDK** für eigene Apps. Jedes Add-on hat eine eigene README. Kopiere nur die Add-ons, die du willst, in den `plugins`-Ordner neben `realistic-radio.dll`.
+- **Läuft mit ETS2 1.62.**
+
+### Update-Hinweise
+- `realistic-radio.dll` ersetzen. Deine Einstellungen bleiben, wie sie sind.
+
+## 1.7.0 – Echte Frequenzen, Frequenz im Popup, Russisch und eigene Sprachen
+
+### Neu
+- **Russische Sprache.** Einstellungsmenü → Radio → Sprache des Menüs: **Русский**. Menü, Popup, Navi, Handy, Tastennamen und Anrufe der Disposition sind auf Russisch (Übersetzung aus der Community – danke!). Die Disposition spricht Russisch, wenn eine russische Windows-Stimme installiert ist. Die Hilfedateien in den Ordnern (usb, truck-logos, styles, frequencies) haben auch einen russischen Teil. Einstellung: `"menuLanguage": "ru"`.
+- **Eigene Sprache hinzufügen: `realistic-radio\languages\`.** Das Plugin legt `_Vorlage - template.txt` mit allen 440 Texten (Deutsch und Englisch) an. Kopieren, z. B. als `pl.txt`, `CODE` und `NAME` eintragen, hinter `TEXT:` übersetzen – nach dem Neustart steht die Sprache im Menü, mit dem Anteil, der schon übersetzt ist („Polski (35 %)“). Leere Texte erscheinen auf Englisch. Optional: `VOICE` (Windows-Stimme für die Anrufe), `DECIMAL` und `THOUSANDS` (Zahlenformat). Neue Texte späterer Versionen werden automatisch unten an die Datei angehängt. Eine Datei mit dem Namen einer eingebauten Sprache (`ru.txt`) korrigiert einzelne Texte. Log: `Languages: …`.
+- **Ganze Sätze statt Bruchstücke.** Meldungen wie „Taste 4 ist leer – gedrückt halten zum Speichern“, die Anrufe der Disposition oder „Preset … geladen“ sind jetzt ganze Sätze mit Platzhaltern (`{n}`, `{city}`, …), damit jede Sprache ihren eigenen Satzbau benutzen kann. Wochentage, Dezimal- und Tausendertrennzeichen richten sich ebenfalls nach der Sprache.
+- **Add-ons: eigene Apps im Handy.** Jeder kann jetzt Apps für das virtuelle Handy bauen – als eigene DLL im plugins-Ordner, ohne Zusatzprogramm und ohne Fenster. Der einfache Weg: die Bildschirme als JSON beschreiben (Zeilen, Knöpfe, Suchfeld, Texte), das Handy zeichnet sie im eigenen Look; oder den Bildschirm selbst zeichnen (Hochformat) oder als großes Tablet im Querformat. Add-ons bekommen außerdem den Spielzustand (Sprache, Position, nächste Stadt, aktueller Auftrag), Städtenamen, Hinweise auf dem Navi und die Nachrichten des Handys. Bis zu fünf Add-on-Apps erscheinen auf dem Startbildschirm (drei pro Reihe). Header, Anleitung (DE/EN) und ein Beispiel: `sdk/addon/`.
+- **Add-on „Aufträge+“ (`realistic-radio-jobs.dll`): eigene Aufträge über das Handy** (Einzelspieler). Ware, Startfirma und Ziel wählen, F5 drücken – der Auftrag kommt in den Schnellspeicherstand – F9 drücken, und er steht im Frachtmarkt der Startfirma: ein normaler Auftrag mit Lohn und Erfahrung. Geht mit verschlüsselten, binären und Text-Spielständen.
+- **Add-on „Web-App“ (`realistic-radio-webapp.dll`): Spotify im Handy.** Der Spotify Web Player (oder eine andere Seite) in Microsoft Edge WebView2, das bei Windows dabei ist – Anmeldung, Playlists, Suche; das Handy wird dafür zum großen Tablet. Maus, Mausrad und Tastatur gehen an die Seite; die Musik läuft weiter, wenn das Handy zu ist.
+- **Das Popup zeigt die Frequenz.** Bei FM steht im Popup jetzt unten rechts unter den Empfangsbalken die Frequenz, z. B. „94,3 MHz“ – auf der Zeile der Stadt. Bei DAB+ gibt es keine Frequenz, das Feld bleibt leer.
+- **Echte Frequenzen selbst eintragen: `frequencies-ets2.json` / `frequencies-ats.json`.** Beim ersten Start legt das Plugin diese Datei im Ordner `realistic-radio` an – mit allen Sendern des Spiels, nach Regionen sortiert, jeder mit einem leeren Eintrag. Trag die echte Frequenz ein – `"94.3"` für UKW in MHz oder `"560 AM"` für AM in kHz – und ab dem nächsten Start liegt der Sender überall auf dieser Frequenz: Popup, Navi, Frequenz-Radio. AM-Sender werden als „560 kHz AM“ angezeigt. Einträge in dieser Datei haben Vorrang vor allem anderen; Sender ohne Eintrag behalten wie bisher die geplante Frequenz. Neue Sender kommen automatisch dazu, deine Einträge werden nie gelöscht. Log: `Frequencies: … FM and … AM entered`.
+- **Schickt mir gern eure ausgefüllten Dateien** (SCS-Forum oder GitHub) – die gesammelten Frequenzen kommen für alle ins Plugin.
+- **Echte Frequenzen für Deutschland.** 169 deutsche Sender haben jetzt ihre echte UKW-Frequenz – SWR, BR, NDR, WDR, MDR, hr, rbb, Radio Bremen und die großen Privatsender, z. B. „Bayern 3 – 97,3 MHz“, „Radio Hamburg – 103,6 MHz“.
+- **Neue Regionen Stuttgart und Karlsruhe** mit ihren örtlichen Frequenzen (SWR1 in Stuttgart auf 94,7 MHz, in Karlsruhe auf 93,5 MHz) und drei neuen Sendern: **Freies Radio für Stuttgart** (99,2), **AFN The Eagle** (102,3, Stuttgart) und **Querfunk** (104,8, Karlsruhe). Karlsruhe (ProMods) empfängt jetzt auch die Sender aus Baden-Württemberg.
+- **Die örtliche Frequenz gewinnt.** Ist dasselbe Programm aus zwei Regionen etwa gleich gut zu empfangen, spielt die örtlichere – in Stuttgart SWR1 auf 94,7 MHz statt der Frequenz für ganz Baden-Württemberg.
+
+- **Läuft zusammen mit MotionCab (Dynamic Head-Motion) und anderen Plugins des SPF Frameworks.** Tasten, die diese Plugins benutzen, bleiben ihnen überlassen: MotionCab blickt standardmäßig mit **Num 7 / 9** nach links / rechts – das sind die Stationstasten 7 und 9 des Radios. Ein Druck hat also den Blick bewegt *und* den Sender gewechselt, langes Halten hat die Stationstaste überschrieben. Jetzt lässt das Radio solche Tasten in Ruhe und zeigt einmal „NumPad7 → MotionCab (Radio: andere Taste wählen)“; im Einstellungsmenü eine andere Taste für die Stationstaste wählen oder in MotionCab eine andere Blick-Taste. Die Tasten liest das Radio aus den Einstellungen der Plugins (`plugins\spfPlugins\…\config\settings.json`, alle 20 s, Änderungen im Spiel zählen also). Log: `Keys: used by other plugins, left to them: …`.
+- **Tasten werden an fremden Hooks vorbei gelesen.** Das SPF Framework hängt sich in die Tasten-Funktionen von Windows und lässt bei jedem Aufruf seine Tastenlogik laufen. Das Radio fragt Windows jetzt direkt und löst so keine Tasten-Ereignisse der SPF-Plugins mehr aus seinem eigenen Thread aus.
+
+### Behoben
+- Sender auf 87,5 oder 108,0 MHz (aus der Datei für eigene Sender) behielten ihre Frequenz nur zwischen 87,6 und 107,9 MHz; jetzt zählt das ganze Band.
+
+### Hinweise zum Update
+- Nur `realistic-radio.dll` ersetzen; die Frequenz-Datei entsteht beim nächsten Start.
 
 ## 1.6.0 – Virtuelles Handy
 

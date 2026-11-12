@@ -14,7 +14,7 @@ By **ScufyKing**. The whole radio runs inside the game:
 
 Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ETS2, and the radio plays. Station data and sounds are built into the DLL.
 
-> **Version 1.6.0** · [Changes](CHANGELOG.md)
+> **Version 1.7.1** · [Changes](CHANGELOG.md)
 >
 > **Status:** Tested in ETS2 1.61 (Windows x64) with several MAN and Scania models and mod trucks: the plugin loads, reads the truck position, switches stations by region, plays audio and shows station and volume on the navigation screen. American Truck Simulator data is included but ATS is untested.
 
@@ -29,6 +29,7 @@ Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ET
 - [Configuration](#configuration)
 - [USB / CD: your own music](#usb--cd-your-own-music)
 - [Adding your own stations](#adding-your-own-stations)
+- [Languages](#languages)
 - [Troubleshooting](#troubleshooting)
 - [Known limitations](#known-limitations)
 - [How it works](#how-it-works)
@@ -60,7 +61,7 @@ Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ET
 - **Radio memory per truck** (optional): every truck keeps its own stations, favourites, volume, source and USB track.
 - **Truck presets:** the position and design of the screen display can be saved per truck; the right preset is loaded automatically by the truck id from the telemetry.
 - **Start screen** when the ignition is switched on: the truck's manufacturer fades in on black, like on modern infotainment systems (your own logo pictures can be added).
-- **Optional pop-up overlay** (off by default): a panel at the top of the screen or a car-radio style dot-matrix display. Works in fullscreen.
+- **Optional pop-up overlay** (off by default): a panel at the top of the screen (on FM with the frequency, e.g. "94.3 MHz") or a car-radio style dot-matrix display. Works in fullscreen.
 - **Radio only with the ignition on** (or only with the engine running, or always; your choice).
 - **Keyboard and controller controls**, freely configurable.
 - **Settings menu in the game** (**Ctrl + 0**) with mouse and keyboard: volume, reception, navigation display, overlay, USB/CD and key bindings, without editing the JSON file.
@@ -169,7 +170,24 @@ Settings menu → Radio → **Tuning (FM): Frequency**. Every station has an FM 
 - **Station buttons store the frequency**, not the station: in another area the button plays whatever is broadcast on that frequency there.
 - **RDS AF** (off by default) makes the radio follow the programme to its frequency in the next area, like a modern radio.
 
-The frequencies are planned by the plugin (the same every time; stations of one region never share a frequency, neighbouring regions mostly avoid each other's). Own or corrected frequencies can be set in the custom stations file with `"frequency": 94.7`. DAB+ has no frequencies: in DAB+ the station list is used.
+Real frequencies can be entered in `frequencies-ets2.json` / `frequencies-ats.json` (see below); the other frequencies are planned by the plugin (the same every time; stations of one region never share a frequency, neighbouring regions mostly avoid each other's). Own or corrected frequencies can be set in the custom stations file with `"frequency": 94.7`. DAB+ has no frequencies: in DAB+ the station list is used.
+
+#### Real frequencies (`frequencies-ets2.json` / `frequencies-ats.json`)
+
+On the first start the plugin creates this file in the `realistic-radio` folder. It lists every station of the game, sorted by region, each with an empty entry:
+
+```
+"wenatchee": {
+    "94.3 Jack FM": "94.3",
+    "560 KPQ": "560 AM",
+    "The Bull 94.7": ""
+}
+```
+
+- Enter `"94.3"` (FM in MHz) or `"560 AM"` (AM in kHz). Empty `""` = the plugin plans a frequency as before.
+- Entries win over everything else (also over `"frequency"` in the custom stations file). They apply from the next start: pop-up, navigation screen and frequency radio show the real frequency; AM stations appear as "560 kHz AM" (on the FM dial they stay reachable on a planned frequency).
+- New stations are added automatically on the next start; your entries are never removed. If the file has a mistake, it is left as it is and the log says `parse error`.
+- **Please send me your filled-in file** (SCS forum or GitHub) – collected frequencies go into the plugin for everyone.
 
 ### Station buttons (numpad)
 
@@ -227,7 +245,7 @@ All settings are in `realistic-radio\realistic-radio.json`. The file is created 
 | `source` | `"radio"` | Last chosen source, `"radio"` or `"usb"` (saved automatically, resumed on start) |
 | `mediaTrack` | – | Last USB track played (saved automatically) |
 | `mediaResume` | – | Last track per USB / CD (saved automatically) |
-| `menuLanguage` | `"de"` | Language of the settings menu: `"de"` or `"en"` |
+| `menuLanguage` | `"de"` | Language of the settings menu: `"de"`, `"en"`, `"ru"` (Russian) or the `CODE` of a language file (see [Languages](#languages)) |
 | `band` | `"fm"` | Band: `"fm"` (static on weak reception) or `"dab"` (DAB+: longer range, no static, drop-outs at the edge of coverage). Saved automatically |
 | `dabRange` | `1.5` | How much further DAB+ reaches than FM (1.0–3.0) |
 | `switchMode` | `"lost"` | `"lost"` = change to another region only when the current station is out of range; `"better"` = as soon as another region is received better by `threshold` (behaviour up to 1.3) |
@@ -368,6 +386,8 @@ Messages and calls are kept in `realistic-radio\phone-ets2.json` (`phone-ats.jso
 
 The phone settings belong to the screen settings and are therefore kept **per truck preset**: switch to a truck with its own preset and its phone settings are loaded (log: `Phone: …`).
 
+**Add-ons – more apps on the phone:** add-ons bring their own apps to the home screen, e.g. **Jobs+** (`realistic-radio-jobs.dll`: own jobs via F5/F9, single player only) and **Web-App** (`realistic-radio-webapp.dll`: Spotify on the phone via WebView2). Put the DLLs next to `realistic-radio.dll` into the `plugins` folder. Building your own add-ons: see `sdk/addon/README.md`.
+
 ### Truck presets (`"presets"`, `"activePreset"`, `"presetAuto"`)
 
 Different trucks have different screens – the area that fits a MAN may be cut off in a Scania. Presets store the screen settings per truck.
@@ -492,6 +512,37 @@ Copy `realistic-radio\custom-stations-ets2.example.json` to `custom-stations-ets
 
 To find the region names, open `ets2.json` and look under `"stations"`. Regions with a hyphen are subregions, e.g. `germany-swr` or `germany-muenchen`. Near the border you often receive several regions at once.
 
+## Languages
+
+Menus, pop-up, navigation screen and phone are available in **German**, **English** and **Russian** (settings menu → Radio → Menu language, setting `"menuLanguage"`). Anyone can add more languages – without building the plugin:
+
+1. Start the game once with 1.7.0 or newer. The folder `realistic-radio\languages\` then contains **`_Vorlage - template.txt`** with every text of the plugin (German and English each).
+2. Copy the template and rename it, e.g. to **`pl.txt`** (without the `_` at the start).
+3. Enter `CODE` (short code, e.g. `pl`) and `NAME` (as shown in the menu, e.g. `Polski`) at the top, then write the translation after every `TEXT:`:
+   ```
+   CODE: pl
+   NAME: Polski
+   VOICE: 415
+   DECIMAL: ,
+   THOUSANDS: space
+
+   [1]
+   DE: Lautstärke
+   EN: Volume
+   TEXT: Głośność
+   ```
+4. Restart the game → settings menu → Radio → Menu language → **Polski**. While the translation is not complete, the share is shown behind it, e.g. "Polski (35 %)".
+
+Notes:
+- Texts left empty are shown in English. Keep placeholders like `{city}`, `{n}`, `{station}`, `{time}` and characters like `•` `→` `–` as they are; the order of the words may change.
+- `VOICE` (optional): Windows language id of the voice for the dispatcher calls, e.g. `415` Polish, `40C` French, `410` Italian, `413` Dutch, `405` Czech, `40A` Spanish, `41F` Turkish. Without it (or without a matching Windows voice) the default voice speaks.
+- `DECIMAL` / `THOUSANDS`: decimal and thousands separator (`94,3 MHz`, `12.500 €`); `space` = a space, `none` = none.
+- The file must be UTF-8 (Windows Notepad: "Save as" → encoding UTF-8).
+- When an update brings new texts, the plugin adds them (empty) at the end of your file. The template itself is written again at every start – do not translate in the template.
+- `_Beispiel Russisch - example Russian.txt` shows a finished translation. Copied to `ru.txt`, its texts replace the built-in ones – that is how the Russian translation can be improved.
+- Log: `Languages: pl 'Polski' from pl.txt - 152 of 440 texts translated`.
+- **Please send me finished translations** (SCS forum or GitHub) – they go into the plugin for everyone.
+
 ## Troubleshooting
 
 Almost every problem can be diagnosed from `realistic-radio\realistic-radio.log`. When asking for help, always attach this file.
@@ -513,6 +564,7 @@ Almost every problem can be diagnosed from `realistic-radio\realistic-radio.log`
 | Overlay hides part of the HUD | Change `position`, `offsetY` or `scale`. |
 | No station logo | Logos are downloaded from `radio.scufystudio.de` on first use; without internet, or if the server is down, the panel is shown without a logo and the download is retried after 10 minutes. |
 | Keys do nothing | Is the game the active window? Another program may be using the key; pick a different one. |
+| Station button 7 / 9 does nothing, the screen says "NumPad7 → MotionCab" | MotionCab (Dynamic Head-Motion) or another SPF Framework plugin uses that key, so the radio leaves it alone. Pick another key for the station button in the settings menu, or another key in MotionCab. |
 | A station I expected is missing | It is not assigned to the region you are in. You only receive regions within range. Add it as your own station. |
 | "Kein Medientyp erkannt" (no media detected) | There is no file with a supported extension in `realistic-radio\usb\` (or the folder set in `media.folder`). The log shows `USB: 0 file(s) in …` with the exact path. |
 | A USB track is skipped | The file could not be played (`Cannot play file:` in the log), e.g. a copy-protected WMA. If no file plays at all, USB mode stops. |
@@ -594,6 +646,8 @@ node tools/convert_data.js <path>/web data
 
 **Regression test for station selection:** `tools/equivalence-test/` runs a JavaScript reference implementation and the C++ code side by side at thousands of positions and compares the results.
 
+**Texts and translations:** `python3 tools/l10n/make_l10n.py` collects every text from the source (German / English) and builds the table `src/L10nTexts.inc` with the built-in translations from `tools/l10n/ru.txt`; `--update` adds new texts (empty) to `ru.txt`.
+
 ### Libraries used
 
 | Library | Version | License | Purpose |
@@ -645,7 +699,7 @@ The folder `server/logo/` contains all logos (downscaled to 200 px) in exactly t
 ├── server/logo/               station logos for the logo server (radio.scufystudio.de/logo/)
 ├── sdk/                       SCS Telemetry SDK headers
 ├── third_party/               miniaudio, nlohmann/json, 5x7 font (Adafruit GFX), MinHook
-└── tools/                     data converter, equivalence test
+└── tools/                     data converter, equivalence test, texts (l10n)
 ```
 
 ## License and credits

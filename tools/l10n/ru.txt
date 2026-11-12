@@ -1,0 +1,2256 @@
+# Realistic Radio - built-in translation (ru). Format: see the README, section "Add a language".
+CODE: ru
+NAME: Русский
+VOICE: 419
+DECIMAL: ,
+THOUSANDS: space
+
+[Config.h, SettingsMenu.cpp:95]
+DE: Radio
+EN: Radio
+RU: Радио
+
+[SettingsMenu.cpp:95]
+DE: Wiedergabe
+EN: Playback
+RU: Воспроизведение
+
+[Config.h, SettingsMenu.cpp:96]
+DE: Lautstärke
+EN: Volume
+RU: Громкость
+
+[Config.h, SettingsMenu.cpp:97, SettingsMenu.cpp:LabelDe]
+DE: Stumm
+EN: Mute
+RU: Отключить звук
+
+[SettingsMenu.cpp:98]
+DE: Radio an bei
+EN: Radio on with
+RU: Включить радио с
+
+[SettingsMenu.cpp:98]
+DE: Wann das Radio spielt
+EN: When the radio plays
+RU: Когда работает радио
+
+[SettingsMenu.cpp:99]
+DE: Zündung
+EN: Ignition
+RU: Зажигание
+
+[SettingsMenu.cpp:99]
+DE: Motor läuft
+EN: Engine running
+RU: Двигатель работает
+
+[SettingsMenu.cpp:99]
+DE: Immer
+EN: Always
+RU: Всегда
+
+[SettingsMenu.cpp:100]
+DE: Automatisch starten
+EN: Start automatically
+RU: Запускать автоматически
+
+[SettingsMenu.cpp:100]
+DE: Beim Spielstart sofort spielen
+EN: Play as soon as the game starts
+RU: Начинает играть сразу после запуска игры
+
+[SettingsMenu.cpp:101]
+DE: Sprache des Menüs
+EN: Menu language
+RU: Язык меню
+
+[SettingsMenu.cpp:103, SettingsMenu.cpp:230]
+DE: Ton
+EN: Sound
+RU: Звук
+
+[SettingsMenu.cpp:105]
+DE: Ton ausgeben
+EN: Sound output
+RU: Вывод звука
+
+[SettingsMenu.cpp:106]
+DE: Windows-Gerät
+EN: Windows device
+RU: Устройство Windows
+
+[SettingsMenu.cpp:106]
+DE: Kabine des Spiels (Beta)
+EN: The game's cab (beta)
+RU: Кабина игры (бета-версия)
+
+[SettingsMenu.cpp:109]
+DE: Spielt in der Kabine: Fenster, Spiel-Lautstärke, draußen leiser
+EN: Plays in the cab: windows, game volume, quieter outside
+RU: В кабине играет музыка: окна, громкость музыки, на улице тише
+
+[RadioManager.cpp:1390, SettingsMenu.cpp:110]
+DE: Wartet auf den Sound des Spiels …
+EN: Waiting for the game's sound system …
+RU: Ожидание загрузки звуковой системы игры …
+
+[SettingsMenu.cpp:111]
+DE: Hier nicht möglich – läuft über Windows (siehe Log)
+EN: Not possible here - plays on the Windows device (see log)
+RU: Здесь это невозможно — работает через Windows (см. журнал)
+
+[SettingsMenu.cpp:112]
+DE: Kabine: klingt wie das Spielradio (Kabinen-Akustik, Fenster)
+EN: Cab: sounds like the game's radio (cab acoustics, windows)
+RU: Салон: звучит как в игре «Радио» (акустика салона, окна)
+
+[SettingsMenu.cpp:117]
+DE: Spielradio stummschalten
+EN: Mute the game's radio
+RU: Отключить звук игрового радио
+
+[SettingsMenu.cpp:117]
+DE: Solange Realistic Radio spielt (Radio und USB / CD)
+EN: While Realistic Radio plays (radio and USB / CD)
+RU: Во время воспроизведения Realistic Radio (радио и USB / CD)
+
+[SettingsMenu.cpp:120]
+DE: Leiser außerhalb des LKWs
+EN: Quieter outside the truck
+RU: Вне кабины грузовика тише
+
+[SettingsMenu.cpp:124]
+DE: Hörweite draußen
+EN: Range outside
+RU: Радиус слышимости на улице
+
+[SettingsMenu.cpp:124]
+DE: Bis hier ist es draußen noch zu hören (offenes Fenster: doppelt)
+EN: Up to here it can still be heard outside (open window: twice)
+RU: До этого момента с улицы ещё слышно (открытое окно: двойное)
+
+[SettingsMenu.cpp:127, SettingsMenu.cpp:128]
+DE: Band
+EN: Band
+RU: Диапазон
+
+[SettingsMenu.cpp:128]
+DE: DAB+: weiter, ohne Rauschen, bricht bei schwachem Signal ab
+EN: DAB+: further, no static, drops out on a weak signal
+RU: DAB+: сигнал стабильный, без шумов, прерывается при слабом сигнале
+
+[SettingsMenu.cpp:129]
+DE: FM (UKW)
+EN: FM
+RU: FM
+
+[SettingsMenu.cpp:129]
+DE: DAB+
+EN: DAB+
+RU: DAB+
+
+[SettingsMenu.cpp:130]
+DE: Taste: Band wechseln
+EN: Key: change band
+RU: Кнопка: смена диапазона
+
+[SettingsMenu.cpp:131]
+DE: Senderwahl (FM)
+EN: Tuning (FM)
+RU: Выбор станции (FM)
+
+[SettingsMenu.cpp:131]
+DE: Frequenz: Weiter/Zurück sucht den nächsten Sender, Umschalt+Pfeile 0,1 MHz
+EN: Frequency: Next/Previous seeks, Shift+arrows 0.1 MHz
+RU: Частота: кнопки «Вперед»/«Назад» позволяют перейти к следующей станции, Shift + стрелки - 0,1 МГц
+
+[SettingsMenu.cpp:133, SettingsMenu.cpp:603]
+DE: Senderliste
+EN: Station list
+RU: Список каналов
+
+[SettingsMenu.cpp:133]
+DE: Frequenz (wie früher)
+EN: Frequency (old style)
+RU: Частота (старый формат)
+
+[SettingsMenu.cpp:134]
+DE: RDS-AF: Programm folgen
+EN: RDS AF: follow the programme
+RU: RDS AF: следите за программой
+
+[SettingsMenu.cpp:134]
+DE: Aus = wie früher: die Frequenz bleibt, auch wenn der Sender weg ist
+EN: Off = old style: the frequency stays even when the station is gone
+RU: Выкл. = старый режим: частота сохраняется, даже если станция исчезла
+
+[SettingsMenu.cpp:136]
+DE: Songtitel live
+EN: Live song title
+RU: Название песни в прямом эфире
+
+[SettingsMenu.cpp:136]
+DE: Interpret und Titel aus dem Stream, läuft auf dem Navi mit
+EN: Artist and title from the stream, scrolls on the navigation screen
+RU: Имя исполнителя и название композиции из потокового вещания, прокрутка на экране навигации
+
+[SettingsMenu.cpp:138]
+DE: Stationstasten
+EN: Station buttons
+RU: Кнопки станций
+
+[SettingsMenu.cpp:139]
+DE: Stationstasten 1–9
+EN: Station buttons 1–9
+RU: Кнопки станций 1–9
+
+[SettingsMenu.cpp:139]
+DE: Nummernblock: kurz drücken = wählen, gedrückt halten = speichern
+EN: Numpad: tap = select, hold = save
+RU: Цифровая клавиатура: однократное нажатие = выбор, удерживание = сохранение
+
+[SettingsMenu.cpp:141]
+DE: Halten zum Speichern
+EN: Hold to save
+RU: Удерживайте, чтобы сохранить
+
+[SettingsMenu.cpp:141]
+DE: Tasten ändern: Seite Tasten
+EN: Change the keys: page Keys
+RU: Изменить клавиши: страница «Клавиши»
+
+[SettingsMenu.cpp:143]
+DE: Stationstasten neu belegen
+EN: Store station buttons again
+RU: Снова сохранить кнопки станций
+
+[SettingsMenu.cpp:143]
+DE: Mit den 9 am besten empfangenen Sendern hier (Travelstore)
+EN: With the 9 best received stations here (travel store)
+RU: Здесь представлены 9 самых популярных станций (магазин для путешественников)
+
+[SettingsMenu.cpp:144]
+DE: Belegen
+EN: Store
+RU: Занять
+
+[SettingsMenu.cpp:146]
+DE: Empfang
+EN: Reception
+RU: Приём
+
+[SettingsMenu.cpp:146]
+DE: Sender und Empfang
+EN: Stations and reception
+RU: Передача и приём
+
+[SettingsMenu.cpp:147]
+DE: Sendereichweite
+EN: Broadcast range
+RU: Радиус действия
+
+[SettingsMenu.cpp:147]
+DE: Grundreichweite einer Stadt
+EN: Base range of a city
+RU: Базовый радиус действия города
+
+[SettingsMenu.cpp:149]
+DE: Wechselschwelle
+EN: Switch threshold
+RU: Порог переключения
+
+[SettingsMenu.cpp:149]
+DE: Wie viel besser eine andere Region sein muss
+EN: How much better another region must be
+RU: Насколько лучше должен быть другой регион
+
+[SettingsMenu.cpp:151]
+DE: Auto-Lautstärke
+EN: Auto volume
+RU: Автоматическая регулировка громкости
+
+[SettingsMenu.cpp:151]
+DE: Lauter bei höherem Tempo (ab 30 km/h, voll bei 90 km/h)
+EN: Louder at higher speed (from 30 km/h, full at 90 km/h)
+RU: Становится громче при увеличении скорости (начиная с 30 км/ч, достигает максимальной громкости при 90 км/ч)
+
+[SettingsMenu.cpp:153, SettingsMenu.cpp:277, SettingsMenu.cpp:295]
+DE: Aus
+EN: Off
+RU: Выкл.
+
+[SettingsMenu.cpp:154]
+DE: Region wechseln
+EN: Change region
+RU: Изменить регион
+
+[SettingsMenu.cpp:154]
+DE: Wann das Radio einen Sender einer anderen Region wählt
+EN: When the radio picks a station of another region
+RU: Когда радио настраивается на станцию из другого региона
+
+[SettingsMenu.cpp:156]
+DE: Erst wenn der Sender weg ist
+EN: Only when the station is lost
+RU: Только в случае потери связи со станцией
+
+[SettingsMenu.cpp:156]
+DE: Bei besserem Empfang
+EN: On better reception
+RU: При лучшем приеме сигнала
+
+[SettingsMenu.cpp:157]
+DE: DAB+-Reichweite
+EN: DAB+ range
+RU: Зона покрытия DAB+
+
+[SettingsMenu.cpp:157]
+DE: Im Vergleich zu FM
+EN: Compared to FM
+RU: По сравнению с FM
+
+[SettingsMenu.cpp:159]
+DE: Rauschen bei schwachem Empfang
+EN: Static on weak reception
+RU: Шум при слабом приеме сигнала
+
+[SettingsMenu.cpp:160]
+DE: Kein Empfang im Tunnel
+EN: No reception in tunnels
+RU: В туннеле нет связи
+
+[SettingsMenu.cpp:160]
+DE: Tunnel-Daten: ETS2 Tunnel Radio (bohbotoly) • USB / CD spielt weiter
+EN: Tunnel data: ETS2 Tunnel Radio (bohbotoly) • USB / CD keeps playing
+RU: Данные о туннелях: ETS2 Tunnel Radio (bohbotoly) • USB / CD продолжает играть
+
+[SettingsMenu.cpp:162]
+DE: Taste: eigenen Tunnel markieren
+EN: Key: mark an own tunnel
+RU: Кнопка: отметить собственный туннель
+
+[SettingsMenu.cpp:162]
+DE: Am Anfang und am Ende drücken (Map-Mods)
+EN: Press at the entry and at the exit (map mods)
+RU: Нажмите при входе и при выходе (моды карт)
+
+[SettingsMenu.cpp:164]
+DE: Umschaltgeräusch
+EN: Tuning sound
+RU: Настройка звука
+
+[SettingsMenu.cpp:164]
+DE: Beim Senderwechsel
+EN: When the station changes
+RU: Когда станция меняется
+
+[SettingsMenu.cpp:166]
+DE: Radio-Seite dauerhaft zeigen
+EN: Keep the radio page on
+RU: Постоянно отображать страницу «Радио»
+
+[SettingsMenu.cpp:166]
+DE: Statt der Navigation
+EN: Instead of the navigation
+RU: Вместо навигации
+
+[SettingsMenu.cpp:170]
+DE: Navi-Bildschirm
+EN: Navigation screen
+RU: Экран навигатора
+
+[SettingsMenu.cpp:170]
+DE: Anzeige im Cockpit
+EN: Display in the cab
+RU: Отображение в кабине
+
+[SettingsMenu.cpp:171]
+DE: Anzeige auf dem Navi
+EN: Show on the navigation screen
+RU: Отображение на навигаторе
+
+[SettingsMenu.cpp:171]
+DE: Sender und Lautstärke im LKW
+EN: Station and volume in the truck
+RU: Радиостанция и громкость в грузовике
+
+[SettingsMenu.cpp:173, SettingsMenu.cpp:283]
+DE: Anzeigedauer
+EN: Display time
+RU: Время отображения
+
+[SettingsMenu.cpp:173]
+DE: Wie lange Sender / Lautstärke zu sehen sind
+EN: How long station / volume are shown
+RU: Как долго отображаются данные о станции и громкости
+
+[SettingsMenu.cpp:175, SettingsMenu.cpp:605]
+DE: Design
+EN: Design
+RU: Дизайн
+
+[SettingsMenu.cpp:175, SettingsMenu.cpp:605]
+DE: Aussehen der Anzeige im LKW
+EN: Look of the display in the truck
+RU: Вид дисплея в грузовике
+
+[SettingsMenu.cpp:177, SettingsMenu.cpp:601]
+DE: Modern
+EN: Modern
+RU: Современный
+
+[SettingsMenu.cpp:177, SettingsMenu.cpp:601]
+DE: Ozean
+EN: Ocean
+RU: Океан
+
+[SettingsMenu.cpp:177, SettingsMenu.cpp:601]
+DE: Sport
+EN: Sport
+RU: Спорт
+
+[SettingsMenu.cpp:177, SettingsMenu.cpp:601]
+DE: Hell
+EN: Light
+RU: Светлый
+
+[SettingsMenu.cpp:177, SettingsMenu.cpp:602]
+DE: Retro (LCD)
+EN: Retro (LCD)
+RU: Ретро (LCD)
+
+[SettingsMenu.cpp:178]
+DE: Eigene Styles
+EN: Own styles
+RU: Свои собственные стили
+
+[SettingsMenu.cpp:178]
+DE: Ordner styles: Vorlage kopieren, anpassen, hier wählen
+EN: Folder styles: copy the template, edit it, choose it here
+RU: Папка стилей: скопируйте шаблон, отредактируйте его, выберите его здесь
+
+[SettingsMenu.cpp:179]
+DE: Ordner öffnen
+EN: Open folder
+RU: Открыть папку
+
+[SettingsMenu.cpp:180]
+DE: Dimmt mit dem Licht (Beta)
+EN: Dims with the lights (beta)
+RU: Регулировка яркости в зависимости от освещения (бета-версия)
+
+[SettingsMenu.cpp:180]
+DE: Licht an: so hell wie die Instrumentenbeleuchtung, wie ein echtes Display
+EN: Lights on: as bright as the dashboard backlight, like a real display
+RU: Включить свет: такая же яркость, как у подсветки приборной панели, как у настоящего дисплея
+
+[SettingsMenu.cpp:182]
+DE: Lautstärke-Anzeige
+EN: Volume display
+RU: Индикатор уровня громкости
+
+[SettingsMenu.cpp:182]
+DE: Leiste: oben im Navi wie bei modernen Systemen, die Navigation bleibt sichtbar
+EN: Bar: at the top of the screen like modern systems, the navigation stays visible
+RU: Панель: расположена в верхней части экрана, как в современных системах; панель навигации остается видимой
+
+[SettingsMenu.cpp:184]
+DE: Große Karte
+EN: Large card
+RU: Увеличить карту
+
+[SettingsMenu.cpp:184]
+DE: Leiste oben (modern)
+EN: Bar at the top (modern)
+RU: Верхняя панель (современный вариант)
+
+[SettingsMenu.cpp:185]
+DE: Start-Logo beim Einschalten
+EN: Start logo at ignition on
+RU: Логотип при включении
+
+[SettingsMenu.cpp:185]
+DE: Hersteller des LKWs auf Schwarz (Bild wählen: Seite LKW)
+EN: The truck's manufacturer on black (choose the picture: page Trucks)
+RU: Производитель грузовика на черном фоне (выберите изображение: раздел «Грузовики»)
+
+[SettingsMenu.cpp:187]
+DE: Dauer Start-Logo
+EN: Start logo time
+RU: Время отображения начального логотипа
+
+[SettingsMenu.cpp:188]
+DE: Größe Start-Logo
+EN: Start logo size
+RU: Размер логотипа при запуске
+
+[SettingsMenu.cpp:188]
+DE: Höhe des Logos im Anzeigebereich (Vorschau: Seite LKW)
+EN: Height of the logo in the display area (preview: page Trucks)
+RU: Размер логотипа в рекламной зоне (предварительный просмотр: страница «Грузовики»)
+
+[SettingsMenu.cpp:190]
+DE: Größe Schrift und Bilder
+EN: Size of text and pictures
+RU: Размер шрифта и изображений
+
+[SettingsMenu.cpp:190]
+DE: Inhalt größer oder kleiner (höchstens so hoch wie der Bereich)
+EN: Content larger or smaller (at most as high as the area)
+RU: Содержимое больше или меньше (не выше, чем область)
+
+[SettingsMenu.cpp:192]
+DE: Größe Senderlogo / Cover
+EN: Size of station logo / cover
+RU: Размер логотипа канала / обложки
+
+[SettingsMenu.cpp:195]
+DE: Taste: Navi ↔ Radio-Seite
+EN: Key: navigation ↔ radio page
+RU: Кнопка: Навигация ↔ Страница «Радио»
+
+[SettingsMenu.cpp:196]
+DE: Position auf dem Bildschirm
+EN: Position on the screen
+RU: Расположение на экране
+
+[SettingsMenu.cpp:198]
+DE: Zeichenfläche
+EN: Drawing surface
+RU: Рабочая область
+
+[SettingsMenu.cpp:199]
+DE: Alle
+EN: All
+RU: Все
+
+[SettingsMenu.cpp:208]
+DE: Gefunden: {n} mit dieser Größe
+EN: Found: {n} with this size
+RU: Найдено: {n} такого размера
+
+[SettingsMenu.cpp:209]
+DE: Doppelt zu sehen? Nur in eine zeichnen
+EN: Shows up twice? Draw into one only
+RU: Появляется дважды? Объединить в одно
+
+[SettingsMenu.cpp:210]
+DE:  • je LKW im Preset
+EN:  • per truck in the preset
+RU: • на каждый грузовик в предустановке
+
+[SettingsMenu.cpp:214]
+DE: Testmodus
+EN: Test mode
+RU: Тестовый режим
+
+[SettingsMenu.cpp:214]
+DE: Gitter + Rahmen der Anzeige im LKW (Menü am Titel verschiebbar)
+EN: Grid + frame of the display in the truck (drag the menu by its title)
+RU: Сетка + рамка дисплея в грузовике (меню можно перемещать по заголовку)
+
+[SettingsMenu.cpp:216]
+DE: Automatisch erkennen (Beta)
+EN: Detect automatically (beta)
+RU: Автоматическое распознавание (бета-версия)
+
+[SettingsMenu.cpp:216]
+DE: Im LKW sitzen, Navigation sichtbar
+EN: Sit in the truck with the navigation visible
+RU: Сядьте в грузовик так, чтобы было видно навигационное устройство
+
+[SettingsMenu.cpp:217]
+DE: Erkennen
+EN: Detect
+RU: Определить
+
+[SettingsMenu.cpp:218]
+DE: Bereich links (X)
+EN: Area left (X)
+RU: Область слева (X)
+
+[SettingsMenu.cpp:219]
+DE: Bereich oben (Y)
+EN: Area top (Y)
+RU: Верхняя область (Y)
+
+[SettingsMenu.cpp:220]
+DE: Breite
+EN: Width
+RU: Ширина
+
+[SettingsMenu.cpp:221]
+DE: Höhe
+EN: Height
+RU: Высота
+
+[SettingsMenu.cpp:222]
+DE: Umdrehen (oben/unten)
+EN: Flip (up/down)
+RU: Перевернуть (вверх/вниз)
+
+[SettingsMenu.cpp:223]
+DE: Spiegeln (links/rechts)
+EN: Mirror (left/right)
+RU: Отражение (влево/вправо)
+
+[RadioManager.cpp:1540, SettingsMenu.cpp:225]
+DE: Handy
+EN: Phone
+RU: Телефон
+
+[SettingsMenu.cpp:225]
+DE: Virtuelles Handy im LKW
+EN: Virtual phone in the truck
+RU: Виртуальный телефон в грузовике
+
+[SettingsMenu.cpp:226]
+DE: Virtuelles Handy
+EN: Virtual mobile device
+RU: Виртуальный мобильный телефон
+
+[SettingsMenu.cpp:226]
+DE: Nach dem Start des Radios: „Verbunden“ auf dem Navi
+EN: After the radio starts: “Connected” on the navigation screen
+RU: После включения радио: «Подключено» на навигаторе
+
+[SettingsMenu.cpp:228]
+DE: Name des Handys
+EN: Name of the phone
+RU: Название мобильного телефона
+
+[SettingsMenu.cpp:228]
+DE: Steht in der Meldung „Verbunden“
+EN: Shown in the “connected” message
+RU: В сообщении указано «Подключено»
+
+[SettingsMenu.cpp:230]
+DE: Kurzer Hinweiston wie beim Handy
+EN: Short notification tone like a phone
+RU: Короткий звуковой сигнал, как на мобильном телефоне
+
+[SettingsMenu.cpp:231]
+DE: Taste: Handy
+EN: Key: phone
+RU: Кнопка: «Мобильный телефон»
+
+[SettingsMenu.cpp:232]
+DE: Anrufe
+EN: Calls
+RU: Звонки
+
+[SettingsMenu.cpp:233]
+DE: Disponent ruft an
+EN: Dispatcher calls
+RU: Звонит диспетчер
+
+[SettingsMenu.cpp:233]
+DE: Bei neuem Auftrag und nach der Lieferung
+EN: For a new job and after the delivery
+RU: При получении нового заказа и после доставки
+
+[SettingsMenu.cpp:235]
+DE: Name des Anrufers
+EN: Name of the caller
+RU: Имя звонящего
+
+[SettingsMenu.cpp:236]
+DE: Sprachausgabe
+EN: Voice
+RU: Голосовой вывод
+
+[SettingsMenu.cpp:236]
+DE: Windows-Stimme liest den Anruf vor (sonst nur Text)
+EN: A Windows voice speaks the call (else text only)
+RU: Голос Windows зачитывает содержание звонка (в противном случае — только текст)
+
+[SettingsMenu.cpp:238]
+DE: Bußgelder als Nachricht
+EN: Fines as a message
+RU: Штрафы как предупреждение
+
+[SettingsMenu.cpp:238]
+DE: Von der Polizei, mit Grund und Betrag
+EN: From the police, with reason and amount
+RU: От полиции, с указанием основания и суммы
+
+[SettingsMenu.cpp:240]
+DE: Testanruf
+EN: Test call
+RU: Пробный звонок
+
+[SettingsMenu.cpp:240]
+DE: Klingelt gleich – Handy-Taste drücken und annehmen
+EN: Rings in a moment - press the phone key and answer
+RU: Скоро зазвонит — нажмите кнопку на мобильном телефоне и ответьте
+
+[SettingsMenu.cpp:241]
+DE: Anrufen
+EN: Call
+RU: Позвонить
+
+[SettingsMenu.cpp:242]
+DE: Nachrichten vom Kunden
+EN: Messages from the customer
+RU: Сообщения от клиента
+
+[SettingsMenu.cpp:243]
+DE: Kunde meldet sich
+EN: Customer gets in touch
+RU: Клиент связывается с нами
+
+[SettingsMenu.cpp:243]
+DE: Wenn die Lieferzeit bald abläuft
+EN: When the delivery time is running out
+RU: Если срок доставки скоро истекает
+
+[SettingsMenu.cpp:245]
+DE: Wann
+EN: When
+RU: Когда
+
+[SettingsMenu.cpp:245]
+DE: Spielminuten vor Ende der Lieferzeit
+EN: Game minutes before the delivery time ends
+RU: Оставшееся время до окончания срока доставки
+
+[SettingsMenu.cpp:248]
+DE: Absender
+EN: Sender
+RU: Отправитель
+
+[SettingsMenu.cpp:249]
+DE: Nachricht
+EN: Message
+RU: Сообщение
+
+[SettingsMenu.cpp:249]
+DE: {city} {company} {cargo} {time} werden ersetzt
+EN: {city} {company} {cargo} {time} are filled in
+RU: {city} {company} {cargo} {time} заполнены
+
+[SettingsMenu.cpp:251]
+DE: Test
+EN: Test
+RU: Тест
+
+[SettingsMenu.cpp:251]
+DE: Schickt die Nachricht jetzt aufs Navi
+EN: Sends the message to the screen now
+RU: Отправляет сообщение на экран прямо сейчас
+
+[SettingsMenu.cpp:251]
+DE: Senden
+EN: Send
+RU: Отправить
+
+[SettingsMenu.cpp:252]
+DE: Spotify & Co. (Zusatz-Plugin Web-App)
+EN: Spotify & co. (add-on Web-App)
+RU: Spotify и др. (дополнительный плагин Web-App)
+
+[SettingsMenu.cpp:254]
+DE: Titel auf dem Navi
+EN: Title on the navigation screen
+RU: Трек на навигаторе
+
+[SettingsMenu.cpp:258]
+DE: Braucht das Zusatz-Plugin Web-App (realistic-radio-webapp.dll)
+EN: Needs the add-on Web-App (realistic-radio-webapp.dll)
+RU: Нужен дополнительный плагин Web-App (realistic-radio-webapp.dll)
+
+[SettingsMenu.cpp:260]
+DE: Zusatz-Plugin verbunden • gerade spielt nichts
+EN: Add-on connected • nothing plays right now
+RU: Дополнительный плагин подключён • сейчас ничего не играет
+
+[SettingsMenu.cpp:261]
+DE: Zusatz-Plugin verbunden • {app}: {title}
+EN: Add-on connected • {app}: {title}
+RU: Дополнительный плагин подключён • {app}: {title}
+
+[SettingsMenu.cpp:266]
+DE: Radio aus, solange sie spielt
+EN: Radio off while it plays
+RU: Радио выключено, пока она играет
+
+[SettingsMenu.cpp:266]
+DE: Das Radio blendet aus und kommt danach wieder
+EN: The radio fades out and comes back afterwards
+RU: Радио плавно затихает и потом включается снова
+
+[SettingsMenu.cpp:268]
+DE: Je LKW
+EN: Per truck
+RU: На каждый грузовик
+
+[SettingsMenu.cpp:268]
+DE: Gespeichert im aktiven LKW-Preset (Seite LKW)
+EN: Kept in the active truck preset (page Trucks)
+RU: Сохраняется в активной предустановке грузовика (страница «Грузовики»)
+
+[SettingsMenu.cpp:270]
+DE: LKW
+EN: Trucks
+RU: Грузовики
+
+[SettingsMenu.cpp:270]
+DE: Radio und Navi-Presets je LKW
+EN: Radio and screen presets per truck
+RU: Предустановки радио и навигатора для каждого грузовика
+
+[SettingsMenu.cpp:271]
+DE: Position
+EN: Position
+RU: Позиция
+
+[SettingsMenu.cpp:273]
+DE: Oben links
+EN: Top left
+RU: Вверху слева
+
+[SettingsMenu.cpp:273]
+DE: Oben Mitte
+EN: Top centre
+RU: Вверху по центру
+
+[SettingsMenu.cpp:273]
+DE: Oben rechts
+EN: Top right
+RU: Вверху справа
+
+[SettingsMenu.cpp:274]
+DE: Unten links
+EN: Bottom left
+RU: Внизу слева
+
+[SettingsMenu.cpp:274]
+DE: Unten Mitte
+EN: Bottom centre
+RU: Внизу по центру
+
+[SettingsMenu.cpp:274]
+DE: Unten rechts
+EN: Bottom right
+RU: Внизу справа
+
+[SettingsMenu.cpp:275]
+DE: Popup-Overlay
+EN: Pop-up overlay
+RU: Всплывающее окно
+
+[SettingsMenu.cpp:275]
+DE: Einblendung im Spielbild
+EN: Pop-up in the game picture
+RU: Окно поверх изображения игры
+
+[SettingsMenu.cpp:276]
+DE: Modus
+EN: Mode
+RU: Режим
+
+[SettingsMenu.cpp:277, SettingsMenu.cpp:448]
+DE: Automatisch
+EN: Automatic
+RU: Автоматически
+
+[SettingsMenu.cpp:277]
+DE: DirectX 11
+EN: DirectX 11
+RU: DirectX 11
+
+[SettingsMenu.cpp:277]
+DE: Fenster
+EN: Window
+RU: Окно
+
+[SettingsMenu.cpp:278]
+DE: Stil
+EN: Style
+RU: Стиль
+
+[SettingsMenu.cpp:279]
+DE: Info-Panel
+EN: Info panel
+RU: Информационная панель
+
+[SettingsMenu.cpp:279]
+DE: Autoradio-Display
+EN: Car radio display
+RU: Дисплей автомагнитолы
+
+[SettingsMenu.cpp:281]
+DE: Größe
+EN: Size
+RU: Размер
+
+[SettingsMenu.cpp:284]
+DE: Senderlogos
+EN: Station logos
+RU: Логотипы каналов
+
+[SettingsMenu.cpp:286]
+DE: USB / CD
+EN: USB / CD
+RU: USB / CD
+
+[SettingsMenu.cpp:286]
+DE: Eigene Musik
+EN: Your own music
+RU: Своя музыка
+
+[SettingsMenu.cpp:287]
+DE: USB / CD-Modus
+EN: USB / CD mode
+RU: Режим USB / CD
+
+[SettingsMenu.cpp:287]
+DE: Musik aus dem Ordner usb (Taste Pos1)
+EN: Music from the usb folder (Home key)
+RU: Музыка из папки на USB-накопителе (клавиша «Home»)
+
+[SettingsMenu.cpp:288]
+DE: Jeder Ordner ein eigener USB
+EN: Every folder is its own USB
+RU: Каждая папка — отдельный USB-накопитель
+
+[SettingsMenu.cpp:288]
+DE: Aus = der ganze Ordner ist ein USB
+EN: Off = the whole folder is one USB
+RU: Выкл. = вся папка представляет собой один USB-накопитель
+
+[SettingsMenu.cpp:290]
+DE: Standard-Typ
+EN: Default type
+RU: Стандартный тип
+
+[SettingsMenu.cpp:290]
+DE: Für Ordner ohne eigene Einstellung
+EN: For folders without their own setting
+RU: Для папок, не имеющих собственных настроек
+
+[MediaLibrary.cpp:310, SettingsMenu.cpp:292]
+DE: USB
+EN: USB
+RU: USB
+
+[MediaLibrary.cpp:310, SettingsMenu.cpp:292]
+DE: CD
+EN: CD
+RU: CD
+
+[MediaLibrary.cpp:310, SettingsMenu.cpp:292]
+DE: SD-Karte
+EN: SD card
+RU: SD-карта
+
+[MediaLibrary.cpp:310, SettingsMenu.cpp:292]
+DE: Kassette
+EN: Cassette
+RU: Кассета
+
+[MediaLibrary.cpp:311, SettingsMenu.cpp:292]
+DE: Bluetooth
+EN: Bluetooth
+RU: Bluetooth
+
+[MediaLibrary.cpp:311, SettingsMenu.cpp:292]
+DE: AUX
+EN: AUX
+RU: AUX
+
+[SettingsMenu.cpp:293]
+DE: Zufallswiedergabe
+EN: Shuffle
+RU: Проигрывание в случайном порядке
+
+[SettingsMenu.cpp:294]
+DE: Wiederholen
+EN: Repeat
+RU: Повторить
+
+[SettingsMenu.cpp:295]
+DE: Alle Titel
+EN: All tracks
+RU: Все треки
+
+[SettingsMenu.cpp:295]
+DE: Einen Titel
+EN: One track
+RU: Один трек
+
+[SettingsMenu.cpp:296]
+DE: Musikordner
+EN: Music folder
+RU: Папка «Музыка»
+
+[SettingsMenu.cpp:296]
+DE: Hier Musik hinzufügen (öffnet den Explorer)
+EN: Add music here (opens Explorer)
+RU: Добавить музыку здесь (откроется «Проводник»)
+
+[SettingsMenu.cpp:297, SettingsMenu.cpp:309, SettingsMenu.cpp:461]
+DE: Öffnen
+EN: Open
+RU: Открыть
+
+[SettingsMenu.cpp:299]
+DE: Speicher
+EN: Storage
+RU: Память
+
+[SettingsMenu.cpp:299]
+DE: Logos und Cover
+EN: Logos and covers
+RU: Логотипы и обложки
+
+[SettingsMenu.cpp:301]
+DE: Logo-Speicher höchstens
+EN: Logo storage at most
+RU: Максимальный размер памяти для логотипов
+
+[SettingsMenu.cpp:301]
+DE: Älteste Logos werden automatisch gelöscht
+EN: Oldest logos are deleted automatically
+RU: Самые старые логотипы удаляются автоматически
+
+[SettingsMenu.cpp:307]
+DE: Senderlogos laden
+EN: Load station logos
+RU: Загрузить логотипы каналов
+
+[SettingsMenu.cpp:307]
+DE: Aus = keine Downloads, keine Logos
+EN: Off = no downloads, no logos
+RU: Выкл. = никаких загрузок, никаких логотипов
+
+[SettingsMenu.cpp:308]
+DE: Belegt
+EN: In use
+RU: Занято
+
+[SettingsMenu.cpp:308]
+DE: Logos und USB-Cover im Ordner logos
+EN: Logos and USB covers in the logos folder
+RU: Логотипы и обложки для USB-накопителей в папке «logos»
+
+[SettingsMenu.cpp:308]
+DE: Leeren
+EN: Clear
+RU: Очистить
+
+[SettingsMenu.cpp:309, SettingsMenu.cpp:459]
+DE: Logo-Ordner
+EN: Logo folder
+RU: Папка «Логотипы»
+
+[SettingsMenu.cpp:311]
+DE: Tasten
+EN: Keys
+RU: Клавиши
+
+[SettingsMenu.cpp:311]
+DE: Tastatur und Controller
+EN: Keyboard and controller
+RU: Клавиатура и контроллер
+
+[SettingsMenu.cpp:391]
+DE: Pos1
+EN: Home
+RU: Home
+
+[SettingsMenu.cpp:392]
+DE: Ende
+EN: End
+RU: End
+
+[SettingsMenu.cpp:393]
+DE: Einfg
+EN: Insert
+RU: Insert
+
+[SettingsMenu.cpp:394]
+DE: Entf
+EN: Delete
+RU: Delete
+
+[SettingsMenu.cpp:395]
+DE: Bild ↑
+EN: Page Up
+RU: Page Up
+
+[SettingsMenu.cpp:396]
+DE: Bild ↓
+EN: Page Down
+RU: Page Down
+
+[SettingsMenu.cpp:398]
+DE: Leertaste
+EN: Space
+RU: Space
+
+[SettingsMenu.cpp:400]
+DE: Rücktaste
+EN: Backspace
+RU: Backspace
+
+[SettingsMenu.cpp:411]
+DE: Strg + 
+EN: Ctrl + 
+RU: Ctrl +
+
+[SettingsMenu.cpp:412]
+DE: Umschalt + 
+EN: Shift + 
+RU: Shift +
+
+[SettingsMenu.cpp:427]
+DE: Neues Preset
+EN: New preset
+RU: Новая предустановка
+
+[SettingsMenu.cpp:428]
+DE: Kein LKW erkannt
+EN: No truck detected
+RU: Грузовик не обнаружен
+
+[SettingsMenu.cpp:428]
+DE: Dieser LKW: 
+EN: This truck: 
+RU: Этот грузовик:
+
+[SettingsMenu.cpp:429]
+DE: Erst einsteigen – „Neues Preset“ speichert die aktuellen Navi-Einstellungen
+EN: Get into a truck first - "New preset" saves the current screen settings
+RU: Сначала перейдите в грузовик — функция «Новая предустановка» сохраняет текущие настройки экрана
+
+[SettingsMenu.cpp:431]
+DE: Preset: 
+EN: Preset: 
+RU: Предустановка:
+
+[SettingsMenu.cpp:432]
+DE: Noch kein Preset  (
+EN: No preset yet  (
+RU: Пока нет предустановок  (
+
+[SettingsMenu.cpp:434]
+DE: Radio-Speicher je LKW
+EN: Radio memory per truck
+RU: Количество радиостанций в памяти на каждый грузовик
+
+[SettingsMenu.cpp:435]
+DE: Sender, Favoriten, Lautstärke, Quelle und USB-Titel merkt sich jeder LKW
+EN: Every truck keeps its own stations, favourites, volume, source and USB track
+RU: Каждый грузовик сохраняет свои собственные станции, избранное, громкость, источник воспроизведения и трек с USB-накопителя
+
+[SettingsMenu.cpp:439, SettingsMenu.cpp:443]
+DE: Start-Logo
+EN: Start logo
+RU: Логотип запуска
+
+[SettingsMenu.cpp:444]
+DE: Kein Bild für diesen LKW im Ordner truck-logos – der Name wird gezeigt
+EN: No picture for this truck in the folder truck-logos - the name is shown
+RU: В папке «truck-logos» нет изображения этого грузовика — указано только его название
+
+[SettingsMenu.cpp:446]
+DE:  Bild(er) • im aktiven Preset gespeichert
+EN:  picture(s) • stored in the active preset
+RU: изображение(я) • сохранены в активном пресете
+
+[SettingsMenu.cpp:449]
+DE: Nur Name
+EN: Name only
+RU: Только имя
+
+[SettingsMenu.cpp:458]
+DE: Vorschau auf dem Navi
+EN: Preview on the screen
+RU: Предварительный просмотр на экране
+
+[SettingsMenu.cpp:458]
+DE: Zeigen
+EN: Show
+RU: Показать
+
+[SettingsMenu.cpp:459]
+DE: Öffnet den Ordner des Herstellers – Bilder einfach hineinlegen
+EN: Opens the folder of this brand - just put pictures in
+RU: Откройте папку производителя — просто поместите туда изображения
+
+[SettingsMenu.cpp:462]
+DE: Navi-Presets
+EN: Screen presets
+RU: Предустановки навигатора
+
+[SettingsMenu.cpp:467, SettingsMenu.cpp:484]
+DE: Aktives Preset
+EN: Active preset
+RU: Активная предустановка
+
+[SettingsMenu.cpp:468]
+DE: Wird geladen und merkt sich Änderungen der Navi-Seite
+EN: Is loaded and keeps the changes of the screen page
+RU: Загружается и сохраняет изменения на странице навигации
+
+[SettingsMenu.cpp:470]
+DE: (keins)
+EN: (none)
+RU: (нет)
+
+[SettingsMenu.cpp:481]
+DE: Automatisch je LKW wechseln
+EN: Change automatically per truck
+RU: Автоматически изменять для каждого грузовика
+
+[SettingsMenu.cpp:482]
+DE: Erkennt den LKW über die LKW-ID der Telemetrie
+EN: Detects the truck by the truck id of the telemetry
+RU: Определяет грузовик по идентификатору полученному из телеметрии
+
+[SettingsMenu.cpp:485]
+DE: Mit diesem LKW verknüpfen
+EN: Link to this truck
+RU: Связать с этим грузовиком
+
+[SettingsMenu.cpp:485]
+DE: Das aktive Preset lädt dann automatisch in diesem LKW
+EN: The active preset then loads automatically in this truck
+RU: После этого активная предустановка автоматически загружается в этот грузовик
+
+[SettingsMenu.cpp:486]
+DE: Verknüpfen
+EN: Link
+RU: Связать
+
+[SettingsMenu.cpp:487]
+DE: Verknüpfung lösen
+EN: Unlink
+RU: Отменить связь
+
+[SettingsMenu.cpp:487]
+DE: Dieser LKW lädt das aktive Preset nicht mehr automatisch
+EN: This truck no longer loads the active preset automatically
+RU: Этот грузовик больше не загружает активную предустановку автоматически
+
+[SettingsMenu.cpp:488]
+DE: Lösen
+EN: Unlink
+RU: Решить
+
+[SettingsMenu.cpp:489]
+DE: Aktives Preset löschen
+EN: Delete active preset
+RU: Удалить активную предустановку
+
+[SettingsMenu.cpp:489]
+DE: Die Navi-Einstellungen bleiben
+EN: The screen settings stay
+RU: Настройки экрана сохраняются
+
+[SettingsMenu.cpp:490]
+DE: Löschen
+EN: Delete
+RU: Удалить
+
+[SettingsMenu.cpp:491]
+DE: Wirklich?
+EN: Sure?
+RU: Точно?
+
+[SettingsMenu.cpp:494]
+DE: Gespeicherte Presets
+EN: Saved presets
+RU: Сохраненные пресеты
+
+[SettingsMenu.cpp:497]
+DE: Laden
+EN: Load
+RU: Загрузить
+
+[SettingsMenu.cpp:500]
+DE: Kein LKW verknüpft
+EN: No truck linked
+RU: Грузовик не указан
+
+[SettingsMenu.cpp:507]
+DE:   •  Standard
+EN:   •  standard
+RU: •  Стандартный
+
+[SettingsMenu.cpp:507]
+DE:   •  angepasst
+EN:   •  customised
+RU: •  индивидуальный
+
+[SettingsMenu.cpp:518]
+DE: „
+EN: "
+RU: «
+
+[SettingsMenu.cpp:518]
+DE: “
+EN: "
+RU: »
+
+[SettingsMenu.cpp:526]
+DE: Preset {name} geladen
+EN: Preset {name} loaded
+RU: Предустановка {name} загружена
+
+[SettingsMenu.cpp:536]
+DE: Preset {name} angelegt
+EN: Preset {name} created
+RU: Предустановка {name} создана
+
+[RadioManager.cpp:341, SettingsMenu.cpp:539]
+DE: Kein LKW erkannt – erst einsteigen
+EN: No truck detected - get into a truck first
+RU: Грузовик не обнаружен — сначала сядьте в грузовик
+
+[SettingsMenu.cpp:540]
+DE: Erst ein Preset wählen oder anlegen
+EN: Choose or create a preset first
+RU: Сначала выберите или создайте предустановку
+
+[SettingsMenu.cpp:544]
+DE: Verknüpft mit 
+EN: Linked to 
+RU: Связано с
+
+[SettingsMenu.cpp:548]
+DE: Dieser LKW ist nicht mit dem aktiven Preset verknüpft
+EN: This truck is not linked to the active preset
+RU: Этот грузовик не привязан к активной предустановке
+
+[SettingsMenu.cpp:551]
+DE: Verknüpfung gelöst
+EN: Link removed
+RU: Ссылка удалена
+
+[SettingsMenu.cpp:554]
+DE: Kein Preset aktiv
+EN: No preset active
+RU: Нет активных предустановок
+
+[SettingsMenu.cpp:556]
+DE: Standard-Presets lassen sich nicht löschen – eigenes Preset anlegen oder Verknüpfung lösen
+EN: Standard presets cannot be deleted - create an own preset or unlink the truck
+RU: Стандартные пресеты удалить нельзя — создайте собственный пресет или отмените привязку грузовика
+
+[SettingsMenu.cpp:560]
+DE: Zum Löschen nochmal klicken
+EN: Click again to delete
+RU: Нажмите ещё раз, чтобы удалить
+
+[SettingsMenu.cpp:566]
+DE: Preset {name} auf Standard zurückgesetzt
+EN: Preset {name} reset to the standard values
+RU: Предустановка {name} сброшена до стандартных значений
+
+[SettingsMenu.cpp:569]
+DE: Preset {name} gelöscht (Navi-Werte bleiben)
+EN: Preset {name} deleted (screen values stay)
+RU: Предустановка {name} удалена (настройки экрана сохраняются)
+
+[SettingsMenu.cpp:602]
+DE: Klassisches LKW-Radio
+EN: Classic truck radio
+RU: Классическое радио грузовика
+
+[SettingsMenu.cpp:603]
+DE: Smart-Dashboard
+EN: Smart dashboard
+RU: Смарт-панель
+
+[SettingsMenu.cpp:607]
+DE:   (eigener Style)
+EN:   (own style)
+RU: (собственный стиль)
+
+[SettingsMenu.cpp:645]
+DE: Musikordner und ihr Typ
+EN: Music folders and their type
+RU: Папки с музыкой и их типы
+
+[SettingsMenu.cpp:1024, SettingsMenu.cpp:648]
+DE: Standard
+EN: Default
+RU: Стандартный
+
+[SettingsMenu.cpp:678]
+DE: Erkannt: X %.2f  Y %.2f  B %.2f  H %.2f – Rahmen im LKW prüfen, bei Bedarf nachstellen
+EN: Detected: X %.2f  Y %.2f  W %.2f  H %.2f - check the frame in the truck, adjust if needed
+RU: Обнаружено: X %.2f  Y %.2f  B %.2f  H %.2f — проверить раму в грузовике, при необходимости отрегулировать
+
+[SettingsMenu.cpp:713]
+DE: Hinweis: Tasten erreichen während des Menüs auch das Spiel
+EN: Note: keys also reach the game while the menu is open
+RU: Примечание: клавиши также действуют в игре, когда меню открыто
+
+[SettingsMenu.cpp:728]
+DE: Gespeichert
+EN: Saved
+RU: Сохранено
+
+[SettingsMenu.cpp:764]
+DE: Neue Taste oder Controller-Knopf drücken …  (Esc = abbrechen)
+EN: Press the new key or controller button …  (Esc = cancel)
+RU: Нажмите новую клавишу или кнопку контроллера…  (Esc = отмена)
+
+[SettingsMenu.cpp:771]
+DE: Tippen • Enter = übernehmen • Esc = abbrechen • Strg + V = einfügen
+EN: Type • Enter = apply • Esc = cancel • Ctrl + V = paste
+RU: Тип • Enter = подтвердить • Esc = отменить • Ctrl + V = вставить
+
+[SettingsMenu.cpp:787]
+DE: Diese Taste öffnet das Menü – bitte eine andere wählen
+EN: This key opens the menu - please choose another one
+RU: Эта клавиша открывает меню — пожалуйста, выберите другую
+
+[SettingsMenu.cpp:794]
+DE: Taste war vorher bei „
+EN: Key was used by "
+RU: Кнопка использовалась в «
+
+[SettingsMenu.cpp:794, SettingsMenu.cpp:806]
+DE: “ – dort entfernt
+EN: " - removed there
+RU: » — удалено там
+
+[SettingsMenu.cpp:806]
+DE: Knopf war vorher bei „
+EN: Button was used by "
+RU: Клавиша использовалась в «
+
+[SettingsMenu.cpp:812]
+DE: Das Menü braucht eine Taste
+EN: The menu needs a key
+RU: Для меню нужна кнопка
+
+[SettingsMenu.cpp:814]
+DE: Belegung entfernt
+EN: Binding removed
+RU: Запись удалена
+
+[SettingsMenu.cpp:826]
+DE: Standardwerte dieser Seite gesetzt
+EN: Defaults of this page restored
+RU: Установлены стандартные значения для этой страницы
+
+[SettingsMenu.cpp:832]
+DE: Auf den gespeicherten Stand zurückgesetzt
+EN: Reverted to the saved settings
+RU: Восстановлены сохраненные настройки
+
+[SettingsMenu.cpp:864, SettingsMenu.cpp:879]
+DE: Abgebrochen
+EN: Cancelled
+RU: Прервано
+
+[SettingsMenu.cpp:925]
+DE: Nichts zu speichern
+EN: Nothing to save
+RU: Нет данных для сохранения
+
+[SettingsMenu.cpp:938]
+DE: Controller-Knopf drücken …  (Esc = abbrechen)
+EN: Press a controller button …  (Esc = cancel)
+RU: Нажмите кнопку на контроллере…  (Esc = отмена)
+
+[SettingsMenu.cpp:967]
+DE: Einstellungen
+EN: Settings
+RU: Настройки
+
+[SettingsMenu.cpp:972]
+DE:   •  Preset: 
+EN:   •  preset: 
+RU: •  Предустановка:
+
+[RadioManager.cpp:560, RadioManager.cpp:582, SettingsMenu.cpp:973]
+DE: Taste
+EN: Key
+RU: Кнопка
+
+[SettingsMenu.cpp:974]
+DE: NEUSTART
+EN: RESTART
+RU: ПЕРЕЗАГРУЗКА
+
+[SettingsMenu.cpp:992]
+DE: (Dateien direkt im Ordner usb)
+EN: (files directly in the usb folder)
+RU: (Файлы, расположенные непосредственно в папке «usb»)
+
+[SettingsMenu.cpp:999]
+DE:  Dateien
+EN:  files
+RU: Файлы
+
+[SettingsMenu.cpp:1020]
+DE: Knopf drücken …
+EN: Press a button …
+RU: Нажмите кнопку…
+
+[SettingsMenu.cpp:1020]
+DE: Taste drücken …
+EN: Press a key …
+RU: Нажмите кнопку…
+
+[SettingsMenu.cpp:1022]
+DE: Nicht gespeicherte Änderungen
+EN: Unsaved changes
+RU: Несохраненные изменения
+
+[SettingsMenu.cpp:1022]
+DE: Alles gespeichert
+EN: All saved
+RU: Все сохранено
+
+[SettingsMenu.cpp:1023]
+DE: Änderungen wirken sofort  •  Esc speichert und schließt  •  Tab: Seite
+EN: Changes apply at once  •  Esc saves and closes  •  Tab: page
+RU: Изменения вступают в силу сразу  •  Esc — сохранить и закрыть  •  Tab: страница
+
+[SettingsMenu.cpp:1024]
+DE: Speichern
+EN: Save
+RU: Сохранить
+
+[SettingsMenu.cpp:1024]
+DE: Zurücksetzen
+EN: Revert
+RU: Сброс
+
+[SettingsMenu.cpp:LabelDe]
+DE: Nächster Sender / Titel
+EN: Next station / track
+RU: Следующая станция / композиция
+
+[SettingsMenu.cpp:LabelDe]
+DE: Vorheriger Sender / Titel
+EN: Previous station / track
+RU: Предыдущая станция / композиция
+
+[SettingsMenu.cpp:LabelDe]
+DE: Lauter
+EN: Volume up
+RU: Громче
+
+[SettingsMenu.cpp:LabelDe]
+DE: Leiser
+EN: Volume down
+RU: Тише
+
+[SettingsMenu.cpp:LabelDe]
+DE: Radio aus/an • USB Pause
+EN: Radio off/on • USB pause
+RU: Радио выкл./вкл. • пауза USB
+
+[SettingsMenu.cpp:LabelDe]
+DE: Quelle: Radio / USB
+EN: Source: radio / USB
+RU: Источник: радио / USB
+
+[SettingsMenu.cpp:LabelDe]
+DE: Nächster USB / CD
+EN: Next USB / CD
+RU: Следующий USB / CD
+
+[SettingsMenu.cpp:LabelDe]
+DE: Vorheriger USB / CD
+EN: Previous USB / CD
+RU: Предыдущий USB / CD
+
+[SettingsMenu.cpp:LabelDe]
+DE: Navi ↔ Radio-Seite
+EN: Navigation ↔ radio page
+RU: Навигатор ↔ страница радио
+
+[SettingsMenu.cpp:LabelDe]
+DE: Als Favorit speichern
+EN: Save as favourite
+RU: Сохранить в избранное
+
+[SettingsMenu.cpp:LabelDe]
+DE: Zum Favoriten
+EN: Go to favourite
+RU: К избранному
+
+[SettingsMenu.cpp:LabelDe]
+DE: Overlay einblenden
+EN: Show overlay
+RU: Показать всплывающее окно
+
+[SettingsMenu.cpp:LabelDe]
+DE: Dieses Menü
+EN: This menu
+RU: Это меню
+
+[SettingsMenu.cpp:LabelDe]
+DE: Dieses Menü (zweite Taste)
+EN: This menu (second key)
+RU: Это меню (вторая кнопка)
+
+[SettingsMenu.cpp:LabelDe]
+DE: Eigenen Tunnel markieren
+EN: Mark an own tunnel
+RU: Отметить свой туннель
+
+[SettingsMenu.cpp:LabelDe]
+DE: Handy öffnen / schließen
+EN: Open / close the phone
+RU: Открыть / закрыть мобильный телефон
+
+[SettingsMenu.cpp:LabelDe]
+DE: Band: FM / DAB+
+EN: Band: FM / DAB+
+RU: Диапазон: FM / DAB+
+
+[SettingsMenu.cpp:LabelDe]
+DE: Stationstaste 1
+EN: Station button 1
+RU: Кнопка станции 1
+
+[SettingsMenu.cpp:LabelDe]
+DE: Stationstaste 2
+EN: Station button 2
+RU: Кнопка станции 2
+
+[SettingsMenu.cpp:LabelDe]
+DE: Stationstaste 3
+EN: Station button 3
+RU: Кнопка станции 3
+
+[SettingsMenu.cpp:LabelDe]
+DE: Stationstaste 4
+EN: Station button 4
+RU: Кнопка станции 4
+
+[SettingsMenu.cpp:LabelDe]
+DE: Stationstaste 5
+EN: Station button 5
+RU: Кнопка станции 5
+
+[SettingsMenu.cpp:LabelDe]
+DE: Stationstaste 6
+EN: Station button 6
+RU: Кнопка станции 6
+
+[SettingsMenu.cpp:LabelDe]
+DE: Stationstaste 7
+EN: Station button 7
+RU: Кнопка станции 7
+
+[SettingsMenu.cpp:LabelDe]
+DE: Stationstaste 8
+EN: Station button 8
+RU: Кнопка станции 8
+
+[SettingsMenu.cpp:LabelDe]
+DE: Stationstaste 9
+EN: Station button 9
+RU: Кнопка станции 9
+
+[SettingsMenu.cpp:LabelDe]
+DE: Frequenz + 0,1 MHz
+EN: Frequency + 0.1 MHz
+RU: Частота + 0,1 МГц
+
+[SettingsMenu.cpp:LabelDe]
+DE: Frequenz − 0,1 MHz
+EN: Frequency − 0.1 MHz
+RU: Частота − 0,1 МГц
+
+[RadioManager.cpp:136, RadioManager.cpp:1695]
+DE: Medien
+EN: Media
+RU: Медиа
+
+[RadioManager.cpp:138]
+DE: Musik in realistic-radio\{folder} ablegen
+EN: Add music to realistic-radio\{folder}
+RU: Добавьте музыку в папку realistic-radio\{folder}
+
+[RadioManager.cpp:141]
+DE:  → USB / CD → Musikordner öffnen
+EN:  → USB / CD → Music folder
+RU: → USB / CD → Папка «Music»
+
+[RadioManager.cpp:309]
+DE: Ordner im Explorer geöffnet – neue Musik erscheint beim Umschalten auf USB
+EN: Folder opened in Explorer - new music appears when you switch to USB
+RU: Папка открыта в Проводнике — при переключении на USB появляется новая музыка
+
+[RadioManager.cpp:314]
+DE: Stationstasten 1–{n} mit den Sendern in Reichweite belegt
+EN: Station buttons 1-{n} stored with the stations received here
+RU: Кнопки станций 1–{n} заняты станциями в зоне приёма
+
+[RadioManager.cpp:316]
+DE: Hier sind keine Sender in Reichweite
+EN: No stations in range here
+RU: Здесь нет станций в зоне доступа
+
+[RadioManager.cpp:321]
+DE: Hallo, hier ist die Disposition. Das ist ein Testanruf – das Handy funktioniert. Gute Fahrt!
+EN: Hello, dispatch here. This is a test call - the phone works. Drive safely!
+RU: Здравствуйте, это диспетчерская. Это пробный звонок — мобильный телефон работает. Удачной поездки!
+
+[RadioManager.cpp:323]
+DE: Anruf kommt in 3 Sekunden – Menü schließen, dann Handy-Taste
+EN: Call comes in 3 seconds - close the menu, then press the phone key
+RU: Звонок поступит через 3 секунды — закройте меню, а затем нажмите кнопку на телефоне
+
+[RadioManager.cpp:343]
+DE: Start-Logo wird auf dem Navi gezeigt
+EN: The start logo is shown on the navigation screen
+RU: На навигаторе отображается логотип запуска
+
+[RadioManager.cpp:347]
+DE: Erkenne den sichtbaren Bereich … (Navigation im LKW muss zu sehen sein)
+EN: Detecting the visible area … (the navigation must be visible in the truck)
+RU: Определение области видимости… (навигационная система должна быть видна из кабины грузовика)
+
+[RadioManager.cpp:357]
+DE: Logo-Speicher geleert – Logos werden bei Bedarf neu geladen
+EN: Logo storage cleared - logos are downloaded again when needed
+RU: Кэш логотипов очищен — логотипы загружаются заново при необходимости
+
+[RadioManager.cpp:366]
+DE: Die Anzeige auf dem Navi ist aus oder nicht bereit
+EN: The navigation screen display is off or not ready
+RU: Экран навигации выключен или не готов к работе
+
+[RadioManager.cpp:367]
+DE: Navi-Bildschirm nicht gefunden – im LKW sitzen, Navigation sichtbar, nochmal versuchen
+EN: Navigation screen not found - sit in the truck with the navigation visible and try again
+RU: Экран навигации не найден — сядьте в кабину грузовика так, чтобы экран навигации был виден, и попробуйте ещё раз
+
+[RadioManager.cpp:369]
+DE: Automatische Erkennung hier nicht möglich – bitte von Hand einstellen
+EN: Automatic detection is not possible here - please adjust by hand
+RU: В данном случае автоматическое определение невозможно — пожалуйста, настройте вручную
+
+[RadioManager.cpp:558]
+DE: Kein Sender auf dieser Frequenz
+EN: No station on this frequency
+RU: На этой частоте нет ни одной станции
+
+[RadioManager.cpp:752]
+DE: Favorit
+EN: Favourite
+RU: Избранное
+
+[RadioManager.cpp:753]
+DE: {n} Sender in Reichweite
+EN: {n} stations in range
+RU: Станций в зоне приёма: {n}
+
+[RadioManager.cpp:865]
+DE: Kein Sender gefunden
+EN: No station found
+RU: Станция не найдена
+
+[RadioManager.cpp:1073]
+DE: Auf Taste {n} gespeichert: {station}
+EN: Saved on button {n}: {station}
+RU: Сохранено на кнопке {n}: {station}
+
+[RadioManager.cpp:1081]
+DE: Auf Taste {n} gespeichert
+EN: Saved on button {n}
+RU: Сохранено на кнопке {n}
+
+[RadioManager.cpp:1090]
+DE: Taste {n}: {station} – kein Empfang
+EN: Button {n}: {station} - nothing received
+RU: Кнопка {n}: {station} – нет приёма
+
+[RadioManager.cpp:1101]
+DE: Taste {n} ist leer – gedrückt halten zum Speichern
+EN: Button {n} is empty - hold it to save
+RU: Кнопка {n} пуста – удерживайте, чтобы сохранить
+
+[RadioManager.cpp:1108]
+DE: Taste {n}: {station} – nicht in Reichweite
+EN: Button {n}: {station} - out of range
+RU: Кнопка {n}: {station} – вне зоны приёма
+
+[RadioManager.cpp:1245]
+DE: Frequenzwahl: Einstellungsmenü → Radio → Senderwahl
+EN: Tuning by frequency: settings menu → Radio
+RU: Настройка по частоте: меню настроек → Радио
+
+[RadioManager.cpp:1389]
+DE: Vom LKW weggehen: leiser und dumpfer, offenes Fenster lässt mehr durch
+EN: Walk away from the truck: quieter and muffled, an open window lets more through
+RU: Отдаляясь от грузовика: звук становится тише и приглушеннее, а при открытом окне слышно больше
+
+[RadioManager.cpp:1392]
+DE: Aktiv • du bist im LKW
+EN: Active • you are in the truck
+RU: Активно • вы находитесь в грузовике
+
+[RadioManager.cpp:1393]
+DE: Aktiv • draußen, %.0f m vom LKW%s
+EN: Active • outside, %.0f m from the cab%s
+RU: Активно • снаружи, %.0f м от кабины%s
+
+[RadioManager.cpp:1394]
+DE: , Fenster offen
+EN: , window open
+RU: , окно открыто
+
+[RadioManager.cpp:1408]
+DE: dem Ziel
+EN: the destination
+RU: пункт назначения
+
+[RadioManager.cpp:1410]
+DE: die Ladung
+EN: the cargo
+RU: груз
+
+[RadioManager.cpp:1439]
+DE: Hallo, hier ist die Disposition. Dein neuer Auftrag: {cargo} von {from} nach {to}, Firma {company}. Lieferung bis {time} Uhr. Gute Fahrt!
+EN: Hello, dispatch here. Your new job: {cargo} from {from} to {to}, {company}. Please deliver by {time}. Drive safely!
+RU: Здравствуйте, это диспетчерская. Ваш новый заказ: {cargo} из {from} в {to}, компания {company}. Доставить до {time}. Удачной поездки!
+
+[RadioManager.cpp:1457]
+DE: Berlin
+EN: Berlin
+RU: Берлин
+
+[RadioManager.cpp:1457]
+DE: Möbel
+EN: Furniture
+RU: Мебель
+
+[OverlayImage.cpp:1607, Phone.cpp:194, RadioManager.cpp:1460, RadioManager.cpp:1489, RadioManager.cpp:1715, RadioManager.cpp:1730]
+DE: Nachrichten
+EN: Messages
+RU: Сообщения
+
+[Config.h, RadioManager.cpp:1476, RadioManager.cpp:1707]
+DE: Disposition
+EN: Dispatch
+RU: Диспетчер
+
+[RadioManager.cpp:1481]
+DE: Verbunden
+EN: Connected
+RU: Подключено
+
+[OverlayImage.cpp:1607, Phone.cpp:212, RadioManager.cpp:1527]
+DE: Telefon
+EN: Phone
+RU: Телефон
+
+[RadioManager.cpp:1528]
+DE: Eingehender Anruf • {key} zum Annehmen
+EN: Incoming call • {key} to answer
+RU: Входящий звонок • {key} – ответить
+
+[RadioManager.cpp:1540]
+DE: Das Handy ist aus
+EN: The phone is off
+RU: Телефон выключен
+
+[RadioManager.cpp:1541]
+DE: Einstellungsmenü → Handy → Virtuelles Handy
+EN: Settings menu → Phone → Virtual mobile device
+RU: Меню «Настройки» → «Телефон» → «Виртуальное мобильное устройство»
+
+[RadioManager.cpp:1573]
+DE: {time} zu spät
+EN: {time} late
+RU: опоздание {time}
+
+[RadioManager.cpp:1710]
+DE: Hallo, hier ist die Disposition. Die Lieferung nach {city} ist angekommen, danke! {money} sind überwiesen.
+EN: Hello, dispatch here. The delivery to {city} has arrived, thank you! {money} have been transferred to your account.
+RU: Здравствуйте, это диспетчерская. Груз в {city} доставлен, спасибо! {money} перечислены на ваш счёт.
+
+[RadioManager.cpp:1716, RadioManager.cpp:1717]
+DE: Auftrag abgebrochen. Vertragsstrafe: 
+EN: Job cancelled. Penalty: 
+RU: Заказ отменен. Штраф за нарушение договора:
+
+[RadioManager.cpp:1720]
+DE: Unfall
+EN: Crash
+RU: Авария
+
+[RadioManager.cpp:1720]
+DE: Ruhezeit nicht eingehalten
+EN: No rest taken
+RU: Несоблюдение времени отдыха
+
+[RadioManager.cpp:1720]
+DE: Falsche Richtung
+EN: Wrong way
+RU: Неверное направление
+
+[RadioManager.cpp:1721]
+DE: Geblitzt
+EN: Speed camera
+RU: Камера контроля скорости
+
+[RadioManager.cpp:1721]
+DE: Ohne Licht
+EN: No lights
+RU: Без освещения
+
+[RadioManager.cpp:1721]
+DE: Rote Ampel
+EN: Red light
+RU: Красный свет
+
+[RadioManager.cpp:1722]
+DE: Zu schnell
+EN: Speeding
+RU: Превышение скорости
+
+[RadioManager.cpp:1722]
+DE: Waage umfahren
+EN: Avoided weighing
+RU: Отказ от взвешивания
+
+[RadioManager.cpp:1722]
+DE: Unerlaubter Anhänger
+EN: Illegal trailer
+RU: Незаконный прицеп
+
+[RadioManager.cpp:1723]
+DE: Kontrolle umfahren
+EN: Avoided inspection
+RU: Не прошел проверку
+
+[RadioManager.cpp:1723]
+DE: Illegaler Grenzübertritt
+EN: Illegal border crossing
+RU: Незаконное пересечение границы
+
+[RadioManager.cpp:1724]
+DE: Standstreifen befahren
+EN: Hard shoulder
+RU: Аварийная полоса
+
+[RadioManager.cpp:1724]
+DE: Beschädigtes Fahrzeug
+EN: Damaged vehicle
+RU: Повреждённый автомобиль
+
+[RadioManager.cpp:1725]
+DE: Verstoß
+EN: Offence
+RU: Нарушение
+
+[RadioManager.cpp:1728]
+DE: Polizei
+EN: Police
+RU: Полиция
+
+[RadioManager.cpp:1729]
+DE: Bußgeld: 
+EN: Fine: 
+RU: Штраф:
+
+[Phone.cpp:35]
+DE: Mo
+EN: Mon
+RU: Пн
+
+[Phone.cpp:35]
+DE: Di
+EN: Tue
+RU: Вт
+
+[Phone.cpp:35]
+DE: Mi
+EN: Wed
+RU: Ср
+
+[Phone.cpp:35]
+DE: Do
+EN: Thu
+RU: Чт
+
+[Phone.cpp:35]
+DE: Fr
+EN: Fri
+RU: Пт
+
+[Phone.cpp:35]
+DE: Sa
+EN: Sat
+RU: Сб
+
+[Phone.cpp:35]
+DE: So
+EN: Sun
+RU: Вс
+
+[Phone.cpp:51, Phone.cpp:81]
+DE: Mailbox: 
+EN: Voicemail: 
+RU: Голосовая почта:
+
+[Phone.cpp:171]
+DE: Montag
+EN: Monday
+RU: Понедельник
+
+[Phone.cpp:171]
+DE: Dienstag
+EN: Tuesday
+RU: Вторник
+
+[Phone.cpp:171]
+DE: Mittwoch
+EN: Wednesday
+RU: Среда
+
+[Phone.cpp:171]
+DE: Donnerstag
+EN: Thursday
+RU: Четверг
+
+[Phone.cpp:171]
+DE: Freitag
+EN: Friday
+RU: Пятница
+
+[Phone.cpp:171]
+DE: Samstag
+EN: Saturday
+RU: Суббота
+
+[Phone.cpp:171]
+DE: Sonntag
+EN: Sunday
+RU: Воскресенье
+
+[Phone.cpp:190]
+DE: Esc: schließen  •  1-{n}: App
+EN: Esc: close  •  1-{n}: app
+RU: Esc: закрыть  •  1-{n}: приложение
+
+[Phone.cpp:191]
+DE: Esc: schließen  •  1-4: App
+EN: Esc: close  •  1-4: app
+RU: Esc: закрыть  •  1–4: приложение
+
+[Phone.cpp:202]
+DE: Keine Nachrichten
+EN: No messages
+RU: Сообщений нет
+
+[Phone.cpp:214]
+DE: Verpasst
+EN: Missed
+RU: Пропущено
+
+[Phone.cpp:214]
+DE: Eingehend
+EN: Incoming
+RU: Входящие
+
+[Phone.cpp:214]
+DE: Abgelehnt
+EN: Declined
+RU: Отклонено
+
+[Phone.cpp:217]
+DE: Noch keine Anrufe
+EN: No calls yet
+RU: Пока нет звонков
+
+[Phone.cpp:221]
+DE: Anruf
+EN: Call
+RU: Вызов
+
+[Phone.cpp:227]
+DE: Eingehender Anruf …
+EN: Incoming call …
+RU: Входящий вызов…
+
+[Phone.cpp:228]
+DE: Enter: annehmen  •  Rücktaste: ablehnen
+EN: Enter: answer  •  Backspace: decline
+RU: Enter: ответить  •  Backspace: отклонить
+
+[Phone.cpp:232]
+DE: Verbinde …
+EN: Connecting …
+RU: Установка соединения…
+
+[OverlayImage.cpp:1607, Phone.cpp:240]
+DE: Auftrag
+EN: Job
+RU: Работа
+
+[Phone.cpp:246]
+DE: Einstellungsmenü → USB / CD: einen Musikordner auf Bluetooth stellen
+EN: Settings menu → USB / CD: set a music folder to Bluetooth
+RU: Меню «Настройки» → «USB / CD»: назначить папку с музыкой для передачи по Bluetooth
+
+[Phone.cpp:253]
+DE: {app} wird geladen …
+EN: Loading {app} …
+RU: {app} загружается …
+
+[Phone.cpp:265]
+DE: Wird geladen …
+EN: Loading …
+RU: Загрузка …
+
+[OverlayImage.cpp:1607]
+DE: Musik
+EN: Music
+RU: Музыка
+
+[OverlayImage.cpp:1699]
+DE: Nochmal anhören
+EN: Play again
+RU: Прослушать ещё раз
+
+[OverlayImage.cpp:1721]
+DE: Ablehnen
+EN: Decline
+RU: Отклонить
+
+[OverlayImage.cpp:1722]
+DE: Annehmen
+EN: Answer
+RU: Принять
+
+[OverlayImage.cpp:1723]
+DE: Auflegen
+EN: End
+RU: Повесить трубку
+
+[OverlayImage.cpp:1729]
+DE: Kein Auftrag
+EN: No job
+RU: Нет работы
+
+[OverlayImage.cpp:1730]
+DE: Nimm einen Auftrag an – er erscheint hier
+EN: Take a job and it shows up here
+RU: Найдите работу — и она появится здесь
+
+[OverlayImage.cpp:1744]
+DE: Restzeit
+EN: Time left
+RU: Оставшееся время
+
+[OverlayImage.cpp:1744]
+DE: Entfernung
+EN: Distance
+RU: Расстояние
+
+[OverlayImage.cpp:1744]
+DE: Ankunft
+EN: Arrival
+RU: Прибытие
+
+[OverlayImage.cpp:1744]
+DE: Lohn
+EN: Pay
+RU: Оплата
+
+[OverlayImage.cpp:1830]
+DE: ORDNER
+EN: FOLDERS
+RU: ПАПКИ
+
+[Config.cpp:696]
+DE: Knopf 
+EN: Button 
+RU: Кнопка
+
+[InputManager.cpp:40]
+DE:  (Radio: andere Taste wählen)
+EN:  (radio: choose another key)
+RU: (радио: выберите другую клавишу)
+
+[TunnelMap.cpp:111]
+DE: Tunnel-Anfang gespeichert – am Ende nochmal drücken
+EN: Tunnel entry saved - press again at the exit
+RU: Вход в туннель сохранен — нажмите ещё раз при выходе
+
+[TunnelMap.cpp:115]
+DE: Tunnel nicht gespeichert (zu kurz oder zu lang)
+EN: Tunnel not saved (too short or too long)
+RU: Туннель не сохранен (слишком короткий или слишком длинный)
+
+[TunnelMap.cpp:121]
+DE: Tunnel gespeichert (%.0f m)
+EN: Tunnel saved (%.0f m)
+RU: Пройденный участок туннеля (%.0f м)
+
+[Config.h]
+DE: Jetzt läuft:
+EN: Now playing:
+RU: Сейчас в эфире:
+
+[Config.h]
+DE: Radio aus
+EN: Radio off
+RU: Радио выключено
+
+[Config.h]
+DE: Als Favorit gespeichert
+EN: Saved as favourite
+RU: Сохранено в избранное
+
+[Config.h]
+DE: verbinde…
+EN: connecting…
+RU: подключение…
+
+[Config.h]
+DE: Sender nicht erreichbar
+EN: Station not available
+RU: Канал недоступен
+
+[Config.h]
+DE: Zündung aus
+EN: Ignition off
+RU: Зажигание выключено
+
+[Config.h]
+DE: Sender
+EN: Stations
+RU: Станции
+
+[Config.h]
+DE: Titel
+EN: Track
+RU: Трек
+
+[Config.h]
+DE: Pause
+EN: Pause
+RU: Пауза
+
+[Config.h]
+DE: Kein Medientyp erkannt
+EN: No media detected
+RU: Носитель не обнаружен
+
+[Config.h]
+DE: Kunde
+EN: Customer
+RU: Клиент
+
+[Config.h]
+DE: Wo bleibt die Lieferung? Wir erwarten {cargo} bald in {city}.
+EN: Where is the delivery? We are expecting {cargo} in {city} soon.
+RU: Где же посылка? Мы ожидаем, что {cargo} скоро прибудет в {city}.

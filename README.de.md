@@ -14,7 +14,7 @@ Von **ScufyKing**. Das ganze Radio läuft im Spiel:
 
 Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels kopieren, ETS2 starten, das Radio läuft. Senderdaten und Sounds stecken in der DLL.
 
-> **Version 1.6.0** · [Änderungen](CHANGELOG.md#changelog-deutsch)
+> **Version 1.7.1** · [Änderungen](CHANGELOG.md#changelog-deutsch)
 >
 > **Stand:** Getestet in ETS2 1.61 (Windows x64) mit mehreren MAN- und Scania-Modellen sowie Mod-LKW: Das Plugin wird geladen, liest die LKW-Position, wechselt Sender nach Region, spielt Ton ab und zeigt Sender und Lautstärke auf dem Navi-Bildschirm. Daten für American Truck Simulator sind enthalten, ATS ist aber ungetestet.
 
@@ -29,6 +29,7 @@ Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels ko
 - [Einstellungen](#einstellungen)
 - [USB / CD: eigene Musik](#usb--cd-eigene-musik)
 - [Eigene Sender hinzufügen](#eigene-sender-hinzufügen)
+- [Sprachen](#sprachen)
 - [Fehlersuche](#fehlersuche)
 - [Bekannte Einschränkungen](#bekannte-einschränkungen)
 - [Wie es funktioniert](#wie-es-funktioniert)
@@ -60,7 +61,7 @@ Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels ko
 - **Radio-Speicher je LKW** (optional): Jeder LKW merkt sich eigene Sender, Favoriten, Lautstärke, Quelle und USB-Titel.
 - **LKW-Presets:** Position und Design der Navi-Anzeige lassen sich pro LKW speichern; das passende Preset lädt automatisch über die LKW-ID aus der Telemetrie.
 - **Startbildschirm** beim Einschalten der Zündung: Der Hersteller des LKWs wird auf Schwarz eingeblendet, wie bei modernen Infotainment-Systemen (eigene Logo-Bilder möglich).
-- **Optionales Popup-Overlay** (standardmäßig aus): ein Panel oben im Bild oder ein Display im Autoradio-Stil. Funktioniert auch im Vollbild.
+- **Optionales Popup-Overlay** (standardmäßig aus): ein Panel oben im Bild (bei FM mit der Frequenz, z. B. „94,3 MHz“) oder ein Display im Autoradio-Stil. Funktioniert auch im Vollbild.
 - **Radio nur bei eingeschalteter Zündung** (oder nur bei laufendem Motor, oder immer; einstellbar).
 - **Steuerung per Tastatur und Controller**, frei belegbar.
 - **Einstellungsmenü im Spiel** (**Strg + 0**) mit Maus und Tastatur: Lautstärke, Empfang, Navi-Anzeige, Overlay, USB/CD und Tastenbelegung, ohne die JSON-Datei zu bearbeiten.
@@ -169,7 +170,24 @@ Einstellungsmenü → Radio → **Senderwahl (FM): Frequenz**. Jeder Sender hat 
 - **Stationstasten speichern die Frequenz**, nicht den Sender: In einer anderen Gegend spielt die Taste, was dort auf dieser Frequenz gesendet wird.
 - **RDS-AF** (standardmäßig aus) lässt das Radio dem Programm auf seine Frequenz in der nächsten Gegend folgen, wie ein modernes Radio.
 
-Die Frequenzen plant das Plugin selbst (jedes Mal gleich; Sender einer Region teilen sich nie eine Frequenz, benachbarte Regionen meiden sich meistens). Eigene oder korrigierte Frequenzen lassen sich in der Datei für eigene Sender mit `"frequency": 94.7` eintragen. DAB+ hat keine Frequenzen: Bei DAB+ gilt die Senderliste.
+Echte Frequenzen lassen sich in `frequencies-ets2.json` / `frequencies-ats.json` eintragen (siehe unten); die übrigen Frequenzen plant das Plugin selbst (jedes Mal gleich; Sender einer Region teilen sich nie eine Frequenz, benachbarte Regionen meiden sich meistens). Eigene oder korrigierte Frequenzen lassen sich in der Datei für eigene Sender mit `"frequency": 94.7` eintragen. DAB+ hat keine Frequenzen: Bei DAB+ gilt die Senderliste.
+
+#### Echte Frequenzen (`frequencies-ets2.json` / `frequencies-ats.json`)
+
+Beim ersten Start legt das Plugin diese Datei im Ordner `realistic-radio` an. Sie enthält alle Sender des Spiels, nach Regionen sortiert, jeder mit einem leeren Eintrag:
+
+```
+"wenatchee": {
+    "94.3 Jack FM": "94.3",
+    "560 KPQ": "560 AM",
+    "The Bull 94.7": ""
+}
+```
+
+- `"94.3"` (UKW in MHz) oder `"560 AM"` (AM in kHz) eintragen. Leer `""` = das Plugin plant wie bisher eine Frequenz.
+- Einträge haben Vorrang vor allem anderen (auch vor `"frequency"` in der Datei für eigene Sender). Sie gelten ab dem nächsten Start: Popup, Navi und Frequenz-Radio zeigen die echte Frequenz; AM-Sender erscheinen als „560 kHz AM“ (auf der UKW-Skala bleiben sie über eine geplante Frequenz erreichbar).
+- Neue Sender kommen beim nächsten Start automatisch dazu; deine Einträge werden nie gelöscht. Hat die Datei einen Fehler, bleibt sie unverändert und das Log meldet `parse error`.
+- **Schick mir gern deine ausgefüllte Datei** (SCS-Forum oder GitHub) – gesammelte Frequenzen kommen für alle ins Plugin.
 
 ### Stationstasten (Nummernblock)
 
@@ -227,7 +245,7 @@ Alle Einstellungen stehen in `realistic-radio\realistic-radio.json`. Die Datei w
 | `source` | `"radio"` | Zuletzt gewählte Quelle, `"radio"` oder `"usb"` (wird automatisch gespeichert, beim Start fortgesetzt) |
 | `mediaTrack` | – | Zuletzt gespielter USB-Titel (wird automatisch gespeichert) |
 | `mediaResume` | – | Letzter Titel je USB / CD (wird automatisch gespeichert) |
-| `menuLanguage` | `"de"` | Sprache des Einstellungsmenüs: `"de"` oder `"en"` |
+| `menuLanguage` | `"de"` | Sprache des Einstellungsmenüs: `"de"`, `"en"`, `"ru"` (Russisch) oder der `CODE` einer Sprachdatei (siehe [Sprachen](#sprachen)) |
 | `band` | `"fm"` | Band: `"fm"` (Rauschen bei schwachem Empfang) oder `"dab"` (DAB+: größere Reichweite, kein Rauschen, Aussetzer am Rand des Empfangsgebiets). Wird automatisch gespeichert |
 | `dabRange` | `1.5` | Um wie viel weiter DAB+ reicht als FM (1,0–3,0) |
 | `switchMode` | `"lost"` | `"lost"` = erst in eine andere Region wechseln, wenn der gehörte Sender nicht mehr empfangen wird; `"better"` = sobald eine andere Region um `threshold` besser empfangen wird (Verhalten bis 1.3) |
@@ -368,6 +386,8 @@ Nachrichten und Anrufe werden in `realistic-radio\phone-ets2.json` (`phone-ats.j
 
 Die Handy-Einstellungen gehören zu den Navi-Einstellungen und werden deshalb **je LKW-Preset** gespeichert: Wechselst du in einen LKW mit eigenem Preset, werden dessen Handy-Einstellungen geladen (Log: `Phone: …`).
 
+**Add-ons – weitere Apps im Handy:** Zusatz-Plugins bringen eigene Apps auf den Startbildschirm, z. B. **Aufträge+** (`realistic-radio-jobs.dll`: eigene Aufträge über F5/F9, nur Einzelspieler) und **Web-App** (`realistic-radio-webapp.dll`: Spotify im Handy über WebView2). Die DLLs kommen einfach neben `realistic-radio.dll` in den `plugins`-Ordner. Eigene Add-ons bauen: siehe `sdk/addon/README.md`.
+
 ### LKW-Presets (`"presets"`, `"activePreset"`, `"presetAuto"`)
 
 Jeder LKW hat einen anderen Bildschirm – der Bereich, der im MAN passt, kann im Scania abgeschnitten sein. Presets speichern die Navi-Einstellungen pro LKW.
@@ -492,6 +512,37 @@ Kopiere `realistic-radio\custom-stations-ets2.example.json` im selben Ordner nac
 
 Die Regionsnamen findest du in `ets2.json` unter `"stations"`. Regionen mit Bindestrich sind Teilgebiete, z. B. `germany-swr` oder `germany-muenchen`. In Grenznähe empfängst du oft mehrere Regionen gleichzeitig.
 
+## Sprachen
+
+Menüs, Popup, Navi und Handy gibt es auf **Deutsch**, **Englisch** und **Russisch** (Einstellungsmenü → Radio → Sprache des Menüs, Einstellung `"menuLanguage"`). Weitere Sprachen kann jeder selbst hinzufügen – ohne das Plugin neu zu bauen:
+
+1. Spiel einmal mit 1.7.0 oder neuer starten. Im Ordner `realistic-radio\languages\` liegt dann **`_Vorlage - template.txt`** mit allen Texten des Plugins (jeweils Deutsch und Englisch).
+2. Die Vorlage kopieren und umbenennen, z. B. in **`pl.txt`** (ohne `_` am Anfang).
+3. Oben `CODE` (Kürzel, z. B. `pl`) und `NAME` (so erscheint die Sprache im Menü, z. B. `Polski`) eintragen, dann hinter jedes `TEXT:` die Übersetzung schreiben:
+   ```
+   CODE: pl
+   NAME: Polski
+   VOICE: 415
+   DECIMAL: ,
+   THOUSANDS: space
+
+   [1]
+   DE: Lautstärke
+   EN: Volume
+   TEXT: Głośność
+   ```
+4. Spiel neu starten → Einstellungsmenü → Radio → Sprache des Menüs → **Polski**. Ist die Übersetzung noch nicht fertig, steht der Anteil dahinter, z. B. „Polski (35 %)“.
+
+Hinweise:
+- Leer gelassene Texte erscheinen auf Englisch. Platzhalter wie `{city}`, `{n}`, `{station}`, `{time}` und Zeichen wie `•` `→` `–` unverändert übernehmen; die Reihenfolge der Wörter darf sich ändern.
+- `VOICE` (optional): Windows-Sprach-ID der Stimme für die Anrufe der Disposition, z. B. `415` Polnisch, `40C` Französisch, `410` Italienisch, `413` Niederländisch, `405` Tschechisch, `40A` Spanisch, `41F` Türkisch. Ohne Angabe (oder ohne passende Windows-Stimme) spricht die Standardstimme.
+- `DECIMAL` / `THOUSANDS`: Dezimal- und Tausendertrennzeichen (`94,3 MHz`, `12.500 €`); `space` = Leerzeichen, `none` = keins.
+- Die Datei muss UTF-8 sein (Editor von Windows: „Speichern unter“ → Codierung UTF-8).
+- Kommen mit einem Update neue Texte dazu, hängt das Plugin sie unten an deine Datei an (leer). Die Vorlage selbst wird bei jedem Start neu geschrieben – also nicht in der Vorlage übersetzen.
+- `_Beispiel Russisch - example Russian.txt` zeigt eine fertige Übersetzung. Als `ru.txt` kopiert, ersetzen deren Texte die eingebauten – so lässt sich die russische Übersetzung verbessern.
+- Log: `Languages: pl 'Polski' from pl.txt - 152 of 440 texts translated`.
+- **Fertige Übersetzungen gern an mich schicken** (SCS-Forum oder GitHub) – dann kommen sie für alle ins Plugin.
+
 ## Fehlersuche
 
 Fast jedes Problem lässt sich an `realistic-radio\realistic-radio.log` erkennen. Wenn du um Hilfe bittest, häng diese Datei immer an.
@@ -513,6 +564,7 @@ Fast jedes Problem lässt sich an `realistic-radio\realistic-radio.log` erkennen
 | Overlay verdeckt einen Teil des HUD | `position`, `offsetY` oder `scale` ändern. |
 | Kein Senderlogo | Logos werden beim ersten Gebrauch von `radio.scufystudio.de` geladen; ohne Internet oder bei Serverausfall erscheint das Panel ohne Logo, und nach 10 Minuten wird es erneut versucht. |
 | Tasten tun nichts | Ist das Spiel das aktive Fenster? Eventuell belegt ein anderes Programm die Taste; eine andere wählen. |
+| Stationstaste 7 / 9 tut nichts, das Navi zeigt „NumPad7 → MotionCab“ | MotionCab (Dynamic Head-Motion) oder ein anderes Plugin des SPF Frameworks benutzt die Taste, deshalb lässt das Radio sie in Ruhe. Im Einstellungsmenü eine andere Taste für die Stationstaste wählen oder in MotionCab eine andere Taste. |
 | „Kein Medientyp erkannt“ | Im Ordner `realistic-radio\usb\` (oder dem unter `media.folder` eingestellten) liegt keine Datei mit unterstützter Endung. Im Log steht `USB: 0 file(s) in …` mit dem genauen Pfad. |
 | Ein USB-Titel wird übersprungen | Die Datei ließ sich nicht abspielen (`Cannot play file:` im Log), z. B. ein kopiergeschütztes WMA. Spielt keine einzige Datei, hält der USB-Modus an. |
 | Falscher Titel oder Interpret | Die ID3-Tags der MP3 prüfen (z. B. mit Mp3tag). Bei anderen Formaten den Dateinamen als `Interpret - Titel` benennen. |
@@ -594,6 +646,8 @@ node tools/convert_data.js <Pfad>/web data
 
 **Regressionstest der Senderwahl:** `tools/equivalence-test/` lässt eine JavaScript-Referenzimplementierung und den C++-Code nebeneinander an Tausenden Positionen laufen und vergleicht die Ergebnisse.
 
+**Texte und Übersetzungen:** `python3 tools/l10n/make_l10n.py` sammelt alle Texte aus dem Quellcode (Deutsch / Englisch) und erzeugt mit den eingebauten Übersetzungen aus `tools/l10n/ru.txt` die Tabelle `src/L10nTexts.inc`; `--update` trägt neue Texte (leer) in `ru.txt` ein.
+
 ### Verwendete Bibliotheken
 
 | Bibliothek | Version | Lizenz | Zweck |
@@ -645,7 +699,7 @@ Der Ordner `server/logo/` enthält alle Logos (verkleinert auf 200 px) in genau 
 ├── server/logo/               Senderlogos für den Logo-Server (radio.scufystudio.de/logo/)
 ├── sdk/                       Header des SCS-Telemetrie-SDK
 ├── third_party/               miniaudio, nlohmann/json, 5×7-Schrift (Adafruit GFX), MinHook
-└── tools/                     Datenkonverter, Vergleichstest
+└── tools/                     Datenkonverter, Vergleichstest, Texte (l10n)
 ```
 
 ## Lizenz und Danksagung
