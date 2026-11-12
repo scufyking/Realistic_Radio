@@ -3,6 +3,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "D3D11Overlay.h"
+#include <cmath>
 #include "Logger.h"
 #include <d3d11_1.h>
 #include <psapi.h>
