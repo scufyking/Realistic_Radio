@@ -42,11 +42,13 @@ public:
     void Open();
     void Close();
     bool IsOpen() const { return open_; }
+    void Refresh() { dirty_ = true; }  // language changed: redraw known UI labels
     void Update(ULONGLONG now);                         // always (call timer, voices, saving)
     void Tick(InputManager& input);                     // while open: keyboard and mouse
     std::shared_ptr<OverlayImage> TakeImage();          // new picture when something changed
     void Shutdown();
 private:
+    friend struct LocalizationTestAccess;
     enum class CallState { None, Ringing, Connecting, Talking };
     struct Msg { std::wstring from, text; unsigned time = 0; bool read = false; };
     struct Log_ { std::wstring from, text; unsigned time = 0; int kind = 0; };   // 0 missed, 1 answered, 2 declined

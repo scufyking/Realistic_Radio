@@ -65,6 +65,7 @@ public:
 
     using Def = MenuDef;
 private:
+    friend struct LocalizationTestAccess;
     MenuView View() const;
     std::wstring T(const char* de, const char* en) const;
     std::wstring KeyText(const KeyBinding& b) const;

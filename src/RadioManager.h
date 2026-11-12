@@ -41,6 +41,7 @@ public:
     void SetTruck(const std::string& id, const std::string& name, const std::string& brandId = "", const std::string& brand = "",
                   const std::string& model = "");   // truck changed: load its preset (presetAuto)
 private:
+    friend struct LocalizationTestAccess;
     void Refresh(double x, double z);
     // variant: the same programme in a neighbouring region (e.g. SWR1 BW -> SWR1 RP): changes without tuning noise
     void SetRadioStation(const std::string& country, size_t index, double whitenoise, bool variant = false);

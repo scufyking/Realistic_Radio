@@ -1,3 +1,4 @@
+#include "Localization.h"
 // Realistic Radio
 // Copyright (c) 2026 ScufyKing
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
@@ -32,7 +33,7 @@ std::wstring Phone::TimeText(unsigned t) const {
     if (now && now / 1440 != t / 1440) {   // another day: weekday in front
         static const wchar_t* de[] = {L"Mo", L"Di", L"Mi", L"Do", L"Fr", L"Sa", L"So"}, *en[] = {L"Mon", L"Tue", L"Wed", L"Thu", L"Fri", L"Sat", L"Sun"};
         bool e = host_.english && host_.english();
-        return std::wstring(e ? en[(t / 1440) % 7] : de[(t / 1440) % 7]) + L" " + b;
+        return Localization::Text(e ? en[(t / 1440) % 7] : de[(t / 1440) % 7]) + L" " + b;
     }
     return b;
 }
@@ -45,14 +46,14 @@ void Phone::AddMessage(const std::wstring& from, const std::wstring& text) {
 
 void Phone::Call(const std::wstring& from, const std::wstring& text) {
     if (call_.state != CallState::None) {   // busy: the second caller leaves a message
-        AddMessage(from, (host_.english() ? L"Voicemail: " : L"Mailbox: ") + text);
+        AddMessage(from, (Localization::Select(host_.english(), L"Voicemail: ", L"Mailbox: ")) + text);
         calls_.push_front({from, text, host_.gameTime(), 0});
         return;
     }
     call_ = Call_{};
     call_.state = CallState::Ringing; call_.from = from; call_.text = text; call_.time = host_.gameTime(); call_.at = GetTickCount64();
     const PhoneConfig& ph = host_.settings();
-    if (ph.voice) { call_.speechId = nextSpeechId_++; Speech::Request(call_.speechId, text, host_.english() ? "en" : "de"); }   // ready when answered
+    if (ph.voice) { call_.speechId = nextSpeechId_++; Speech::Request(call_.speechId, text, Localization::Russian() ? "ru" : host_.english() ? "en" : "de"); }   // ready when answered
     host_.play(Speech::Ringtone(), true, 0.32f);
     host_.callBanner(from, text);
     if (open_) { screen_ = PhoneScreen::Incoming; sel_ = 0; }
@@ -75,7 +76,7 @@ void Phone::EndCall(int kind) {
     host_.stopSound();
     calls_.push_front({call_.from, call_.text, call_.time, kind});
     while (calls_.size() > kMaxCalls) calls_.pop_back();
-    if (kind != 1) AddMessage(call_.from, (host_.english() ? L"Voicemail: " : L"Mailbox: ") + call_.text);   // not answered: the text is not lost
+    if (kind != 1) AddMessage(call_.from, (Localization::Select(host_.english(), L"Voicemail: ", L"Mailbox: ")) + call_.text);   // not answered: the text is not lost
     Log::Write(kind == 0 ? "Phone: missed call" : kind == 1 ? "Phone: call ended" : "Phone: call declined");
     call_ = Call_{};
     if (screen_ == PhoneScreen::Incoming || screen_ == PhoneScreen::InCall) { screen_ = PhoneScreen::Home; sel_ = 0; }
@@ -137,22 +138,22 @@ PhoneView Phone::View() const {
     v.en = host_.english();
     v.design = host_.design();
     const PhoneConfig& ph = host_.settings();
-    v.device = Utf8ToWide(ph.name);
+    v.device = Localization::PhoneText(ph, &PhoneConfig::name);
     unsigned t = host_.gameTime();
     if (t) {
         wchar_t b[16]; swprintf(b, 16, L"%02u:%02u", (t / 60) % 24, t % 60); v.clock = b;
         static const wchar_t* de[] = {L"Montag", L"Dienstag", L"Mittwoch", L"Donnerstag", L"Freitag", L"Samstag", L"Sonntag"};
         static const wchar_t* en[] = {L"Monday", L"Tuesday", L"Wednesday", L"Thursday", L"Friday", L"Saturday", L"Sunday"};
-        v.day = v.en ? en[(t / 1440) % 7] : de[(t / 1440) % 7];
+        v.day = Localization::Text(v.en ? en[(t / 1440) % 7] : de[(t / 1440) % 7]);
     } else v.clock = L"--:--";
     for (auto& m : msgs_) if (!m.read) ++v.unreadMessages;
     for (auto& c : calls_) if (c.kind == 0) ++v.missedCalls;
     v.screen = screen_; v.sel = sel_; v.scroll = scroll_;
     const bool e = v.en;
     switch (screen_) {
-    case PhoneScreen::Home: v.hint = e ? L"Esc: close  •  1-4: app" : L"Esc: schließen  •  1-4: App"; break;
+    case PhoneScreen::Home: v.hint = Localization::Select(e, L"Esc: close  •  1-4: app", L"Esc: schließen  •  1-4: App"); break;
     case PhoneScreen::Messages:
-        v.title = e ? L"Messages" : L"Nachrichten";
+        v.title = Localization::Select(e, L"Messages", L"Nachrichten");
         for (auto& s : Senders()) {
             for (auto& m : msgs_) if (m.from == s) {
                 bool unread = false; for (auto& k : msgs_) if (k.from == s && !k.read) unread = true;
@@ -160,7 +161,7 @@ PhoneView Phone::View() const {
                 break;
             }
         }
-        if (v.items.empty()) v.hint = e ? L"No messages" : L"Keine Nachrichten";
+        if (v.items.empty()) v.hint = Localization::Select(e, L"No messages", L"Keine Nachrichten");
         break;
     case PhoneScreen::Thread: {
         auto s = Senders();
@@ -170,27 +171,27 @@ PhoneView Phone::View() const {
         }
         break; }
     case PhoneScreen::Calls:
-        v.title = e ? L"Phone" : L"Telefon";
+        v.title = Localization::Select(e, L"Phone", L"Telefon");
         for (auto& c : calls_) {   // kind 3 = missed, already seen
-            std::wstring st = (c.kind == 0 || c.kind == 3) ? (e ? L"Missed" : L"Verpasst") : c.kind == 1 ? (e ? L"Incoming" : L"Eingehend") : (e ? L"Declined" : L"Abgelehnt");
+            std::wstring st = (c.kind == 0 || c.kind == 3) ? (Localization::Select(e, L"Missed", L"Verpasst")) : c.kind == 1 ? (Localization::Select(e, L"Incoming", L"Eingehend")) : (Localization::Select(e, L"Declined", L"Abgelehnt"));
             v.items.push_back({c.from, st, TimeText(c.time), c.kind == 3 ? 0 : c.kind, c.kind == 0});
         }
-        if (v.items.empty()) v.hint = e ? L"No calls yet" : L"Noch keine Anrufe";
+        if (v.items.empty()) v.hint = Localization::Select(e, L"No calls yet", L"Noch keine Anrufe");
         break;
     case PhoneScreen::CallDetail:
         if (detail_ >= 0 && detail_ < (int)calls_.size()) {
-            v.title = e ? L"Call" : L"Anruf";
+            v.title = Localization::Select(e, L"Call", L"Anruf");
             v.caller = calls_[detail_].from; v.callText = calls_[detail_].text; v.callState = TimeText(calls_[detail_].time);
         }
         break;
     case PhoneScreen::Incoming:
         v.caller = call_.from;
-        v.callState = e ? L"Incoming call …" : L"Eingehender Anruf …";
-        v.hint = e ? L"Enter: answer  •  Backspace: decline" : L"Enter: annehmen  •  Rücktaste: ablehnen";
+        v.callState = Localization::Select(e, L"Incoming call …", L"Eingehender Anruf …");
+        v.hint = Localization::Select(e, L"Enter: answer  •  Backspace: decline", L"Enter: annehmen  •  Rücktaste: ablehnen");
         break;
     case PhoneScreen::InCall: {
         v.caller = call_.from;
-        if (call_.state == CallState::Connecting) v.callState = e ? L"Connecting …" : L"Verbinde …";
+        if (call_.state == CallState::Connecting) v.callState = Localization::Select(e, L"Connecting …", L"Verbinde …");
         else {
             unsigned s = (unsigned)((GetTickCount64() - call_.talkAt) / 1000);
             wchar_t b[16]; swprintf(b, 16, L"%02u:%02u", s / 60, s % 60); v.callState = b;
@@ -198,13 +199,13 @@ PhoneView Phone::View() const {
         }
         break; }
     case PhoneScreen::Job:
-        v.title = e ? L"Job" : L"Auftrag";
+        v.title = Localization::Select(e, L"Job", L"Auftrag");
         host_.fillJob(v);
         break;
     case PhoneScreen::Music:
         v.title = L"Bluetooth Audio";
         host_.fillMusic(v);
-        if (v.musicFolders.empty()) v.hint = e ? L"Settings menu → USB / CD: set a music folder to Bluetooth" : L"Einstellungsmenü → USB / CD: einen Musikordner auf Bluetooth stellen";
+        if (v.musicFolders.empty()) v.hint = Localization::Select(e, L"Settings menu → USB / CD: set a music folder to Bluetooth", L"Einstellungsmenü → USB / CD: einen Musikordner auf Bluetooth stellen");
         break;
     }
     return v;
@@ -276,7 +277,7 @@ void Phone::Act(int action, int index) {
     case PA_Replay:
         if (detail_ >= 0 && detail_ < (int)calls_.size()) {
             replayId_ = nextSpeechId_++;
-            Speech::Request(replayId_, calls_[detail_].text, host_.english() ? "en" : "de");
+            Speech::Request(replayId_, calls_[detail_].text, Localization::Russian() ? "ru" : host_.english() ? "en" : "de");
         }
         break;
     case PA_Prev: host_.musicControl(-1); break;

@@ -6,18 +6,38 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(realistic-radio SHARED
     src/Plugin.cpp src/Logger.cpp src/Config.cpp src/StationDatabase.cpp src/ReceptionCalculator.cpp
     src/RadioManager.cpp src/AudioEngine.cpp src/StreamSource.cpp src/InputManager.cpp src/MiniaudioImpl.cpp
+    src/GameAudio.cpp src/CardStyles.cpp src/Phone.cpp src/Speech.cpp
+    src/Localization.cpp
     src/Overlay.cpp src/OverlayImage.cpp src/D3D11Overlay.cpp src/DisplayWindow.cpp src/EmbeddedData.cpp src/MediaLibrary.cpp src/MenuInput.cpp src/SettingsMenu.cpp src/InputBlock.cpp src/TunnelMap.cpp src/PluginApi.cpp
     third_party/minhook/src/buffer.c third_party/minhook/src/hook.c third_party/minhook/src/trampoline.c third_party/minhook/src/hde/hde64.c
     ${CMAKE_BINARY_DIR}/resources.rc
     src/exports.def)
 target_include_directories(realistic-radio PRIVATE src third_party third_party/minhook/include sdk/include)
 target_compile_definitions(realistic-radio PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS)
-target_link_libraries(realistic-radio PRIVATE winhttp mfplat mfreadwrite mfuuid ole32 winmm user32 gdi32 d3d11 dxgi dxguid urlmon windowscodecs shlwapi dinput8 psapi shell32)
+target_link_libraries(realistic-radio PRIVATE winhttp mfplat mfreadwrite mfuuid ole32 oleaut32 uuid winmm user32 gdi32 d3d11 dxgi dxguid urlmon windowscodecs shlwapi dinput8 psapi shell32)
 if(MSVC)
     target_compile_options(realistic-radio PRIVATE /W3 /utf-8 /EHsc)
     set_property(TARGET realistic-radio PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")  # no VC++ redist needed
 else()
     target_link_options(realistic-radio PRIVATE -static -static-libgcc -static-libstdc++)
+endif()
+
+option(RR_BUILD_LOCALIZATION_PROBE "Build native settings-menu localization regression test" OFF)
+if(RR_BUILD_LOCALIZATION_PROBE)
+    get_target_property(RR_TEST_SOURCES realistic-radio SOURCES)
+    list(FILTER RR_TEST_SOURCES EXCLUDE REGEX "\\.(rc|def)$")
+    add_executable(localization-probe tests/LocalizationProbe.cpp ${RR_TEST_SOURCES})
+    target_include_directories(localization-probe PRIVATE src third_party third_party/minhook/include sdk/include)
+    target_compile_definitions(localization-probe PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS)
+    target_link_libraries(localization-probe PRIVATE $<TARGET_PROPERTY:realistic-radio,LINK_LIBRARIES>)
+    if(MSVC)
+        target_compile_options(localization-probe PRIVATE /utf-8 /EHsc)
+        set_property(TARGET localization-probe PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    else()
+        target_link_options(localization-probe PRIVATE -static -static-libgcc -static-libstdc++)
+    endif()
+    enable_testing()
+    add_test(NAME native-localization COMMAND localization-probe)
 endif()
 set_target_properties(realistic-radio PROPERTIES PREFIX "" OUTPUT_NAME "realistic-radio")
 
