@@ -4,6 +4,7 @@
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "StreamSource.h"
 #include "Logger.h"
+#include "HlsInput.h"
 #include <winhttp.h>
 #include <mfapi.h>
 #include <mfidl.h>
@@ -195,6 +196,7 @@ DWORD WINAPI StreamSession::ThreadProc(LPVOID p) {
 
 void StreamSession::Stop() {
     stop_ = true;
+    { std::lock_guard<std::mutex> l(hlsMtx_); if (hls_) hls_->Cancel(); }
     HANDLE r = req_.exchange(nullptr);
     if (r) WinHttpCloseHandle(r);   // aborts a blocking WinHttpReadData
 }
@@ -252,7 +254,7 @@ bool StreamSession::PlayOnce(const std::string& url, int depth) {
     if (url.empty()) return false;
     std::string lower = url; std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
     if (lower.rfind("http://", 0) != 0 && lower.rfind("https://", 0) != 0) return PlayLocalFile(url);
-    if (lower.find(".m3u8") != std::string::npos) return PlayMediaFoundation(url);   // HLS -> Media Foundation
+    if (lower.find(".m3u8") != std::string::npos) return PlayMediaFoundation(url, true);
 
     Http h; h.owner = this;
     if (!HttpOpen(h, url)) return false;
@@ -264,7 +266,7 @@ bool StreamSession::PlayOnce(const std::string& url, int depth) {
         std::string body; char buf[4096];
         while (body.size() < 65536) { DWORD n = h.Read(buf, sizeof(buf)); if (!n) break; body.append(buf, n); }
         h.Close();
-        if (body.find("#EXT-X-") != std::string::npos) return PlayMediaFoundation(url);   // it is HLS after all
+        if (body.find("#EXT-X-") != std::string::npos) return PlayMediaFoundation(url, true);
         size_t p = body.find("http");
         if (p == std::string::npos) { Log::Write("Playlist without URL: %s", url.c_str()); return false; }
         size_t e = body.find_first_of("\r\n \t", p);
@@ -350,15 +352,16 @@ bool StreamSession::PlayLocalFile(const std::string& path) {
     return any;
 }
 
-bool StreamSession::PlayMediaFoundation(const std::string& url) {
-    if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) return false;
+bool StreamSession::PlayMediaFoundation(const std::string& url, bool hls) {
+    if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_FULL))) return false;
     bool any = false;
+    std::shared_ptr<HlsInput> input;
     // AAC and other streams Media Foundation opens itself: ask the server for the title every 20 s on a short second
     // connection (the title then follows the audio that was decoded at that moment)
     std::atomic<bool> pollStop{false};
     std::thread poller;
     std::string lower = url; std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
-    if (MetadataEnabled() && !once_ && (lower.rfind("http://", 0) == 0 || lower.rfind("https://", 0) == 0) && lower.find(".m3u8") == std::string::npos)
+    if (!hls && MetadataEnabled() && !once_ && (lower.rfind("http://", 0) == 0 || lower.rfind("https://", 0) == 0) && lower.find(".m3u8") == std::string::npos)
         poller = std::thread([this, url, &pollStop] {
             int fails = 0;
             while (!stop_ && !pollStop && MetadataEnabled() && fails < 3) {
@@ -370,8 +373,18 @@ bool StreamSession::PlayMediaFoundation(const std::string& url) {
     IMFSourceReader* reader = nullptr; IMFMediaType* type = nullptr; IMFMediaType* actual = nullptr;
     ma_data_converter conv; bool convInit = false;
     do {
-        HRESULT hr = MFCreateSourceReaderFromURL(Utf8ToWide(url).c_str(), nullptr, &reader);
-        if (FAILED(hr)) { Log::Write("Media Foundation cannot open %s (hr=0x%08lx)", url.c_str(), (unsigned long)hr); break; }
+        HRESULT hr;
+        if (hls) {
+            try {
+                input = std::make_shared<HlsInput>(url);
+                { std::lock_guard<std::mutex> l(hlsMtx_); hls_ = input; if (stop_) input->Cancel(); }
+                Log::Write("HLS: loading original playlist %s", url.c_str());
+                input->Start();
+                if (!input->WaitReady()) break;
+                hr = MFCreateSourceReaderFromByteStream(input->Stream(), nullptr, &reader);
+            } catch (const std::exception& e) { Log::Write("HLS init: %s", e.what()); break; }
+        } else hr = MFCreateSourceReaderFromURL(Utf8ToWide(url).c_str(), nullptr, &reader);
+        if (FAILED(hr)) { if (!stop_) Log::Write("Media Foundation cannot open %s (hr=0x%08lx)", url.c_str(), (unsigned long)hr); break; }
         reader->SetStreamSelection((DWORD)MF_SOURCE_READER_ALL_STREAMS, FALSE);
         reader->SetStreamSelection((DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM, TRUE);
         MFCreateMediaType(&type);
@@ -396,7 +409,9 @@ bool StreamSession::PlayMediaFoundation(const std::string& url) {
         while (!stop_) {
             DWORD flags = 0; IMFSample* sample = nullptr;
             hr = reader->ReadSample((DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM, 0, nullptr, &flags, nullptr, &sample);
-            if (FAILED(hr) || (flags & (MF_SOURCE_READERF_ENDOFSTREAM | MF_SOURCE_READERF_ERROR))) { if (sample) sample->Release(); break; }
+            if (FAILED(hr) || (flags & MF_SOURCE_READERF_ERROR)) { if (!stop_) Log::Write("MF ReadSample failed (hr=0x%08lx flags=0x%lx)", (unsigned long)hr, (unsigned long)flags); if (sample) sample->Release(); break; }
+            if (flags & MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED) { if (!stop_) Log::Write("MF format changed; restarting decoder"); if (sample) sample->Release(); break; }
+            if (!sample && (flags & MF_SOURCE_READERF_ENDOFSTREAM)) break;
             if (!sample) continue;
             IMFMediaBuffer* mb = nullptr;
             if (SUCCEEDED(sample->ConvertToContiguousBuffer(&mb))) {
@@ -413,14 +428,18 @@ bool StreamSession::PlayMediaFoundation(const std::string& url) {
                 mb->Release();
             }
             sample->Release();
+            if (flags & MF_SOURCE_READERF_ENDOFSTREAM) break;
         }
     } while (false);
     pollStop = true;
+    if (input) { input->Cancel(); input->Join(); }
     if (poller.joinable()) poller.join();
     if (convInit) ma_data_converter_uninit(&conv, nullptr);
     if (actual) actual->Release();
     if (type) type->Release();
     if (reader) reader->Release();
+    { std::lock_guard<std::mutex> l(hlsMtx_); hls_.reset(); }
+    input.reset();
     MFShutdown();
     return any;
 }
