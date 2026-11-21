@@ -52,7 +52,7 @@ typedef void(STDMETHODCALLTYPE* OMSetRTUAVFn)(ID3D11DeviceContext*, UINT, ID3D11
 // one entry per context vtable we patched (the runtime may use more than one context class)
 struct VtHook { void** vt; OMSetRTFn rt; OMSetRTUAVFn rtuav; };
 VtHook g_vts[8]; std::atomic<int> g_nVts{0};
-// 1.8.0: the Direct3D table last seen on the game's context. Another tool may put a method table of its own over it (TM Real
+// 1.8.1: the Direct3D table last seen on the game's context. Another tool may put a method table of its own over it (TM Real
 // Walk in the cab, Shift + R) and forward each call through Direct3D's table - which holds the radio's hook: that call
 // goes on to this table's original function.
 std::atomic<int> g_baseVt{0};
@@ -646,7 +646,7 @@ void HookGameContext(IDXGISwapChain* sc) {
         void** cvt = *(void***)c;
         bool known = false;
         for (int i = 0; i < g_nVts.load(); ++i) if (g_vts[i].vt == cvt) { known = true; g_baseVt = i; }
-        // 1.8.0: only Direct3D's own tables (in a d3d11.dll). A table of another tool (TM Real Walk puts its own over
+        // 1.8.1: only Direct3D's own tables (in a d3d11.dll). A table of another tool (TM Real Walk puts its own over
         // Direct3D's in the cab) forwards its calls through Direct3D's table and our hook there: hooking it, too, made
         // the two call each other without end - the game crashed (stack overflow).
         static void* foreignVt[8] = {}; static int nForeign = 0;   // tables of other tools seen (checked once each)
