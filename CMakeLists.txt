@@ -7,7 +7,7 @@ add_library(realistic-radio SHARED
     src/Plugin.cpp src/Logger.cpp src/Config.cpp src/StationDatabase.cpp src/ReceptionCalculator.cpp
     src/RadioManager.cpp src/AudioEngine.cpp src/StreamSource.cpp src/InputManager.cpp src/MiniaudioImpl.cpp
     src/Overlay.cpp src/OverlayImage.cpp src/D3D11Overlay.cpp src/DisplayWindow.cpp src/EmbeddedData.cpp src/MediaLibrary.cpp src/MenuInput.cpp src/SettingsMenu.cpp src/InputBlock.cpp src/TunnelMap.cpp src/PluginApi.cpp
-    src/GameAudio.cpp src/CardStyles.cpp src/Phone.cpp src/Speech.cpp src/ForeignKeys.cpp src/L10n.cpp src/ExternalMedia.cpp src/Addons.cpp third_party/minhook/src/buffer.c third_party/minhook/src/hook.c third_party/minhook/src/trampoline.c third_party/minhook/src/hde/hde64.c
+    src/GameAudio.cpp src/CardStyles.cpp src/Phone.cpp src/ScufyOS.cpp src/Speech.cpp src/ForeignKeys.cpp src/L10n.cpp src/ExternalMedia.cpp src/Addons.cpp third_party/minhook/src/buffer.c third_party/minhook/src/hook.c third_party/minhook/src/trampoline.c third_party/minhook/src/hde/hde64.c
     ${CMAKE_BINARY_DIR}/resources.rc
     src/exports.def)
 target_include_directories(realistic-radio PRIVATE src third_party third_party/minhook/include sdk/include)
@@ -55,6 +55,21 @@ else()
     target_link_options(realistic-radio-jobs PRIVATE -static -static-libgcc -static-libstdc++)
 endif()
 set_target_properties(realistic-radio-jobs PROPERTIES PREFIX "" OUTPUT_NAME "realistic-radio-jobs")
+
+# Add-on "Realistic Radio Bus+" (realistic-radio-bus.dll): Coaches DLC - the timetable of the bus job on the phone and own
+# bus lines (put into the quick save like Jobs+). Uses the add-on interface (sdk/addon/rr_addon.h).
+add_library(realistic-radio-bus SHARED addons/bus/BusApp.cpp addons/bus/BusLogic.cpp addons/bus/SiiFile.cpp addons/jobs/aes/aes.c addons/jobs/miniz/miniz_tinfl.c
+            addons/bus/resources.rc addons/bus/exports.def)
+target_include_directories(realistic-radio-bus PRIVATE addons/bus third_party sdk/include)
+target_compile_definitions(realistic-radio-bus PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
+target_link_libraries(realistic-radio-bus PRIVATE ole32 shell32 advapi32 psapi)
+if(MSVC)
+    target_compile_options(realistic-radio-bus PRIVATE /W3 /utf-8 /EHsc)
+    set_property(TARGET realistic-radio-bus PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+else()
+    target_link_options(realistic-radio-bus PRIVATE -static -static-libgcc -static-libstdc++)
+endif()
+set_target_properties(realistic-radio-bus PROPERTIES PREFIX "" OUTPUT_NAME "realistic-radio-bus")
 
 # Example add-on for add-on authors (sdk/addon/example): a small "list" app
 add_library(realistic-radio-hello SHARED sdk/addon/example/HelloApp.cpp addons/jobs/exports.def)

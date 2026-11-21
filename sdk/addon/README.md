@@ -49,6 +49,7 @@ Beispiele:
 ### `canvas` / `tablet`: eigene Pixel
 
 - `rr.app_area(id, &w, &h)` sagt, wie groß dein Bild sein soll, und gibt `1` zurück, solange deine App offen ist.
+- Ab Realistic Radio 1.8.0 kann deine App auch in **Scufy OS** auf dem Navi offen sein (Querformat, auch bei `canvas`). Die Größe immer aus `app_area` nehmen, sie kann sich ändern. Die Ereignisse (Klicks, Tasten, Mausrad) kommen dort genauso an.
 - `rr.app_frame(id, pixels, w, h)` schickt das Bild: 32 Bit BGRA, premultiplied, von oben nach unten.
 - Ereignisse:
   - Maustasten: `{"type":"down"|"up","button":0,"x":..,"y":..}`
@@ -123,6 +124,7 @@ Examples:
 **`canvas` / `tablet`:**
 
 - `rr.app_area(id, &w, &h)` gives the picture size and returns `1` while your app is open.
+- From Realistic Radio 1.8.0 your app can also be open in **Scufy OS** on the navigation screen (landscape, also for `canvas`). Always take the size from `app_area`, it can change. The events (clicks, keys, wheel) arrive there the same way.
 - `rr.app_frame(id, pixels, w, h)` sends it: 32-bit BGRA, premultiplied, top-down.
 - Events: `down`, `up`, `move`, `wheel`, `key`, `char` (x/y in pixels of your picture). Esc always closes the phone.
 

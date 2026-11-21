@@ -274,7 +274,7 @@ void Phone::Open() {
     renderH_ = D3D11Overlay::ScreenHeight() >= 200 ? D3D11Overlay::ScreenHeight() : 1080;
     float cx = std::max(1, D3D11Overlay::ScreenWidth()) * 0.8f, cy = renderH_ * 0.7f;
     InputBlock::Install();
-    InputBlock::AttachWindow(GetForegroundWindow());
+    InputBlock::AttachWindow(InputBlock::GameWindow());   // 1.8.0: not whatever is in front (e.g. the Web-App window)
     InputBlock::SetMouseBlocked(true);
     bool hooks = MenuInput::Start(cx, cy);
     mouse_ = hooks && MenuInput::MouseActive();

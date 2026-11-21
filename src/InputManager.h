@@ -34,6 +34,8 @@ private:
     bool GameFocused() const;
     Config cfg_;
     bool keyDown_[(int)Action::Count] = {};
+    bool vkWas_[(int)Action::Count] = {};    // the binding's key was down at the last poll
+    bool keyHeld_[(int)Action::Count] = {};  // pressed with the right modifiers and not released since
     bool holdDone_[(int)Action::Count] = {};
     ULONGLONG pressAt_[(int)Action::Count] = {};
     DWORD lastButtons_ = 0;

@@ -14,7 +14,7 @@ Von **ScufyKing**. Das ganze Radio läuft im Spiel:
 
 Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels kopieren, ETS2 starten, das Radio läuft. Senderdaten und Sounds stecken in der DLL.
 
-> **Version 1.7.1** · [Änderungen](CHANGELOG.md#changelog-deutsch)
+> **Version 1.8.0** · [Änderungen](CHANGELOG.md#changelog-deutsch)
 >
 > **Stand:** Getestet in ETS2 1.61 (Windows x64) mit mehreren MAN- und Scania-Modellen sowie Mod-LKW: Das Plugin wird geladen, liest die LKW-Position, wechselt Sender nach Region, spielt Ton ab und zeigt Sender und Lautstärke auf dem Navi-Bildschirm. Daten für American Truck Simulator sind enthalten, ATS ist aber ungetestet.
 
@@ -25,6 +25,7 @@ Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels ko
 - [Funktionen](#funktionen)
 - [Installation](#installation)
 - [Bedienung](#bedienung)
+- [Scufy OS](#scufy-os)
 - [Einstellungsmenü (Strg + 0)](#einstellungsmenü-strg--0)
 - [Einstellungen](#einstellungen)
 - [USB / CD: eigene Musik](#usb--cd-eigene-musik)
@@ -48,6 +49,7 @@ Eine einzige Datei, `realistic-radio.dll`, in den `plugins`-Ordner des Spiels ko
 - **Stationstasten 1–9** auf dem Nummernblock wie im Autoradio: gedrückt halten speichert, kurz drücken wählt – vorbelegt mit den Sendern, die du beim Start empfängst.
 - **Empfang und Rauschen.** Je weiter du von einer Region entfernt bist, desto mehr rauscht es, und bei schwachem Signal setzt der Ton ab und zu aus.
 - **Sanfte Übergänge** mit Umschaltgeräusch.
+- **Scufy OS (neu in 1.8.0):** ein Infotainment-System auf dem Navi wie CarPlay im Auto – Startbildschirm mit Apps, Leiste mit Uhr und Route, Apps für Navigation, Radio, Musik, Einstellungen und die Add-ons. Steuerung mit Lenkrad-Knöpfen oder per Maus direkt auf dem Navi (siehe [Scufy OS](#scufy-os)).
 - **Radio-Seite auf dem Navi-Bildschirm.** Mit **Einfg** zwischen Navigation und einer dauerhaften Radio-Seite umschalten, die Sender bzw. Titel live anzeigt.
 - **Anzeige auf dem Navi-Bildschirm im LKW.** Bei jedem Senderwechsel erscheinen Logo, Sendername, Land, Empfang und „Sender 3 / 12“ für ein paar Sekunden auf dem Navi-Bildschirm im Cockpit, bei Lautstärkeänderungen ein Lautsprechersymbol, eine große Prozentzahl und ein Balken aus 20 Segmenten; danach ist die Navigation wieder da. Funktioniert in LKW mit modernem Infotainment-/Navi-Bildschirm (getestet: mehrere MAN- und Scania-Modelle sowie Mod-LKW; siehe „Anzeige auf dem Cockpit-Bildschirm“).
 - **Songtitel live.** Interpret und Titel des Songs, den der Sender gerade spielt, erscheinen auf dem Navi – genau dann, wenn der Song in dem, was du hörst, wechselt, und laufen bei langen Titeln durch (Einstellungsmenü → Radio → **Songtitel live**).
@@ -195,11 +197,51 @@ Wie die Stationstasten im Autoradio: Eine Taste auf dem Nummernblock (1–9) **1
 
 Die Tasten sind **vorbelegt**: Beim ersten Start bekommen sie die neun am besten empfangenen Sender dort, wo du gerade bist (je Programm einer). Einstellungsmenü → Radio → **Stationstasten neu belegen** belegt sie neu mit den Sendern in Reichweite – praktisch in einem neuen Land.
 
-Alternativ lassen sich die Tasten weiterhin in der Datei eintragen. **Tastennamen** sind die .NET-Tastennamen: Buchstaben `A`–`Z`, Ziffern `0`–`9`, `F1`–`F24`, `NumPad0`–`NumPad9`, `PageUp`, `Next` (= Bild ↓), `Home`, `End`, `Insert`, `Delete`, `Up`, `Down`, `Left`, `Right`, `Pause`, `Space`, `Oemplus`, `OemMinus`, `Add`, `Subtract`, `MediaNextTrack`, `MediaPlayPause` und weitere. Kombinationen gehen auch, z. B. `"Ctrl+Shift+R"`. Ein leerer Wert `""` schaltet eine Taste ab.
+Alternativ lassen sich die Tasten weiterhin in der Datei eintragen. **Tastennamen** sind die .NET-Tastennamen: Buchstaben `A`–`Z`, Ziffern `0`–`9`, `F1`–`F24`, `NumPad0`–`NumPad9`, `PageUp`, `Next` (= Bild ↓), `Home`, `End`, `Insert`, `Delete`, `Up`, `Down`, `Left`, `Right`, `Pause`, `Space`, `Oemplus`, `OemMinus`, `Add`, `Subtract`, `MediaNextTrack`, `MediaPlayPause` und weitere. Kombinationen gehen auch, z. B. `"Ctrl+Shift+R"`; dabei erst Strg / Umschalt / Alt drücken, dann die Taste. Ein leerer Wert `""` schaltet eine Taste ab.
 
 **Controller:** Jeder angeschlossene Controller funktioniert – Lenkräder (auch aus mehreren Geräten wie bei Moza oder Fanatec: Basis, Lenkrad, Button-Box), Gamepads und Button-Boxen, mit bis zu 128 Knöpfen und dem Coolie-Hat (POV). Am einfachsten im Einstellungsmenü: Seite Tasten, in der Spalte **Controller** klicken und den Knopf drücken. In der Datei steht unter `buttons` `"Gerätename/12"` (Knopf 12 dieses Controllers, `"Gerätename/POV1 up"` für den Coolie-Hat), eine reine Zahl (ab 0 gezählt, beliebiger Controller; ältere Dateien) oder `-1` (keiner). Im Log stehen die gefundenen Controller (`Controller: … found`).
 
+## Scufy OS
+
+**Scufy OS** macht den Navi-Bildschirm im LKW zu einem Infotainment-System wie CarPlay oder Android Auto im Auto. Einschalten: Einstellungsmenü (**Strg + 0**) → Seite **Scufy OS** → **Scufy OS** an. Es braucht die Anzeige auf dem Navi (Seite Navi-Bildschirm) und läuft mit der Zündung.
+
+- **Start:** Nach dem Start-Logo des LKWs erscheint kurz „Scufy OS“, dann der Startbildschirm (abschaltbar: **Startanimation**).
+- **Leiste** am Rand (links oder rechts):
+  - Uhrzeit und Wochentag des Spiels,
+  - mit Route die Entfernung und Fahrzeit zum Ziel,
+  - vier Knöpfe: Start, Navigation, Radio, Musik,
+  - unten, was gerade spielt (antippen öffnet das Radio).
+- **Apps:**
+
+| App | Was sie zeigt |
+|---|---|
+| Navigation | die Navigation des Spiels, nur die Leiste liegt darüber |
+| Radio | Senderlogo, Name, Songtitel, Land, Frequenz; Zurück / Pause / Weiter, Quelle, FM / DAB+, Lautstärke; die Stationstasten 1–9 zum Antippen. Bei USB / CD: Titel, Cover und Fortschritt |
+| Musik | deine USB- / CD-Ordner zum Auswählen, mit Steuerung des laufenden Titels |
+| Einstellungen | Akzentfarbe, Seite der Leiste, Startanimation, Mausgeschwindigkeit, Scufy OS ausschalten |
+| Add-ons | Bus+, Aufträge+, Web-App (Spotify, YouTube …) und andere Add-on-Apps, im Querformat |
+
+- **Navi-Taste (Einfg):** springt zwischen der Navigation und der App davor hin und her. Die zuletzt offene App kommt beim nächsten Start wieder.
+- **Lautstärke und Benachrichtigungen** (Handy, Kunde, Polizei) erscheinen als Leiste oben über Scufy OS.
+
+### Steuerung
+
+> **Wichtig: Spiel nicht beenden, solange Handy, Einstellungsmenü oder die Scufy-OS-Steuerung offen sind.** In dieser Zeit hält Realistic Radio Maus und Tastatur vom Spiel fern. Bleibt das Spiel beim Beenden hängen (z. B. wegen eines anderen Plugins), kann Windows sonst kurz nicht mehr auf Maus und Tastatur reagieren. Also erst Handy / Menü schließen bzw. die Steuerung mit **Strg + Einfg** beenden, dann das Spiel verlassen. Ab 1.8.0 gibt das Radio Maus und Tastatur von selbst frei, wenn das Spiel geschlossen wird oder nicht mehr reagiert. Und **Strg + Alt + Entf** geht immer.
+
+- **Lenkrad / Tasten:** Hoch, Runter, Links, Rechts, OK, Zurück und Startbildschirm sind eigene Funktionen. Am besten auf Knöpfe am Lenkrad oder an der Button-Box legen (Einstellungsmenü → Seite Scufy OS oder Tasten). Die Markierung springt dann von Knopf zu Knopf, OK öffnet bzw. drückt.
+- **Maus / Steuerung (Strg + Einfg):** Danach bewegt die Maus einen Zeiger auf dem Navi im LKW, statt die Kamera zu drehen:
+  - Linksklick tippt an, Rechtsklick geht zurück, das Mausrad blättert Listen.
+  - Die Tastatur geht auch: Pfeile, Enter, Rücktaste, Pos1. In Suchfeldern von Add-ons wird getippt.
+  - Ein farbiger Rahmen zeigt, dass die Steuerung an ist.
+  - **Strg + Einfg** oder **Esc** gibt Maus und Tastatur ans Spiel zurück.
+  - Die Lenkrad-Knöpfe fürs Radio gehen weiterhin.
+- **Steuerung geht von selbst aus,** wenn das Navi 3 Sekunden lang nicht gezeichnet wird, zum Beispiel beim Aussteigen. Alt + Tab und der Task-Manager gehen immer.
+
+Scufy OS ersetzt die Radio-Seite; die normale Senderanzeige auf dem Navi gibt es mit Scufy OS nicht. Ausschalten: in der App Einstellungen oder im Einstellungsmenü.
+
 ## Einstellungsmenü (Strg + 0)
+
+> **Wichtig: Spiel nicht beenden, solange Handy, Einstellungsmenü oder die Scufy-OS-Steuerung offen sind.** In dieser Zeit hält Realistic Radio Maus und Tastatur vom Spiel fern. Bleibt das Spiel beim Beenden hängen (z. B. wegen eines anderen Plugins), kann Windows sonst kurz nicht mehr auf Maus und Tastatur reagieren. Also erst Handy / Menü schließen bzw. die Steuerung mit **Strg + Einfg** beenden, dann das Spiel verlassen. Ab 1.8.0 gibt das Radio Maus und Tastatur von selbst frei, wenn das Spiel geschlossen wird oder nicht mehr reagiert. Und **Strg + Alt + Entf** geht immer.
 
 Die wichtigsten Einstellungen lassen sich direkt im Spiel ändern. **Strg + 0** (oder **Strg + F1**) öffnet das Menü in der Bildmitte; es lässt sich mit der Maus und mit der Tastatur bedienen.
 
@@ -208,6 +250,7 @@ Die wichtigsten Einstellungen lassen sich direkt im Spiel ändern. **Strg + 0** 
 | Radio | Lautstärke, Stumm, Radio an bei (Zündung / Motor läuft / immer), automatisch starten, Sprache des Menüs, **Band FM / DAB+** und seine Taste, **Stationstasten** an/aus und Haltezeit, **Senderwahl: Senderliste oder Frequenz**, **RDS-AF** |
 | Empfang | Sendereichweite, Wechselschwelle, **Region wechseln** (erst wenn der Sender weg ist / bei besserem Empfang), **DAB+-Reichweite**, Auto-Lautstärke, Rauschen, Umschaltgeräusch, **kein Empfang im Tunnel**, Taste zum Markieren eigener Tunnel |
 | Navi-Bildschirm | Anzeige an/aus, Anzeigedauer, **Design** (eingebaute und eigene Styles, Knopf zum Öffnen des Style-Ordners), **Start-Logo** an/aus, Dauer und Größe, **Größe von Schrift und Bildern**, **Größe des Senderlogos**, **Zeichenfläche** (falls die Anzeige doppelt erscheint), Radio-Seite dauerhaft, Taste für Navi ↔ Radio-Seite, **Testmodus**, **automatische Erkennung (Beta)** und Position der Anzeige (Bereich X / Y / Breite / Höhe, umdrehen, spiegeln) |
+| Scufy OS | **Scufy OS** an/aus, Akzentfarbe, Seite der Leiste, Startanimation, Mausgeschwindigkeit, Taste für Maus / Steuerung und die Tasten / Lenkrad-Knöpfe für Hoch, Runter, Links, Rechts, OK, Zurück, Startbildschirm |
 | Handy | **Virtuelles Handy** an/aus, Name des Handys, Ton, Handy-Taste, **Anrufe vom Disponenten** an/aus, Name des Anrufers, Sprachausgabe an/aus, Bußgelder als Nachricht, Testanruf, **Nachrichten vom Kunden** an/aus, wann (Spielminuten vor Ende der Lieferzeit), Absender, Nachrichtentext, Testnachricht. Textfelder: anklicken oder Enter, tippen, Enter übernimmt (Strg + V fügt ein) |
 | LKW | Aktueller LKW (aus der Telemetrie), **Radio-Speicher je LKW**, **Start-Logo** (Auswahl, Vorschau, Logo-Ordner), neues Preset, aktives Preset, automatisch je LKW wechseln, verknüpfen / lösen, löschen, gespeichertes Preset laden |
 | Popup-Overlay | Modus, Stil, Position, Größe, Anzeigedauer, Senderlogos |
@@ -351,6 +394,8 @@ Jede JSON-Datei im Ordner `realistic-radio\styles\` ist ein eigener Style und er
 Gespeichert wird das Design als `"design": "style:<Dateiname>"` (auch in den LKW-Presets). Fehlt die Datei, zeigt die Anzeige *Modern*.
 
 ### Virtuelles Handy (`"phone": { … }`)
+
+> **Wichtig: Spiel nicht beenden, solange Handy, Einstellungsmenü oder die Scufy-OS-Steuerung offen sind.** In dieser Zeit hält Realistic Radio Maus und Tastatur vom Spiel fern. Bleibt das Spiel beim Beenden hängen (z. B. wegen eines anderen Plugins), kann Windows sonst kurz nicht mehr auf Maus und Tastatur reagieren. Also erst Handy / Menü schließen bzw. die Steuerung mit **Strg + Einfg** beenden, dann das Spiel verlassen. Ab 1.8.0 gibt das Radio Maus und Tastatur von selbst frei, wenn das Spiel geschlossen wird oder nicht mehr reagiert. Und **Strg + Alt + Entf** geht immer.
 
 Nach dem Start des Radios erscheint oben auf dem Navi die Benachrichtigung „Verbunden“ mit dem Namen des Handys. Läuft die Lieferzeit des aktuellen Auftrags bald ab, schreibt der Kunde eine Nachricht. Beides sieht aus wie eine Benachrichtigung auf dem Smartphone (Banner oben, die Navigation bzw. die Radio-Seite bleibt darunter sichtbar) und kommt mit einem kurzen Hinweiston; ist das Popup-Overlay an, erscheint es auch dort. Wann sich der Kunde meldet, wird aus der Telemetrie berechnet (Ende der Lieferzeit minus Spielzeit), einmal pro Auftrag.
 

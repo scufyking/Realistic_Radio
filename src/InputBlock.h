@@ -16,4 +16,6 @@ namespace InputBlock {
 void Install();              // once, from the radio thread (not from DllMain / game callbacks)
 void SetMouseBlocked(bool on);
 void AttachWindow(HWND gameWindow);   // also filter WM_INPUT in the game window's message handler (stays installed)
+// 1.8.0: the game's own window (class "prism3d"), never a helper window of a plugin (Web-App, overlay, chat menu)
+HWND GameWindow();
 }

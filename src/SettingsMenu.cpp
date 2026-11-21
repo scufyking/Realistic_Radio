@@ -222,6 +222,29 @@ const std::vector<Page>& Pages() {
             Toggle("Umdrehen (oben/unten)", "Flip (up/down)", "", "", [](Config& c) -> bool& { return c.screen.flipY; }),
             Toggle("Spiegeln (links/rechts)", "Mirror (left/right)", "", "", [](Config& c) -> bool& { return c.screen.flipX; }),
         }, false});
+        p.push_back({"Scufy OS", "Scufy OS", "Infotainment auf dem Navi", "Infotainment on the navigation screen", {
+            Toggle("Scufy OS", "Scufy OS", "Startbildschirm mit Apps statt Radio-Seite (Navigation ist eine App)",
+                   "Home screen with apps instead of the radio page (the navigation is an app)", [](Config& c) -> bool& { return c.os.enabled; }),
+            Choice("Akzentfarbe", "Accent colour", "", "", [](Config& c) -> std::string& { return c.os.accent; },
+                   {"blue", "green", "orange", "purple", "red", "teal"},
+                   {{"Blau", "Blue"}, {"Gr\u00fcn", "Green"}, {"Orange", "Orange"}, {"Lila", "Purple"}, {"Rot", "Red"}, {"T\u00fcrkis", "Teal"}}),
+            Choice("Leiste", "Dock", "Uhr, Apps und Musik am Rand", "Clock, apps and music at the side", [](Config& c) -> std::string& { return c.os.dock; },
+                   {"left", "right"}, {{"Links", "Left"}, {"Rechts", "Right"}}),
+            Toggle("Startanimation", "Start animation", "\u201eScufy OS\u201c nach dem Start-Logo", "\u201cScufy OS\u201d after the start logo",
+                   [](Config& c) -> bool& { return c.os.boot; }),
+            Slider("Mausgeschwindigkeit", "Mouse speed", "Zeiger auf dem Navi im Steuer-Modus", "Cursor on the screen in control mode",
+                   [](Config& c) -> double& { return c.os.mouseSpeed; }, 0.3, 3, 0.1, [](double v, bool en) { return Num(v, 1, en) + L" \u00d7"; }),
+            Heading("Steuerung", "Control"),
+            KeyRow("Taste: Maus / Steuerung", "Key: mouse / control", "Danach steuern Maus und Tastatur das Navi; noch einmal = zur\u00fcck ins Spiel",
+                   "Then mouse and keyboard control the screen; again = back to the game", Action::OsControl),
+            KeyRow("Startbildschirm", "Home screen", "Lenkrad-Kn\u00f6pfe: Seite Tasten", "Steering wheel buttons: page Keys", Action::OsHome),
+            KeyRow("Hoch", "Up", "", "", Action::OsUp),
+            KeyRow("Runter", "Down", "", "", Action::OsDown),
+            KeyRow("Links", "Left", "", "", Action::OsLeft),
+            KeyRow("Rechts", "Right", "", "", Action::OsRight),
+            KeyRow("OK", "OK", "", "", Action::OsOk),
+            KeyRow("Zur\u00fcck", "Back", "", "", Action::OsBack),
+        }, false});
         p.push_back({"Handy", "Phone", "Virtuelles Handy im LKW", "Virtual phone in the truck", {
             Toggle("Virtuelles Handy", "Virtual mobile device", "Nach dem Start des Radios: \u201eVerbunden\u201c auf dem Navi",
                    "After the radio starts: \u201cConnected\u201d on the navigation screen", [](Config& c) -> bool& { return c.screen.phone.enabled; }),
@@ -318,7 +341,8 @@ const Action kRows[] = {Action::Next, Action::Previous, Action::VolumeUp, Action
                         Action::Source, Action::NextDisc, Action::PreviousDisc, Action::ScreenPage, Action::MakeFavourite,
                         Action::GoToFavourite, Action::ShowOverlay, Action::Menu, Action::Band,
                         Action::Memory1, Action::Memory2, Action::Memory3, Action::Memory4, Action::Memory5,
-                        Action::Memory6, Action::Memory7, Action::Memory8, Action::Memory9, Action::TuneUp, Action::TuneDown, Action::MenuAlt, Action::TunnelMark, Action::Phone};
+                        Action::Memory6, Action::Memory7, Action::Memory8, Action::Memory9, Action::TuneUp, Action::TuneDown, Action::MenuAlt, Action::TunnelMark, Action::Phone,
+                        Action::OsControl, Action::OsHome, Action::OsUp, Action::OsDown, Action::OsLeft, Action::OsRight, Action::OsOk, Action::OsBack};
 constexpr int kRowCount = (int)(sizeof(kRows) / sizeof(kRows[0]));
 static_assert(kRowCount == (int)Action::Count, "every action needs a row in the key menu");
 
@@ -346,6 +370,10 @@ const char* LabelDe(Action a) {
     case Action::Memory4: return "Stationstaste 4"; case Action::Memory5: return "Stationstaste 5"; case Action::Memory6: return "Stationstaste 6";
     case Action::Memory7: return "Stationstaste 7"; case Action::Memory8: return "Stationstaste 8"; case Action::Memory9: return "Stationstaste 9";
     case Action::TuneUp: return "Frequenz + 0,1 MHz"; case Action::TuneDown: return "Frequenz \u2212 0,1 MHz";
+    case Action::OsControl: return "Scufy OS: Maus / Steuerung an/aus"; case Action::OsHome: return "Scufy OS: Startbildschirm";
+    case Action::OsUp: return "Scufy OS: hoch"; case Action::OsDown: return "Scufy OS: runter";
+    case Action::OsLeft: return "Scufy OS: links"; case Action::OsRight: return "Scufy OS: rechts";
+    case Action::OsOk: return "Scufy OS: OK"; case Action::OsBack: return "Scufy OS: zur\u00fcck";
     default: return "?";
     }
 }
@@ -373,6 +401,10 @@ const char* LabelEn(Action a) {
     case Action::Memory4: return "Station button 4"; case Action::Memory5: return "Station button 5"; case Action::Memory6: return "Station button 6";
     case Action::Memory7: return "Station button 7"; case Action::Memory8: return "Station button 8"; case Action::Memory9: return "Station button 9";
     case Action::TuneUp: return "Frequency + 0.1 MHz"; case Action::TuneDown: return "Frequency \u2212 0.1 MHz";
+    case Action::OsControl: return "Scufy OS: mouse / control on/off"; case Action::OsHome: return "Scufy OS: home screen";
+    case Action::OsUp: return "Scufy OS: up"; case Action::OsDown: return "Scufy OS: down";
+    case Action::OsLeft: return "Scufy OS: left"; case Action::OsRight: return "Scufy OS: right";
+    case Action::OsOk: return "Scufy OS: OK"; case Action::OsBack: return "Scufy OS: back";
     default: return "?";
     }
 }
@@ -704,7 +736,7 @@ void SettingsMenu::Open(const Config& cfg) {
     renderH_ = D3D11Overlay::ScreenHeight() >= 200 ? D3D11Overlay::ScreenHeight() : 1080;
     float cx = std::max(1, D3D11Overlay::ScreenWidth()) / 2.f, cy = renderH_ / 2.f;
     InputBlock::Install();                          // the game reads the mouse itself (raw input / DirectInput)
-    InputBlock::AttachWindow(GetForegroundWindow());
+    InputBlock::AttachWindow(InputBlock::GameWindow());   // 1.8.0: not whatever is in front (e.g. the Web-App window)
     InputBlock::SetMouseBlocked(true);
     bool hooks = MenuInput::Start(cx, cy);
     mouse_ = hooks && MenuInput::MouseActive();

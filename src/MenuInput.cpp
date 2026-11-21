@@ -3,6 +3,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "MenuInput.h"
+#include <atomic>
+#include "InputBlock.h"
 #include "KeyState.h"
 #include "D3D11Overlay.h"
 #include "Logger.h"
@@ -23,11 +25,15 @@ bool g_poll = false;                  // no hooks: poll the keyboard (keys then 
 bool g_prev[256] = {};
 std::atomic<float> g_scale{1.f};      // window pixels -> back-buffer pixels
 std::atomic<float> g_cx{0}, g_cy{0};
+float g_dx = 0, g_dy = 0;   // g_mtx
 
+std::atomic<bool> g_closing{false};   // 1.8.0: the game is closing: mouse and keyboard always go to Windows
 bool GameInFront() {
+    if (g_closing) return false;
     HWND fg = GetForegroundWindow(); if (!fg) return false;
     DWORD pid = 0; GetWindowThreadProcessId(fg, &pid);
     if (pid != GetCurrentProcessId()) return false;
+    if (IsHungAppWindow(fg)) return false;   // 1.8.0: the game does not respond: never keep the input from Windows
     wchar_t cls[64] = {0}; GetClassNameW(fg, cls, 64);
     if (!wcscmp(cls, L"TruckerChatMenu")) return false;   // the Trucker Chat menu window keeps its keys
     return true;
@@ -47,6 +53,14 @@ LRESULT CALLBACK KeyboardProc(int code, WPARAM wp, LPARAM lp) {
         case VK_LMENU: case VK_RMENU: case VK_MENU: g_alt = down; break;
         case VK_LWIN: case VK_RWIN: return CallNextHookEx(nullptr, code, wp, lp);   // never block the Windows key
         default: modifier = false;
+        }
+        // 1.8.0: Windows' own escape routes always work while the menu / phone is open: Alt + Tab, Ctrl + Shift + Esc
+        // (Task Manager), Ctrl + Esc and Alt + F4. Before, every key was kept from Windows, so when the phone could not be
+        // seen the game looked frozen and could not even be left with Alt + Tab or the Task Manager key.
+        if (modifier) return CallNextHookEx(nullptr, code, wp, lp);   // Ctrl / Shift / Alt: only remembered
+        if ((vk == VK_TAB && g_alt) || (vk == VK_ESCAPE && g_ctrl) || (vk == VK_F4 && g_alt) || (vk == VK_DELETE && g_ctrl && g_alt)) {
+            g_swallowed.erase(vk);
+            return CallNextHookEx(nullptr, code, wp, lp);
         }
         if (down) {
             if (!modifier) {
@@ -85,6 +99,10 @@ LRESULT CALLBACK MouseProc(int code, WPARAM wp, LPARAM lp) {
             float x = std::clamp(g_cx.load() + (m->pt.x - cur.x) * k, 0.f, w - 1), y = std::clamp(g_cy.load() + (m->pt.y - cur.y) * k, 0.f, h - 1);
             g_cx = x; g_cy = y;
             D3D11Overlay::SetCursorPos(x, y);
+            {   // 1.8.0: unclamped movement for Scufy OS (its cursor lives on the navigation screen, not in the game picture)
+                std::lock_guard<std::mutex> l(g_mtx);
+                g_dx += (m->pt.x - cur.x) * k; g_dy += (m->pt.y - cur.y) * k;
+            }
             return 1;
         }
         case WM_LBUTTONDOWN: e.type = Event::MouseDown; e.button = 0; break;
@@ -132,9 +150,10 @@ void PollKeys() {   // g_mtx held
 
 bool Start(float cx, float cy) {
     if (g_thread) return true;
+    g_closing = false;   // a closing that was cancelled (the game's "really quit?")
     {
         std::lock_guard<std::mutex> l(g_mtx);
-        g_queue.clear(); g_swallowed.clear();
+        g_queue.clear(); g_swallowed.clear(); g_dx = g_dy = 0;
         g_ctrl = (RealAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
         g_shift = (RealAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
         g_alt = (RealAsyncKeyState(VK_MENU) & 0x8000) != 0;
@@ -142,7 +161,7 @@ bool Start(float cx, float cy) {
     g_cx = cx; g_cy = cy;
     D3D11Overlay::SetCursorPos(cx, cy);
     {   // the back buffer can be larger or smaller than the window (render scaling, DPI)
-        RECT r{}; HWND fg = GetForegroundWindow();
+        RECT r{}; HWND fg = InputBlock::GameWindow();
         float k = 1.f;
         if (fg && GetClientRect(fg, &r) && r.right > 0 && D3D11Overlay::ScreenWidth() > 0) k = (float)D3D11Overlay::ScreenWidth() / r.right;
         g_scale = std::clamp(k, 0.25f, 4.f);
@@ -177,4 +196,9 @@ bool Pop(Event& e) {
 }
 
 bool MouseActive() { return g_mouse != nullptr; }
+void GameClosing() { g_closing = true; }
+void TakeMouseDelta(float& dx, float& dy) {
+    std::lock_guard<std::mutex> l(g_mtx);
+    dx = g_dx; dy = g_dy; g_dx = g_dy = 0;
+}
 } // namespace MenuInput

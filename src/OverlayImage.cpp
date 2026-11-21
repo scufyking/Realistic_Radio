@@ -2381,3 +2381,6 @@ std::shared_ptr<OverlayImage> PrepareLogoImage(const OverlayImage& src) {
     }
     return img;
 }
+
+// ------------------------------------------------------------------------------------------------
+#include "ScufyOSRender.inc"

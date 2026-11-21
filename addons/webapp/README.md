@@ -1,4 +1,4 @@
-# Realistic Radio Web-App 1.0.0 (Spotify & Co.)
+# Realistic Radio Web-App 1.0.1 (Spotify & Co.)
 
 **Deutsch** · [English](#english)
 
@@ -29,5 +29,9 @@ Add-on for **Realistic Radio 1.7.0 or newer**: a web page as an app on the phone
 - The login is kept in `plugins\realistic-radio\webapp\profile`.
 - The music keeps playing when the phone is closed. The sound comes straight from WebView2 (Windows volume mixer: "Microsoft Edge WebView2").
 - Name, start page and zoom are set in `plugins\realistic-radio\webapp.json`.
+
+## Changelog
+- **1.0.1:** The hidden browser window is only created when the app is opened on the phone; the web page can no longer take the focus from the game.
+- **1.0.0:** First version.
 
 License: MPL 2.0 · © 2026 ScufyKing · uses the WebView2 SDK headers (Microsoft, BSD) and OpenWebView2Loader (ISC).

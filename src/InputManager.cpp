@@ -7,6 +7,7 @@
 #include "L10n.h"
 #include "KeyState.h"
 #include "Logger.h"
+#include "InputBlock.h"
 #include <mmsystem.h>
 #include <dinput.h>
 
@@ -27,11 +28,24 @@ static bool ChatMenuInFront() {   // the Trucker Chat menu (separate plugin) is 
 static bool Down(int vk) { return vk && (RealAsyncKeyState(vk) & 0x8000) != 0; }   // past other plugins' hooks (KeyState.h)
 
 void InputManager::Poll(const std::function<void(Action, bool)>& fire) {
-    if ((cfg_.onlyWhenGameFocused && !GameFocused()) || ChatMenuInFront()) { for (auto& k : keyDown_) k = false; for (auto& h : holdDone_) h = true; return; }
+    if ((cfg_.onlyWhenGameFocused && !GameFocused()) || ChatMenuInFront()) {
+        for (auto& k : keyDown_) k = false;
+        for (auto& h : holdDone_) h = true;
+        for (int i = 0; i < (int)Action::Count; ++i) { keyHeld_[i] = false; vkWas_[i] = cfg_.keys[i].vk && Down(cfg_.keys[i].vk); }   // keys held when coming back do nothing
+        return;
+    }
     bool pressed[(int)Action::Count] = {};
     for (int i = 0; i < (int)Action::Count; ++i) {
         const KeyBinding& b = cfg_.keys[i];
-        pressed[i] = b.vk && Down(b.vk) && Down(VK_CONTROL) == b.ctrl && Down(VK_SHIFT) == b.shift && Down(VK_MENU) == b.alt;
+        // 1.8.0: a key counts only if it went down while exactly its modifiers were held, and stays down until it is
+        // released. Before, letting go of Shift while Insert / Right / Home was still held fired the key without Shift as
+        // well: Shift + Insert (phone) also switched the screen page (radio page "stuck" on the navigation screen),
+        // Shift + Right / Left (0.1 MHz) also jumped to the next station, Shift + Home (band) also switched to USB.
+        const bool vkDown = b.vk && Down(b.vk);
+        const bool modsOk = Down(VK_CONTROL) == b.ctrl && Down(VK_SHIFT) == b.shift && Down(VK_MENU) == b.alt;
+        pressed[i] = vkDown && (keyHeld_[i] || (!vkWas_[i] && modsOk));
+        keyHeld_[i] = pressed[i];
+        vkWas_[i] = vkDown;
         if (pressed[i]) if (auto f = foreign_.find(b.vk); f != foreign_.end()) {   // the key belongs to another plugin
             pressed[i] = false;
             if (!foreignNoticed_[b.vk]) {
@@ -75,6 +89,7 @@ void InputManager::Resync() {
     for (int i = 0; i < (int)Action::Count; ++i) {
         const KeyBinding& b = cfg_.keys[i];
         keyDown_[i] = b.vk && Down(b.vk);
+        vkWas_[i] = keyDown_[i]; keyHeld_[i] = false;   // must be pressed again
         holdDone_[i] = true;   // a key still held from the menu does nothing when released
     }
     if (!diFailed_) { UpdatePads(GetTickCount64()); for (auto& p : pads_) for (int b = 0; b < 144; ++b) p.prev[b] = p.down[b]; }
@@ -144,7 +159,8 @@ void InputManager::UpdatePads(ULONGLONG now) {
     }
     if (now >= enumAt_) {   // (re)connect all controllers now and then: plugged in later, woken up, ...
         enumAt_ = now + 10000;
-        HWND game = GameWindow();
+        HWND game = InputBlock::GameWindow();   // 1.8.0: the game's own window, not a plugin's helper window
+        if (!game) game = GameWindow();
         if (!game) { enumAt_ = now + 2000; return; }
         std::vector<DIDEVICEINSTANCEW> found;
         di_->EnumDevices(DI8DEVCLASS_GAMECTRL, [](LPCDIDEVICEINSTANCEW d, LPVOID p) -> BOOL {

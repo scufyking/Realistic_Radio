@@ -12,6 +12,7 @@
 #include "RadioManager.h"
 #include "ForeignKeys.h"
 #include "InputManager.h"
+#include "D3D11Overlay.h"
 #include "EmbeddedData.h"
 #include <scssdk_telemetry.h>
 #include <eurotrucks2/scssdk_eut2.h>
@@ -148,6 +149,59 @@ SCSAPI_VOID OnPlacement(const scs_string_t, const scs_u32_t, const scs_value_t* 
     g_havePos = true;
 }
 
+// 1.8.0: if the radio thread stops (a hang), say where it is - module and offset of the top frames - so it can be found.
+std::atomic<ULONGLONG> g_loopAt{0};
+HANDLE g_stallThread = nullptr;
+std::string FrameName(DWORD64 pc) {
+    HMODULE m = nullptr; char path[MAX_PATH] = "?";
+    if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)pc, &m) && m) {
+        GetModuleFileNameA(m, path, MAX_PATH);
+        const char* f = strrchr(path, '\\');
+        char b[MAX_PATH + 32]; snprintf(b, sizeof b, "%s+0x%llx", f ? f + 1 : path, (unsigned long long)(pc - (DWORD64)m));
+        return b;
+    }
+    char b[32]; snprintf(b, sizeof b, "0x%llx", (unsigned long long)pc); return b;
+}
+DWORD WINAPI StallWatch(LPVOID radioThread) {
+    bool reported = false, picReported = false;
+    long long lastFrames = -1; ULONGLONG framesAt = GetTickCount64();
+    while (!g_quit) {
+        for (int i = 0; i < 10 && !g_quit; ++i) Sleep(100);
+        {   // the game's picture: stopped for long while the game is in front (a hang in the game or in a Present hook)
+            long long f = D3D11Overlay::D3D11Frames();
+            if (f != lastFrames) { lastFrames = f; framesAt = GetTickCount64(); picReported = false; }
+            else if (f > 0 && !picReported && GetTickCount64() - framesAt > 8000 && !IsIconic(GetForegroundWindow())) {
+                DWORD pid = 0; GetWindowThreadProcessId(GetForegroundWindow(), &pid);
+                if (pid == GetCurrentProcessId()) {
+                    picReported = true;
+                    Log::Write("WARNING: the game has not shown a new picture for 8 s (radio thread %s) - please send this log",
+                               GetTickCount64() - g_loopAt.load() < 3000 ? "running" : "stuck too");
+                }
+            }
+        }
+        ULONGLONG at = g_loopAt.load();
+        if (!at || GetTickCount64() - at < 6000) { reported = false; continue; }
+        if (reported) continue;
+        reported = true;
+        std::string where;
+        if (SuspendThread((HANDLE)radioThread) != (DWORD)-1) {
+            CONTEXT c{}; c.ContextFlags = CONTEXT_FULL;
+            if (GetThreadContext((HANDLE)radioThread, &c)) {
+                for (int n = 0; n < 14 && c.Rip; ++n) {
+                    where += (where.empty() ? "" : " < ") + FrameName(c.Rip);
+                    DWORD64 base = 0; PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(c.Rip, &base, nullptr);
+                    if (!fn) { c.Rip = *(DWORD64*)c.Rsp; c.Rsp += 8; continue; }   // leaf function
+                    void* handlerData = nullptr; DWORD64 frame = 0;
+                    RtlVirtualUnwind(UNW_FLAG_NHANDLER, base, c.Rip, fn, &c, &handlerData, &frame, nullptr);
+                }
+            }
+            ResumeThread((HANDLE)radioThread);
+        }
+        Log::Write("WARNING: the radio thread is stuck for %llu s - please send this log. Where: %s", (GetTickCount64() - at) / 1000, where.c_str());
+    }
+    return 0;
+}
+
 DWORD WINAPI RadioThread(LPVOID) {
     std::wstring dir = PluginDataDir();
     CoInitializeEx(nullptr, COINIT_MULTITHREADED);
@@ -176,6 +230,7 @@ DWORD WINAPI RadioThread(LPVOID) {
     Log::Write("Radio thread running");
     int truckVersion = 0, jobVersion = 0;
     while (!g_quit) {
+        g_loopAt = GetTickCount64();
         if (GetTickCount64() >= foreignAt) { foreignAt = GetTickCount64() + 20000; scanForeign(); }
         if (radio.MenuOpen()) {   // key menu: keys go to the menu, no radio actions
             if (radio.MenuTick(input)) { input.Init(radio.Settings()); input.Resync(); }
@@ -183,6 +238,10 @@ DWORD WINAPI RadioThread(LPVOID) {
             radio.PhoneUiTick(input);
             input.Poll([&](Action a, bool) { if (a == Action::Phone && radio.PhoneOpen()) radio.OnAction(a, false); });
             if (!radio.PhoneOpen()) input.Resync();
+        } else if (radio.OsControl()) {   // Scufy OS control mode: mouse and keyboard on the navigation screen; controller buttons work as always
+            radio.OsUiTick();
+            input.Poll([&](Action a, bool hold) { Log::Write("Action: %s%s", ActionName(a), hold ? " (held)" : ""); radio.OnAction(a, hold); });
+            if (!radio.OsControl()) input.Resync();
         } else input.Poll([&](Action a, bool hold) { Log::Write("Action: %s%s", ActionName(a), hold ? " (held)" : ""); radio.OnAction(a, hold); });
         if (std::wstring n = input.TakeNotice(); !n.empty()) radio.ShowHint(n);   // a radio key that belongs to another plugin
         if (int v = g_truckVersion.load(); v != truckVersion) {
@@ -212,7 +271,7 @@ DWORD WINAPI RadioThread(LPVOID) {
             radio.SetPose(g_havePos, truck, head, g_speed, g_heading);
         }
         radio.Tick(g_x, g_z, g_havePos, g_electric, g_engine, g_speed);
-        Sleep(radio.MenuOpen() || radio.PhoneOpen() ? 15 : 50);   // the menu reacts faster to the mouse
+        Sleep(radio.MenuOpen() || radio.PhoneOpen() || radio.OsControl() ? 15 : 50);   // the menu reacts faster to the mouse
     }
     radio.Shutdown();
     CoUninitialize();
@@ -278,7 +337,9 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
         if (h != INVALID_HANDLE_VALUE) {
             do {
                 std::wstring n = fd.cFileName, l = n; for (auto& ch : l) ch = towlower(ch);
-                if (folder + n != mine && (l.find(L"local-radio") != std::wstring::npos || l.find(L"realistic-radio") != std::wstring::npos ||
+                // 1.8.0: the add-ons (realistic-radio-bus.dll, -jobs, -webapp ...) are no second radio (the radio itself is > 8 MB)
+                const bool addon = l.rfind(L"realistic-radio-", 0) == 0 && fd.nFileSizeHigh == 0 && fd.nFileSizeLow < 8u * 1024 * 1024;
+                if (folder + n != mine && !addon && (l.find(L"local-radio") != std::wstring::npos || l.find(L"realistic-radio") != std::wstring::npos ||
                                            l.find(L"realisticradio") != std::wstring::npos))
                     Log::Write("WARNING: another radio plugin DLL is in the plugins folder: %s - remove it, otherwise two radios may play", WideToUtf8(n).c_str());
             } while (FindNextFileW(h, &fd));
@@ -315,12 +376,14 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
     p->common.log(SCS_LOG_TYPE_message, "[realistic-radio] Realistic Radio plugin initialised");
     g_quit = false;
     g_thread = CreateThread(nullptr, 0, RadioThread, nullptr, 0, nullptr);
+    if (g_thread) g_stallThread = CreateThread(nullptr, 0, StallWatch, g_thread, 0, nullptr);
     return g_thread ? SCS_RESULT_ok : SCS_RESULT_generic_error;
 }
 
 SCSAPI_VOID scs_telemetry_shutdown(void) {
     if (!g_instance) return;   // inactive duplicate copy
     g_quit = true;
+    if (g_stallThread) { WaitForSingleObject(g_stallThread, 3000); CloseHandle(g_stallThread); g_stallThread = nullptr; }
     if (g_thread) { WaitForSingleObject(g_thread, 10000); CloseHandle(g_thread); g_thread = nullptr; }
     g_havePos = false; g_electric = false; g_engine = false;
     Log::Write("Plugin shut down");

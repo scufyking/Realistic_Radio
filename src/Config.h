@@ -7,7 +7,9 @@
 #include "DisplayWindow.h"
 
 enum class Action { Next, Previous, Stop, VolumeUp, VolumeDown, MakeFavourite, GoToFavourite, Mute, ShowOverlay, Source, NextDisc, PreviousDisc, ScreenPage, Menu,
-                    Band, Memory1, Memory2, Memory3, Memory4, Memory5, Memory6, Memory7, Memory8, Memory9, TuneUp, TuneDown, MenuAlt, TunnelMark, Phone, Count };
+                    Band, Memory1, Memory2, Memory3, Memory4, Memory5, Memory6, Memory7, Memory8, Memory9, TuneUp, TuneDown, MenuAlt, TunnelMark, Phone,
+                    OsControl, OsHome, OsUp, OsDown, OsLeft, OsRight, OsOk, OsBack, Count };   // 1.8.0: Scufy OS
+inline bool IsOsAction(Action a) { return a >= Action::OsControl && a <= Action::OsBack; }
 inline bool IsMemoryAction(Action a) { return a >= Action::Memory1 && a <= Action::Memory9; }
 
 struct KeyBinding { int vk = 0; bool ctrl = false, shift = false, alt = false; };
@@ -121,7 +123,19 @@ struct OverlayConfig {
     std::string textStations = "Sender";
 };
 
+// Scufy OS (1.8.0): an infotainment system on the navigation screen (start screen, apps, dock), instead of the radio page.
+// Controlled with keys / steering wheel buttons, or with the mouse after the "control" key (cursor on the screen).
+struct ScufyOsConfig {
+    bool enabled = false;
+    std::string accent = "blue";        // blue | green | orange | purple | red | teal
+    std::string dock = "left";          // left | right: side of the dock
+    bool boot = true;                   // "Scufy OS" start animation after the start logo
+    double mouseSpeed = 1.0;            // cursor speed in control mode (0.3 - 3)
+    std::string app = "home";           // app on the screen (remembered): home | navi | radio | music | settings
+};
+
 struct Config {
+    ScufyOsConfig os;
     OverlayConfig overlay;
     ScreenConfig screen;
     DisplayConfig display;

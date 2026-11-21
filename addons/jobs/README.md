@@ -1,4 +1,4 @@
-# Realistic Radio Aufträge+ / Jobs+ 1.0.0
+# Realistic Radio Aufträge+ / Jobs+ 1.0.1
 
 **Deutsch** · [English](#english)
 
@@ -12,9 +12,10 @@ Zusatz-Plugin für **Realistic Radio 1.7.0 oder neuer**: **eigene Aufträge übe
 5. **F9** drücken (Schnellladen) → der Auftrag steht im **Frachtmarkt der Startfirma**. Ein ganz normaler Auftrag mit Geld und Erfahrungspunkten.
 
 ## Gut zu wissen
-- Das Plugin ersetzt dafür **einen** der Aufträge der Startfirma im Schnellspeicherstand. Anhänger, Menge und Gewicht kommen von einem Auftrag mit derselben Ware aus dem Spielstand. Sonst ändert sich nichts. Eine Kopie des Originals bleibt als `game.sii.rr-backup` im Ordner `quicksave` liegen.
+- Das Plugin ersetzt dafür **einen** der Aufträge der Startfirma im Schnellspeicherstand. Anhänger, Menge und Gewicht kommen von einem Auftrag mit derselben Ware aus dem Spielstand. Sonst ändert sich nichts. Eine Kopie des Originals kommt nach `plugins\realistic-radio\backup`.
 - Die **Entfernung** stammt von Aufträgen zwischen denselben Städten. Gibt es keine, wird sie aus der Karte geschätzt. Danach richtet sich der Lohn.
 - Es gehen nur Firmen und Waren, die es im Spielstand gibt. Die Startfirma muss gerade Aufträge haben.
+- **Steam Cloud:** Profile in der Steam Cloud gehen auch. Der geänderte Spielstand wird dann über Steam gespeichert, sonst würde das Spiel ihn nicht laden („Fehler beim Laden des Spielstands“). Klappt das ausnahmsweise nicht, sagt das Handy Bescheid; dann im Spiel beim Profil „Steam Cloud verwenden“ ausschalten.
 - Spielstände in jedem Format gehen: verschlüsselt, binär oder Text. Der geänderte Spielstand wird unverschlüsselt geschrieben, das Spiel liest ihn genauso.
 - **Nicht im Multiplayer** (TruckersMP, Haul MP …): Dort gibt es kein Schnellspeichern.
 - Die Warennamen sind die internen Namen des Spiels (z. B. „Furniture“).
@@ -33,11 +34,16 @@ Add-on for **Realistic Radio 1.7.0 or newer**: **own jobs from the phone** – c
 5. Press **F9** (quick load) → the job is in the **freight market of the start company**. It is a normal job with pay and experience.
 
 Good to know:
-- The add-on replaces **one** of the start company's offers in the quick save. Trailer, amount and weight come from an offer of the same cargo in the save. Nothing else changes, and a copy of the original stays as `game.sii.rr-backup` in the `quicksave` folder.
+- The add-on replaces **one** of the start company's offers in the quick save. Trailer, amount and weight come from an offer of the same cargo in the save. Nothing else changes, and a copy of the original goes to `plugins\realistic-radio\backup`.
 - The distance (and so the pay) comes from offers between the same cities. Without such offers it is estimated from the map.
 - Only companies and cargo that exist in the save are possible, and the start company has to have offers.
+- Steam Cloud profiles work too: the changed save is then written through Steam, otherwise the game could not load it. If that ever fails, the phone says so; then turn off "Use Steam Cloud" for the profile in the game.
 - Saves in every format work (encrypted, binary, text). The changed save is written unencrypted, and the game reads it the same way.
 - Not in multiplayer (TruckersMP, Haul MP …), as there is no quick save there.
 - Log: `realistic-radio.log`, lines `Jobs+: …`.
 
 License: MPL 2.0 · © 2026 ScufyKing · uses tiny-AES-c (public domain) and miniz (MIT).
+
+## Changelog
+- **1.0.1:** Fix: "Fehler beim Laden des Spielstands" after F9 with Steam Cloud profiles – the changed save is now written through Steam. Backup moved to `plugins\realistic-radio\backup`.
+- **1.0.0:** First version.

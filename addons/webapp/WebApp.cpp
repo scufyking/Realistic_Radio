@@ -33,7 +33,7 @@
 #include <string>
 #include <vector>
 
-#define WA_VERSION "1.0.0"
+#define WA_VERSION "1.0.1"
 using json = nlohmann::json;
 
 namespace {
@@ -220,7 +220,9 @@ void SendMessageFrame(int w, int h, const std::wstring& text) {
 struct App {
     Settings set;
     std::wstring dir;            // realistic-radio\ folder
-    HWND host = nullptr;
+    HWND host = nullptr;      // parent of the web view: created the first time the app is opened (1.0.1)
+    HWND timer = nullptr;     // message-only window for the 16 ms tick (never visible)
+    HWND game = nullptr;      // the game's own window (focus goes back there)
     ICoreWebView2Environment* env = nullptr;
     ICoreWebView2Controller* ctrl = nullptr;
     ICoreWebView2* web = nullptr;
@@ -258,7 +260,7 @@ void Resize(int w, int h) {
     if (!g.ctrl || !changed) return;
     RECT r{0, 0, w, h};
     g.ctrl->put_Bounds(r);
-    SetWindowPos(g.host, nullptr, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    if (g.host) SetWindowPos(g.host, nullptr, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
     if (g.casting) { StopCast(); StartCast(); }   // new size for the frames
 }
 
@@ -283,8 +285,10 @@ void Fail(const std::wstring& text, const std::string& log) {
     SendMessageFrame(g.areaW, g.areaH, text);
 }
 
+bool EnsureHost();
 void CreateView() {
     if (g.creating || g.ctrl || g.failed) return;
+    if (!EnsureHost()) { Fail(L"Web-App: Fenster konnte nicht angelegt werden / could not create its window", "could not create the host window"); return; }
     g.creating = true;
     SendMessageFrame(g.areaW, g.areaH, g.set.name + L" wird geladen … / loading …");
     auto* opt = new Options();
@@ -432,9 +436,26 @@ void HandleInput() {
     }
 }
 
+// 1.0.1: the web view must never take the focus from the game. Before, its window could become the active window: the
+// game then no longer got its keys, and Realistic Radio (which checks for "a window of the game process in front")
+// could hook the wrong window.
+bool OwnWindow(HWND w) { return w && g.host && (w == g.host || GetAncestor(w, GA_ROOT) == g.host || GetWindow(w, GW_OWNER) == g.host); }
+void KeepFocusOnGame() {
+    HWND fg = GetForegroundWindow();
+    if (!fg) return;
+    DWORD pid = 0; GetWindowThreadProcessId(fg, &pid);
+    if (pid == GetCurrentProcessId() && !OwnWindow(fg)) { g.game = fg; return; }   // the game (or another window of it) in front
+    if (OwnWindow(fg) && g.game && IsWindow(g.game)) {
+        SetForegroundWindow(g.game);
+        static DWORD logged = 0;
+        if (!logged || GetTickCount() - logged > 10000) { logged = GetTickCount(); Log("the web view took the focus - given back to the game"); }
+    }
+}
+
 // every 16 ms on the web view's thread
 void Tick() {
     DWORD now = GetTickCount();
+    KeepFocusOnGame();
     if (now - g.lastReg >= 1000) {   // keep the app on the phone
         g.lastReg = now;
         rr.app_register(json{{"id", kId}, {"name", Utf8(g.set.name)}, {"mode", "tablet"}, {"color", "#1E9E58"}}.dump().c_str());
@@ -456,6 +477,21 @@ LRESULT CALLBACK HostProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     return DefWindowProcW(h, m, w, l);
 }
 
+bool EnsureHost() {
+    if (g.host) return true;
+    HMODULE self = nullptr;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)&HostProc, &self);
+    // never seen: far outside every monitor, no taskbar button, never activated
+    int vx = GetSystemMetrics(SM_XVIRTUALSCREEN), vw = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+    int w = g.areaW > 0 ? g.areaW : 1280, h = g.areaH > 0 ? g.areaH : 800;
+    g.host = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, L"RealisticRadioWebApp", L"Realistic Radio Web-App", WS_POPUP,
+                             vx + vw + 4000, 0, w, h, nullptr, nullptr, self, nullptr);
+    if (!g.host) return false;
+    ShowWindow(g.host, SW_SHOWNOACTIVATE);   // WebView2 only renders into a shown window
+    Log("browser window created (app opened on the phone)");
+    return true;
+}
+
 DWORD WINAPI Worker(LPVOID) {
     bool found = false;
     for (int i = 0; i < 600 && !g_quit && !found; ++i) { found = rr_addon_load(&rr) != 0; if (!found) Sleep(500); }
@@ -472,21 +508,19 @@ DWORD WINAPI Worker(LPVOID) {
     GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)&HostProc, &self);
     WNDCLASSW wc{}; wc.lpfnWndProc = HostProc; wc.hInstance = self; wc.lpszClassName = L"RealisticRadioWebApp";
     RegisterClassW(&wc);
-    // never visible: far outside every monitor, no taskbar button, never activated
-    int vx = GetSystemMetrics(SM_XVIRTUALSCREEN), vw = GetSystemMetrics(SM_CXVIRTUALSCREEN);
-    g.host = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, wc.lpszClassName, L"Realistic Radio Web-App", WS_POPUP,
-                             vx + vw + 4000, 0, 1280, 800, nullptr, nullptr, wc.hInstance, nullptr);
-    if (!g.host) { Log("could not create the host window"); CoUninitialize(); return 0; }
-    ShowWindow(g.host, SW_SHOWNOACTIVATE);
-    SetTimer(g.host, 1, 16, nullptr);
+    // 1.0.1: until the app is opened on the phone there is no visible window at all, only this message-only one
+    g.timer = CreateWindowExW(0, wc.lpszClassName, L"Realistic Radio Web-App timer", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, wc.hInstance, nullptr);
+    if (!g.timer) { Log("could not create the timer window"); CoUninitialize(); return 0; }
+    SetTimer(g.timer, 1, 16, nullptr);
     MSG msg;
     while (!g_quit && GetMessageW(&msg, nullptr, 0, 0) > 0) { TranslateMessage(&msg); DispatchMessageW(&msg); }
-    KillTimer(g.host, 1);
+    KillTimer(g.timer, 1);
     if (g.ctrl) { g.ctrl->Close(); g.ctrl->Release(); g.ctrl = nullptr; }
     if (g.web) { g.web->Release(); g.web = nullptr; }
     if (g.env) { g.env->Release(); g.env = nullptr; }
     if (g.wic) { g.wic->Release(); g.wic = nullptr; }
-    DestroyWindow(g.host); g.host = nullptr;
+    if (g.host) { DestroyWindow(g.host); g.host = nullptr; }
+    DestroyWindow(g.timer); g.timer = nullptr;
     CoUninitialize();
     return 0;
 }

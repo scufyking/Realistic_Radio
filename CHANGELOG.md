@@ -2,6 +2,54 @@
 
 **English** · [Deutsch](#changelog-deutsch)
 
+## 1.8.0 – Scufy OS, keys with Shift, radio page, phone, Rain plugin, Web-App
+
+### New
+- **Scufy OS:** an infotainment system on the truck's navigation screen, like CarPlay or Android Auto. Switch it on in the settings menu, page **Scufy OS**.
+  - **Start:** the start animation "Scufy OS" after the truck's start logo, then the home screen.
+  - **Dock at the side:** clock, route (distance and time to the destination), Home / Navigation / Radio / Music and what plays.
+  - **Apps:**
+    - Navigation: the game's map stays visible.
+    - Radio: logo, song title, controls, station buttons 1–9 to tap; USB / CD with cover and progress.
+    - Music: choose a USB / CD folder.
+    - Settings: accent colour, dock left or right, start animation, mouse speed.
+    - The apps of the add-ons (Bus+, Jobs+, Web-App …), in landscape.
+  - **Control with the steering wheel:** own actions for up, down, left, right, OK, back and home, for keys or controller buttons.
+  - **Mouse on the screen:** the new key **Ctrl + Insert** makes the mouse move a cursor on the navigation screen. Click, right click = back, the wheel scrolls; the keyboard works there too. Press it again (or Esc) to give mouse and keyboard back to the game. It also ends by itself when the screen is not drawn.
+  - Volume and notifications show as a bar over it. **Insert** switches between Navigation and the app before.
+
+### Fixed
+- **Mouse and keyboard are given back when the game closes or hangs.** While the phone, the settings menu or the Scufy OS control mode is open, the radio keeps mouse and keyboard from the game. Now it lets them through to Windows as soon as the game window closes or the game stops responding. Before, a game that hung while closing could block the whole PC.
+- **Settings menu closed again by itself** (only in the test builds of 1.8.0): fixed. The menu key also works at most once every 0.4 seconds now.
+- **Add-ons were reported as a "second radio plugin"** in the log: fixed.
+- **Log: where the radio is stuck.** If the radio stops for more than 6 seconds, or the game shows no new picture for 8 seconds, the log says where (`WARNING: the radio thread is stuck …`).
+- **Letting go of Shift too early also pressed the key without Shift.** Who let go of Shift before the other key got both actions:
+  - **Shift + Insert** (phone) also switched the navigation screen to the radio page. The page is remembered, so from then on only the radio was on the screen, also after a restart, and the navigation was gone.
+  - **Shift + Right / Left** (0.1 MHz) also jumped to the next / previous station.
+  - **Shift + Home** (FM / DAB+) also switched to USB / CD.
+  
+  Now a key only counts when it is pressed while exactly its Shift / Ctrl / Alt are held. Press Shift (or Ctrl, Alt) first, then the key.
+- **Radio page stuck on the navigation screen.** A radio page from an older version is switched back to the navigation **once**. **Insert** pins it again on purpose. When the radio page is pinned, a note on the screen says which key brings the navigation back.
+- **The game seemed frozen after opening the phone.** If the phone was not drawn (e.g. another graphics tool presents the picture), the phone still had the mouse and the keyboard, so nothing in the game reacted. Even Alt + Tab and the Task Manager key did not work. Now:
+  - The phone closes by itself when it is not drawn for 2.5 seconds (log: `Phone: not drawn …`).
+  - **Alt + Tab, Ctrl + Shift + Esc, Ctrl + Esc and Alt + F4** always work while the phone or the settings menu is open.
+  - The settings menu checks that it is really drawn, not only that the game draws frames.
+- **Other plugins are left alone.** While the phone or the menu is open, the radio keeps the mouse from the game. It no longer changes plugins in the `plugins` folder for this (e.g. TM Real Walk, SPF Framework); they may hook the same functions themselves. The log names the files it does change.
+- **Game hang together with the Realistic Rain Plugin (and other plugins that hook Present).** When another plugin already sits in the game's Present slot, the radio no longer puts itself in front of it. It draws in a hook on Windows' own Present behind it instead, so the two can never call each other in a loop (log: `Overlay: … stays in the Present slot - drawing in a code hook on Windows' Present behind it`).
+- **The settings menu is checked all the time it is open,** like the phone: if it is not drawn for 3 seconds, it closes and gives the mouse and keyboard back. Before, it was checked only once after opening.
+- **The radio now always finds the game's own window.** Before, it took the window that was in front at that moment when the phone or the menu was opened the first time; with the Web-App add-on that could be the Web-App's hidden browser window. The mouse then still reached the game, and the window overlay could follow the wrong window.
+
+### Changed
+- **Bus+ (`realistic-radio-bus.dll`) is in the `Add-ons` folder now:** timetable, driving time, trip reports and own lines for the Coaches DLC. See its README.
+
+### Web-App 1.0.1 (add-on)
+- **The hidden browser window is only created when the app is opened on the phone.** Before, it was there from the start of the game, also for players who never use the Web-App. Players reported problems together with other plugins that went away without the Web-App.
+- **The web page can no longer take the focus from the game.** If it does, the focus goes back to the game at once (log: `Web-App: the web view took the focus …`). Before, the game could then stop reacting to keys.
+
+### Upgrade notes
+- **Do not quit the game while the phone, the settings menu or the Scufy OS control mode is open** – close them first (control mode: Ctrl + Insert).
+- Replace `realistic-radio.dll` and, if you use it, `realistic-radio-webapp.dll`. The settings stay. Jobs+ and Bus+ do not change.
+
 ## 1.7.1 – New download, add-ons included
 
 ### Fixed
@@ -301,6 +349,54 @@
 
 <a id="changelog-deutsch"></a>
 # Changelog (Deutsch)
+
+## 1.8.0 – Scufy OS, Tasten mit Umschalt, Radio-Seite, Handy, Rain-Plugin, Web-App
+
+### Neu
+- **Scufy OS:** ein Infotainment-System auf dem Navi-Bildschirm im LKW, wie CarPlay oder Android Auto. Einschalten im Einstellungsmenü, Seite **Scufy OS**.
+  - **Start:** Startanimation „Scufy OS“ nach dem Start-Logo des LKWs, dann der Startbildschirm.
+  - **Leiste am Rand:** Uhr, Route (Entfernung und Fahrzeit zum Ziel), Start / Navigation / Radio / Musik und was gerade spielt.
+  - **Apps:**
+    - Navigation: die Karte des Spiels bleibt sichtbar.
+    - Radio: Logo, Songtitel, Steuerung, Stationstasten 1–9 zum Antippen; USB / CD mit Cover und Fortschritt.
+    - Musik: USB- / CD-Ordner auswählen.
+    - Einstellungen: Akzentfarbe, Leiste links oder rechts, Startanimation, Mausgeschwindigkeit.
+    - Die Apps der Add-ons (Bus+, Aufträge+, Web-App …), im Querformat.
+  - **Steuerung mit dem Lenkrad:** eigene Funktionen für Hoch, Runter, Links, Rechts, OK, Zurück und Startbildschirm, für Tasten oder Controller-Knöpfe.
+  - **Maus auf dem Navi:** Die neue Taste **Strg + Einfg** lässt die Maus einen Zeiger auf dem Navi-Bildschirm bewegen. Klicken, Rechtsklick = zurück, das Mausrad blättert; die Tastatur geht dort auch. Noch einmal drücken (oder Esc) gibt Maus und Tastatur ans Spiel zurück. Das passiert auch von selbst, wenn das Navi nicht gezeichnet wird.
+  - Lautstärke und Benachrichtigungen erscheinen als Leiste darüber. **Einfg** wechselt zwischen Navigation und der App davor.
+
+### Behoben
+- **Maus und Tastatur kommen frei, wenn das Spiel schließt oder hängt.** Solange Handy, Einstellungsmenü oder die Scufy-OS-Steuerung offen sind, hält das Radio Maus und Tastatur vom Spiel fern. Jetzt lässt es sie sofort zu Windows durch, wenn das Spielfenster geschlossen wird oder das Spiel nicht mehr reagiert. Bisher konnte ein Spiel, das beim Beenden hängen blieb, den ganzen PC blockieren.
+- **Einstellungsmenü schloss sich von selbst** (nur in den Testversionen von 1.8.0): behoben. Die Menütaste wirkt jetzt außerdem höchstens einmal alle 0,4 Sekunden.
+- **Add-ons wurden im Log als „zweites Radio-Plugin“ gemeldet:** behoben.
+- **Log: wo das Radio hängt.** Steht das Radio länger als 6 Sekunden oder zeigt das Spiel 8 Sekunden kein neues Bild, steht im Log, wo (`WARNING: the radio thread is stuck …`).
+- **Wer die Umschalttaste zu früh losgelassen hat, hat auch die Taste ohne Umschalt gedrückt.** Wer Umschalt vor der anderen Taste losgelassen hat, hat beide Aktionen ausgelöst:
+  - **Umschalt + Einfg** (Handy) hat auch das Navi auf die Radio-Seite umgeschaltet. Die Seite wird gespeichert, deshalb war ab da nur noch das Radio auf dem Bildschirm, auch nach einem Neustart, und die Navigation war weg.
+  - **Umschalt + Rechts / Links** (0,1 MHz) ist auch zum nächsten / vorigen Sender gesprungen.
+  - **Umschalt + Pos1** (UKW / DAB+) hat auch auf USB / CD umgeschaltet.
+  
+  Jetzt zählt eine Taste nur, wenn beim Drücken genau ihre Umschalt-/Strg-/Alt-Taste gehalten wird. Also erst Umschalt (oder Strg, Alt) drücken, dann die Taste.
+- **Radio-Seite auf dem Navi hängt fest.** Eine Radio-Seite aus einer älteren Version wird **einmal** auf die Navigation zurückgestellt. Mit **Einfg** lässt sie sich wieder mit Absicht anheften. Ist die Radio-Seite angeheftet, steht auf dem Navi kurz, mit welcher Taste die Navigation zurückkommt.
+- **Spiel scheinbar eingefroren nach dem Öffnen des Handys.** Wenn das Handy nicht gezeichnet wurde (z. B. weil ein anderes Grafik-Tool das Bild ausgibt), hatte es trotzdem Maus und Tastatur, deshalb hat im Spiel nichts mehr reagiert. Auch Alt + Tab und die Task-Manager-Taste gingen nicht. Jetzt:
+  - Das Handy schließt sich von selbst, wenn es 2,5 Sekunden lang nicht gezeichnet wird (Log: `Phone: not drawn …`).
+  - **Alt + Tab, Strg + Umschalt + Esc, Strg + Esc und Alt + F4** gehen immer, auch bei offenem Handy oder Einstellungsmenü.
+  - Das Einstellungsmenü prüft, ob es wirklich gezeichnet wird, nicht nur, ob das Spiel Bilder ausgibt.
+- **Andere Plugins bleiben unangetastet.** Solange Handy oder Menü offen sind, hält das Radio die Maus vom Spiel fern. Dafür ändert es keine Plugins im Ordner `plugins` mehr (z. B. TM Real Walk, SPF Framework); die können dieselben Funktionen selbst abfangen. Im Log steht, welche Dateien es ändert.
+- **Spiel hängt zusammen mit dem Realistic Rain Plugin (und anderen Plugins, die Present abfangen).** Sitzt schon ein anderes Plugin an der Present-Stelle des Spiels, stellt sich das Radio nicht mehr davor. Es zeichnet stattdessen in einem Haken an Windows' eigenem Present dahinter, so können sich die beiden nie gegenseitig im Kreis aufrufen (Log: `Overlay: … stays in the Present slot - drawing in a code hook on Windows' Present behind it`).
+- **Das Einstellungsmenü wird die ganze Zeit geprüft,** solange es offen ist, wie das Handy: Wird es 3 Sekunden lang nicht gezeichnet, schließt es sich und gibt Maus und Tastatur zurück. Bisher wurde es nur einmal nach dem Öffnen geprüft.
+- **Das Radio findet jetzt immer das Fenster des Spiels.** Bisher hat es beim ersten Öffnen von Handy oder Menü das Fenster genommen, das gerade vorne war; mit dem Add-on Web-App konnte das dessen verstecktes Browser-Fenster sein. Die Maus kam dann trotzdem beim Spiel an, und das Fenster-Overlay konnte dem falschen Fenster folgen.
+
+### Geändert
+- **Bus+ (`realistic-radio-bus.dll`) ist jetzt im Ordner `Add-ons`:** Fahrplan, Lenkzeit, Fahrtberichte und eigene Linien für das Coaches-DLC. Siehe dessen README.
+
+### Web-App 1.0.1 (Add-on)
+- **Das versteckte Browser-Fenster entsteht erst, wenn die App im Handy geöffnet wird.** Bisher war es ab Spielstart da, auch bei Spielern, die die Web-App nie benutzen. Spieler haben Probleme zusammen mit anderen Plugins gemeldet, die ohne die Web-App weg waren.
+- **Die Webseite kann dem Spiel nicht mehr den Fokus wegnehmen.** Passiert das, geht der Fokus sofort zurück ans Spiel (Log: `Web-App: the web view took the focus …`). Bisher konnte das Spiel dann nicht mehr auf Tasten reagieren.
+
+### Update-Hinweise
+- **Das Spiel nicht beenden, solange Handy, Einstellungsmenü oder die Scufy-OS-Steuerung offen sind** – erst schließen (Steuerung: Strg + Einfg).
+- `realistic-radio.dll` und, wenn benutzt, `realistic-radio-webapp.dll` ersetzen. Die Einstellungen bleiben. Jobs+ und Bus+ ändern sich nicht.
 
 ## 1.7.1 – Neuer Download, Add-ons dabei
 

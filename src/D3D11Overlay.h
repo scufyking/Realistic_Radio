@@ -18,6 +18,8 @@ void SetAlpha(float a);
 void SetPlacement(int anchor, float offsetX, float offsetY);   // anchor 0..5 = TL, TC, TR, BL, BC, BR; offsets in screen heights
 long long D3D11Frames();         // frames presented by a D3D11 device (overlay drawable)
 long long OtherFrames();         // frames from D3D12/other devices (overlay not drawable here)
+long long ImageFrames();         // frames in which the overlay picture (pop-up / menu / phone) was really drawn
+long long ScreenFrames();        // times the radio's picture was drawn into the in-cab screen (Scufy OS)
 int ScreenHeight();              // back-buffer height of the last frame, 0 if unknown
 int ScreenWidth();
 // auto-detection (beta): the next time the game finishes the screen target, find the area it drew into

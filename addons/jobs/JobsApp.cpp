@@ -7,7 +7,8 @@
 // start company and destination on the phone; then quick save (F5): the add-on replaces one of the start company's job
 // offers in that quick save by the own job (cargo, trailer and amount taken from an offer of that cargo in the save);
 // quick load (F9) and the job is in the freight market of the start company - a normal job with pay and experience.
-// Nothing else in the save changes; a copy of the original is kept as game.sii.rr-backup.
+// Nothing else in the save changes; a copy of the original is kept in plugins\realistic-radio\backup;
+// saves of Steam Cloud profiles are written through Steam (see common/SaveWriter.h).
 //
 // Uses the add-on interface of Realistic Radio (sdk/addon/rr_addon.h, "list" mode): the phone draws the screens.
 #include <windows.h>
@@ -16,6 +17,7 @@
 #include <scssdk_telemetry.h>
 #include "json.hpp"
 #include "SaveGame.h"
+#include "../common/SaveWriter.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -27,7 +29,7 @@
 #include <sstream>
 #include <thread>
 
-#define JOBS_VERSION "1.0.0"
+#define JOBS_VERSION "1.0.1"
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
@@ -333,14 +335,22 @@ void Apply(const fs::path& file) {
     if (d) Distance(*d, ui.from, ui.to, km, ft, fp, est);
     const unsigned expiration = g.gameTime + 3 * 1440;   // three days to take it
     if (!g.Replace(victim, tmpl, ui.to, km, ft, fp, expiration, err)) { ui.status = err; Go("error"); return; }
-    std::error_code ec;
-    fs::copy_file(file, fs::path(file).concat(L".rr-backup"), fs::copy_options::overwrite_existing, ec);
-    {
-        std::ofstream o(file, std::ios::binary | std::ios::trunc);
-        o << g.Bytes();
-        if (!o) { ui.status = T("Spielstand konnte nicht geschrieben werden.", "Could not write the save."); Go("error"); return; }
+    // backup: plugins\realistic-radio\backup (next to this DLL)
+    HMODULE self = nullptr;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)&Apply, &self);
+    wchar_t dll[MAX_PATH] = {};
+    GetModuleFileNameW(self, dll, MAX_PATH);
+    std::string how;
+    if (!SaveWriter::Write(file, g.Bytes(), fs::path(dll).parent_path() / L"realistic-radio" / L"backup", how, err)) {
+        Log("could not write " + U8(file.wstring()) + ": " + err);
+        ui.status = SaveWriter::CloudName(file).empty()
+            ? std::string(T("Spielstand konnte nicht geschrieben werden: ", "Could not write the save: ")) + err
+            : std::string(T("Dein Profil liegt in der Steam Cloud, und Steam hat den geänderten Spielstand nicht angenommen (", "Your profile is in the Steam Cloud and Steam did not take the changed save (")) + err +
+              T("). Abhilfe: im Spiel Profil bearbeiten → „Steam Cloud verwenden“ ausschalten, dann nochmal.", "). Fix: edit the profile in the game → turn off \"Use Steam Cloud\", then try again.");
+        Go("error");
+        return;
     }
-    Log("job written: " + ui.cargo + " " + ui.from + " -> " + ui.to + ", " + std::to_string(km) + " km, into " + U8(file.wstring()));
+    Log("job written: " + ui.cargo + " " + ui.from + " -> " + ui.to + ", " + std::to_string(km) + " km, into " + U8(file.wstring()) + " via " + how);
     ui.status = std::string(T("Schnellladen (F9) – dann steht der Auftrag im Frachtmarkt bei ", "Quick load (F9) - then the job is in the freight market at ")) +
                 CompanyName(ui.from) + ":\n" + CargoName(ui.cargo) + " → " + CompanyName(ui.to) + " (" + (est ? T("ca. ", "about ") : "") + std::to_string(km) + " km)";
     Go("done");

@@ -13,6 +13,7 @@
 #include "SettingsMenu.h"
 #include "TunnelMap.h"
 #include "Phone.h"
+#include "ScufyOS.h"
 #include <set>
 #include <unordered_map>
 
@@ -29,6 +30,8 @@ public:
     void OnGameEvent(const GameEvent& e);     // telemetry: job delivered / cancelled, fine
     bool PhoneOpen() const { return phone_.IsOpen(); }
     void PhoneUiTick(InputManager& input);    // while the phone is open: its input and picture
+    bool OsControl() const { return os_.Control(); }   // Scufy OS: mouse and keyboard on the navigation screen
+    void OsUiTick();
     std::wstring OutsideStatus(bool en) const;   // settings menu: what "quieter outside" sees right now   // dashboard backlight 0..1, parking / low beam lights (telemetry)
     bool Init(const std::wstring& dataDir, const std::string& game);
     void Shutdown();
@@ -74,6 +77,13 @@ private:
     ULONGLONG gameTimeAt_ = 0, powerOffAt_ = 0;
     std::wstring dispatchText_;
     void InitPhone();
+    // Scufy OS (1.8.0)
+    ScufyOS os_;
+    bool osBootDue_ = true;
+    ULONGLONG osCheckAt_ = 0; long long osFrames_ = 0;
+    void InitOs();
+    void OsFrame();                    // every tick: on / off, its picture to the screen, watchdog of the control mode
+    void UpdatePinned();               // the page on the in-cab screen: Scufy OS, the radio page or the navigation
     void OpenPhone();
     void FillPhoneJob(PhoneView& v);
     void FillPhoneMusic(PhoneView& v);
@@ -105,7 +115,8 @@ private:
     int currentIndex_ = -1;
     bool playing_ = false, initialReceived_ = false;
     ULONGLONG lastRefresh_ = 0, switchUntil_ = 0, swapAt_ = 0, flutterAt_ = 0;
-    ULONGLONG menuOpenAt_ = 0; long long menuFrames_ = 0;   // the menu must really be drawn, else it closes again
+    ULONGLONG menuOpenAt_ = 0; long long menuFrames_ = 0; bool menuChecked_ = false;   // the menu must really be drawn, else it closes again
+    ULONGLONG phoneCheckAt_ = 0; long long phoneFrames_ = 0, phoneOpenFrames_ = 0;   // the same for the phone, all the time it is open
     std::string pendingUrl_;
     bool noiseAllowed_ = true;
     struct Entry { std::string country; size_t index; double whitenoise; };

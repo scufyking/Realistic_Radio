@@ -20,4 +20,6 @@ bool Start(float cursorX, float cursorY);   // false = hooks unavailable: keyboa
 void Stop();
 bool Pop(Event& e);
 bool MouseActive();
+void GameClosing();   // the game window closes: from now on every key and the mouse go to Windows (safety if the game hangs while closing)
+void TakeMouseDelta(float& dx, float& dy);   // mouse movement since the last call in back-buffer pixels (not clamped to the screen)
 }

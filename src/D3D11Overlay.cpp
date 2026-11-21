@@ -26,6 +26,8 @@ std::atomic<float> g_alpha{0.f};
 std::atomic<int> g_anchor{1};
 std::atomic<float> g_offX{0.f}, g_offY{0.07f};
 std::atomic<long long> g_d3d11Frames{0}, g_otherFrames{0};
+std::atomic<long long> g_imageFrames{0};
+std::atomic<long long> g_screenFrames{0};   // 1.8.0: times the radio's screen picture (layer 0) was drawn into the game's screen   // frames in which the overlay picture (pop-up / menu / phone) was drawn
 std::atomic<int> g_screenH{0};
 std::vector<char> g_vsCode, g_psCode;
 
@@ -38,6 +40,7 @@ thread_local bool t_inHook = false;
 // through a table hook, so the code hook further down does not handle it a second time.
 thread_local bool t_chainPresent = false, t_chainRt = false;
 std::atomic<bool> g_detours{false};
+std::atomic<bool> g_presentBehind{false};   // 1.8.0: Present of another plugin in the slot: code hook on Windows' Present behind it
 std::atomic<ULONGLONG> g_installAt{0};
 bool g_toolDetected = false;
 
@@ -372,6 +375,7 @@ void DrawIntoTarget(ID3D11DeviceContext* ctx, int L, ID3D11RenderTargetView* rtv
         if (g_flipX[L]) std::swap(x0, x1);
         float cbdata[8] = {x0, yTop, x1, yBot, alpha, std::clamp(g_screenDim.load(), 0.f, 0.9f), 0, 0};
         DrawQuad(ctx, rtv, (float)w, (float)h, g_res.ssrv[L], cbdata);
+        if (L == 0) ++g_screenFrames;
     }
     dev->Release();
 }
@@ -570,6 +574,48 @@ void** RealSwapChainVtable(HWND hwnd, bool& hasPresent1) {
     return vt;   // the DLLs stay loaded (the game uses them anyway)
 }
 
+// 1.8.0: the function a slot of dxgi.dll's swap chain vtable had before any tool changed it - read from the DLL file
+// itself (mapped as an image, not run). nullptr if the file does not match the loaded DLL.
+void* OriginalDxgiSlot(void** vt, int idx) {
+    HMODULE dxgi = GetModuleHandleW(SystemDll(L"dxgi.dll").c_str());
+    if (!dxgi || !InModule(&vt[idx], dxgi)) return nullptr;
+    auto ntOf = [](uintptr_t b) -> const IMAGE_NT_HEADERS64* {
+        auto dos = (const IMAGE_DOS_HEADER*)b;
+        if (dos->e_magic != IMAGE_DOS_SIGNATURE) return nullptr;
+        auto nt = (const IMAGE_NT_HEADERS64*)(b + dos->e_lfanew);
+        return nt->Signature == IMAGE_NT_SIGNATURE && nt->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC ? nt : nullptr;
+    };
+    const uintptr_t base = (uintptr_t)dxgi;
+    const IMAGE_NT_HEADERS64* live = ntOf(base);
+    HMODULE file = LoadLibraryExW(SystemDll(L"dxgi.dll").c_str(), nullptr, LOAD_LIBRARY_AS_IMAGE_RESOURCE);
+    if (!live || !file) { if (file) FreeLibrary(file); return nullptr; }
+    const uintptr_t fbase = (uintptr_t)file & ~(uintptr_t)3;
+    const IMAGE_NT_HEADERS64* disk = ntOf(fbase);
+    void* fn = nullptr;
+    const uintptr_t size = live->OptionalHeader.SizeOfImage;
+    // the pointer in the mapped file: not relocated (preferred base), or already relocated by Windows (to the loaded
+    // DLL's base or to the mapping's own address)
+    auto fromFile = [&](int i) -> uintptr_t {
+        const uintptr_t rva = (uintptr_t)&vt[i] - base;
+        if (rva + sizeof(void*) > size) return 0;
+        const uintptr_t v = (uintptr_t)*(const uint64_t*)(fbase + rva);
+        const uintptr_t pref = (uintptr_t)disk->OptionalHeader.ImageBase;
+        if (v >= base && v < base + size) return v;
+        if (v >= fbase && v < fbase + size) return base + (v - fbase);
+        if (v >= pref && v < pref + size) return base + (v - pref);
+        return 0;
+    };
+    if (disk && disk->FileHeader.TimeDateStamp == live->FileHeader.TimeDateStamp && disk->OptionalHeader.SizeOfImage == size) {
+        // the way of reading must give the right value for a slot nobody hooks (GetBuffer, AddRef)
+        bool checked = false;
+        for (int i : {9, 1}) if (i != idx && InModule(vt[i], dxgi)) { checked = fromFile(i) == (uintptr_t)vt[i]; break; }
+        uintptr_t real = checked ? fromFile(idx) : 0;
+        if (real && InModule((void*)real, dxgi)) fn = (void*)real;
+    }
+    FreeLibrary(file);
+    return fn;
+}
+
 
 void HookGameContext(IDXGISwapChain* sc) {
     if (!g_wantScreenHook) return;
@@ -585,7 +631,7 @@ void HookGameContext(IDXGISwapChain* sc) {
             if (PatchSlot(cvt, 33, (void*)&HookOMSetRT, (void**)&h.rt) && PatchSlot(cvt, 34, (void*)&HookOMSetRTUAV, (void**)&h.rtuav)) {
                 g_vts[g_nVts.load()] = h; ++g_nVts; g_screenHooked = true;
                 Log::Write("Screen: hooked the game's render context #%d (device flags 0x%x)", g_nVts.load(), d->GetCreationFlags());
-                if (g_detours && !g_detRtTarget && h.rt && h.rtuav) {   // the graphics tool may call these directly, too
+                if (g_detours && !g_presentBehind && !g_detRtTarget && h.rt && h.rtuav) {   // the graphics tool may call these directly, too
                     g_detRtTarget = (void*)h.rt;
                     if (Detour((void*)h.rt, (void*)&DetOMSetRT, g_trampRt, "OMSetRenderTargets") &&
                         Detour((void*)h.rtuav, (void*)&DetOMSetRTUAV, g_trampRtUav, "OMSetRenderTargetsAndUnorderedAccessViews"))
@@ -683,6 +729,7 @@ void Draw(IDXGISwapChain* sc) {
             g_imgX = x; g_imgY = y; g_imgW = w; g_imgH = h;
             float cbdata[8] = {x / sw * 2 - 1, 1 - y / sh * 2, (x + w) / sw * 2 - 1, 1 - (y + h) / sh * 2, alpha, 0, 0, 0};
             DrawQuad(ctx, rtv, sw, sh, g_res.srv, cbdata);
+            ++g_imageFrames;
             if (g_cursorOn && EnsureCursorTexture(dev) && g_res.csrv) {   // menu cursor on top
                 float cx = std::floor(g_cursorX.load()), cy = std::floor(g_cursorY.load()), cw = (float)g_res.cW, ch = (float)g_res.cH;
                 float cc[8] = {cx / sw * 2 - 1, 1 - cy / sh * 2, (cx + cw) / sw * 2 - 1, 1 - (cy + ch) / sh * 2, 1.f, 0, 0, 0};
@@ -765,8 +812,24 @@ bool Install() {
             g_hasPresent1 = SUCCEEDED(sc->QueryInterface(__uuidof(IDXGISwapChain1), (void**)&sc1));
             if (sc1) sc1->Release();
         }
+        HMODULE dxgiMod = GetModuleHandleW(SystemDll(L"dxgi.dll").c_str());
         if (vt[8] == (void*)&HookPresent) ok = true;   // already hooked (plugin re-initialised)
-        else {
+        else if (realVt && !InModule(vt[8], dxgiMod)) {
+            // 1.8.0: another plugin (e.g. Realistic Rain Plugin) has its Present in the slot. Putting ours in front of it
+            // made the two call each other when that plugin hooks again (game hangs). So the slot stays as it is, and
+            // Windows' own Present behind it gets a code hook: the game calls the other plugin, that one calls Windows'
+            // Present, and the radio draws there - last, without a fight over the slot.
+            void* real = OriginalDxgiSlot(vt, 8);
+            void* real1 = g_hasPresent1 ? OriginalDxgiSlot(vt, 22) : nullptr;
+            MH_STATUS st = MH_Initialize();
+            if (real && (st == MH_OK || st == MH_ERROR_ALREADY_INITIALIZED) && Detour(real, (void*)&DetPresent, g_trampPresent, "Present")) {
+                if (real1) Detour(real1, (void*)&DetPresent1, g_trampPresent1, "Present1");
+                g_origPresent = (PresentFn)real; g_presentBehind = true; g_detours = true; ok = true;   // no watchdog fallback needed
+                Log::Write("Overlay: %s stays in the Present slot - drawing in a code hook on Windows' Present behind it%s",
+                           Narrow(ModulePathOf(vt[8])).c_str(), real1 && g_trampPresent1 ? " (incl. Present1)" : "");
+            } else Log::Write("Overlay: Windows' own Present not found - chaining to %s in the slot", Narrow(ModulePathOf(vt[8])).c_str());
+        }
+        if (!ok) {
             ok = PatchSlot(vt, 8, (void*)&HookPresent, (void**)&g_origPresent);
             if (ok && g_hasPresent1) PatchSlot(vt, 22, (void*)&HookPresent1, (void**)&g_origPresent1);
         }
@@ -845,6 +908,8 @@ void SetAlpha(float a) { g_alpha = a; }
 void SetPlacement(int anchor, float ox, float oy) { g_anchor = anchor; g_offX = ox; g_offY = oy; }
 long long D3D11Frames() { return g_d3d11Frames; }
 long long OtherFrames() { return g_otherFrames; }
+long long ImageFrames() { return g_imageFrames; }
+long long ScreenFrames() { return g_screenFrames; }
 int ScreenHeight() { return g_screenH; }
 int ScreenWidth() { return g_bbW; }
 void RequestScreenCapture() { g_capState = 1; }

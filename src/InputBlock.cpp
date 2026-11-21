@@ -4,10 +4,12 @@
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #define DIRECTINPUT_VERSION 0x0800
 #include "InputBlock.h"
+#include "MenuInput.h"
 #include "Logger.h"
 #include <dinput.h>
 #include <psapi.h>
 #include <cstring>
+#include <string>
 
 namespace {
 std::atomic<bool> g_block{false};
@@ -73,10 +75,21 @@ int PatchImports(HMODULE mod) {
     return n;
 }
 
+std::string Narrow(const wchar_t* w) {
+    int n = WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
+    std::string s(n > 0 ? n - 1 : 0, '\0');
+    if (n > 1) WideCharToMultiByte(CP_UTF8, 0, w, -1, &s[0], n, nullptr, nullptr);
+    return s;
+}
+
 // ---- window messages: WM_INPUT from the mouse never reaches the game's window procedure while blocked ----------
 WNDPROC g_origProc = nullptr;
 HWND g_wnd = nullptr;
 LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == WM_CLOSE || msg == WM_DESTROY || msg == WM_ENDSESSION || msg == WM_QUIT) {   // 1.8.0: the game closes
+        g_block = false;
+        MenuInput::GameClosing();
+    }
     if (msg == WM_INPUT && g_block && g_origData) {
         RAWINPUTHEADER hdr; UINT sz = sizeof(hdr);
         if (g_origData((HRAWINPUT)lp, RID_HEADER, &hdr, &sz, sizeof(RAWINPUTHEADER)) != (UINT)-1 && hdr.dwType == RIM_TYPEMOUSE) {
@@ -173,6 +186,7 @@ void Install() {
     g_origData = (GetRawInputDataFn)GetProcAddress(u32, "GetRawInputData");
     g_origBuffer = (GetRawInputBufferFn)GetProcAddress(u32, "GetRawInputBuffer");
     int patched = 0;
+    std::string names;
     if (g_origData && g_origBuffer) {
         wchar_t winDir[MAX_PATH]; GetWindowsDirectoryW(winDir, MAX_PATH);
         size_t winLen = wcslen(winDir);
@@ -184,14 +198,33 @@ void Install() {
                 if (mods[i] == self) continue;
                 wchar_t path[MAX_PATH]; GetModuleFileNameW(mods[i], path, MAX_PATH);
                 if (_wcsnicmp(path, winDir, winLen) == 0) continue;   // Windows' own DLLs: leave alone
-                patched += PatchImports(mods[i]);
+                // 1.8.0: other plugins (bin\win_x64\plugins\, e.g. TM Real Walk, SPF Framework) are left alone too -
+                // they may hook the same functions themselves
+                std::wstring low = path; for (auto& c : low) c = (wchar_t)towlower(c);
+                if (low.find(L"\\plugins\\") != std::wstring::npos) continue;
+                int n = PatchImports(mods[i]);
+                if (n) { patched += n; const wchar_t* f = wcsrchr(path, L'\\'); names += (names.empty() ? "" : ", ") + Narrow(f ? f + 1 : path); }
             }
         }
     }
-    Log::Write("Menu: raw input mouse filter on %d import(s)", patched);
+    Log::Write("Menu: raw input mouse filter on %d import(s)%s%s", patched, names.empty() ? "" : " in ", names.c_str());
     HookDirectInput();
 }
 void SetMouseBlocked(bool on) { g_block = on; }
+HWND GameWindow() {
+    struct Ctx { DWORD pid; HWND game, best; long area; } c{GetCurrentProcessId(), nullptr, nullptr, 0};
+    EnumWindows([](HWND h, LPARAM lp) -> BOOL {
+        auto* c = (Ctx*)lp; DWORD pid = 0; GetWindowThreadProcessId(h, &pid);
+        if (pid != c->pid || !IsWindowVisible(h)) return TRUE;
+        wchar_t cls[64] = {0}; GetClassNameW(h, cls, 64);
+        if (!wcscmp(cls, L"prism3d")) { c->game = h; return FALSE; }   // the window of ETS2 / ATS
+        if (!wcsncmp(cls, L"RealisticRadio", 14) || !wcscmp(cls, L"TruckerChatMenu")) return TRUE;   // our own helper windows
+        RECT r; GetClientRect(h, &r); long a = (r.right - r.left) * (r.bottom - r.top);
+        if (a > c->area) { c->area = a; c->best = h; }
+        return TRUE;
+    }, (LPARAM)&c);
+    return c.game ? c.game : c.best;
+}
 void AttachWindow(HWND w) {
     if (!w || g_wnd) return;   // once; the filter stays in place and passes everything through while the menu is closed
     DWORD pid = 0; GetWindowThreadProcessId(w, &pid);

@@ -98,7 +98,8 @@ bool RadioManager::Init(const std::wstring& dir, const std::string& game) {
         if (cfg_.source == "usb") EnterMedia(-1, false);
     }
     overlay_.Update(CurrentInfo());
-    overlay_.SetScreenPinned(cfg_.screenPage == "radio");   // radio page stays on the screen from the last session
+    InitOs();
+    UpdatePinned();   // radio page stays on the screen from the last session
     return true;
 }
 
@@ -287,16 +288,18 @@ OverlayInfo RadioManager::MediaInfo(const std::wstring& sub) {
     return i;
 }
 bool RadioManager::MenuTick(InputManager& input) {
-    if (menuOpenAt_ && GetTickCount64() - menuOpenAt_ > 2500) {   // no frame drawn since the menu opened: it cannot be seen
-        bool drawn = D3D11Overlay::D3D11Frames() > menuFrames_;
-        menuOpenAt_ = 0;
-        if (!drawn) {
-            Log::Write("Settings menu: no picture reached the overlay since it opened (%lld D3D11 / %lld other frames) - closed again so the "
-                       "game can be used. Another graphics tool may be presenting the picture differently; please send this log.",
-                       D3D11Overlay::D3D11Frames(), D3D11Overlay::OtherFrames());
-            menu_.Close(); overlay_.HideMenu();
+    // The menu has the mouse and the keyboard: if it is not drawn (at the start or later, e.g. the game hangs in another
+    // tool's Present), it closes again. 1.8.0: checked all the time it is open, and the menu itself must have been drawn.
+    if (menuOpenAt_ && GetTickCount64() >= menuOpenAt_ + 2500) {   // menuOpenAt_: start of the next 2.5 / 3 s window (may lie ahead)
+        long long f = overlay_.WindowMode() ? D3D11Overlay::D3D11Frames() : D3D11Overlay::ImageFrames();
+        if (f == menuFrames_) {
+            Log::Write("Settings menu: not drawn for %s (%lld D3D11 / %lld other frames) - closed again so the game can be used. "
+                       "Another graphics tool may be presenting the picture differently; please send this log.",
+                       menuChecked_ ? "3 s" : "2.5 s since it opened", D3D11Overlay::D3D11Frames(), D3D11Overlay::OtherFrames());
+            menuOpenAt_ = 0; menu_.Close(); overlay_.HideMenu();
             return true;
         }
+        menuFrames_ = f; menuOpenAt_ = GetTickCount64() - 2500 + 3000; menuChecked_ = true;
     }
     SettingsMenu::Result res = menu_.Tick(input);
     if (menu_.TakeChanged()) ApplySettings(menu_.Edited());   // changes apply immediately
@@ -518,12 +521,12 @@ void RadioManager::ApplySettings(const Config& e) {
     audio_.SetMaster((float)cfg_.volume); audio_.SetMuted(cfg_.muted);
     if (!cfg_.whitenoise) audio_.SetStaticGain(0, 0.3f);
     overlay_.Reconfigure(cfg_.overlay, cfg_.screen);
-    overlay_.SetScreenPinned(powered_ && cfg_.screenPage == "radio");
+    UpdatePinned();
     if (source_ == Source::Media && !cfg_.media.enabled) EnterRadio();
     if (source_ == Source::Media) overlay_.Update(CurrentInfo());   // media type of the folder may have changed
 }
 
-void RadioManager::Shutdown() { g_outsideStatus = nullptr; phone_.Shutdown(); GameAudio::SetRadioAudible(false); GameAudio::Configure(false, false, cfg_.gameBus, nullptr, nullptr); audio_.SetExternal(false); if (UseMemory()) { StoreMemory(); SaveMemory(); } menu_.Close(); overlay_.HideMenu(); display_.Stop(); overlay_.Shutdown(); audio_.Shutdown(); cfg_.SaveVolume(cfgPath_); }
+void RadioManager::Shutdown() { g_outsideStatus = nullptr; os_.Shutdown(); phone_.Shutdown(); GameAudio::SetRadioAudible(false); GameAudio::Configure(false, false, cfg_.gameBus, nullptr, nullptr); audio_.SetExternal(false); if (UseMemory()) { StoreMemory(); SaveMemory(); } menu_.Close(); overlay_.HideMenu(); display_.Stop(); overlay_.Shutdown(); audio_.Shutdown(); cfg_.SaveVolume(cfgPath_); }
 
 
 std::string RadioManager::ResolveUrl(const std::string& url) const {
@@ -624,7 +627,7 @@ void RadioManager::SetPower(bool on) {
     powered_ = on;
     Log::Write(on ? "Power on (%s) - radio on" : "Power off (%s) - radio off", cfg_.powerSource.c_str());
     if (on) overlay_.Update(CurrentInfo());                        // page content = current station/track, not the power-off message
-    overlay_.SetScreenPinned(on && cfg_.screenPage == "radio");   // radio off: navigation only
+    UpdatePinned();   // radio off: navigation only
     if (source_ == Source::Media) { audio_.SetPaused(!on || mediaPaused_); return; }   // USB keeps its position
     if (!on) {
         swapAt_ = 0; switchUntil_ = 0;
@@ -681,6 +684,7 @@ void RadioManager::Tick(double x, double z, bool valid, bool electric, bool engi
     phone_.Update(GetTickCount64());
     audio_.SetExternal(GameAudio::Playing());   // cab output: the game plays the mix, the Windows device stays silent
     GameAudio::SetRadioAudible(powered_ && !cfg_.muted && (source_ == Source::Media ? !mediaPaused_ : playing_));
+    OsFrame();
     if (!powered_) { overlay_.Tick(); UpdateDisplay(); return; }
     if (valid && now - lastRefresh_ >= 1000) { lastRefresh_ = now; Refresh(x, z); }
     if (source_ == Source::Media) TickMedia(now);
@@ -1206,10 +1210,30 @@ void RadioManager::NextStation(int amount) {
 
 void RadioManager::OnAction(Action a, bool hold) {
     if (a == Action::MenuAlt) a = Action::Menu;   // second key for the settings menu
+    if (IsOsAction(a)) {   // Scufy OS
+        const bool en = cfg_.menuLanguage != "de";
+        if (!os_.Active()) {
+            if (a == Action::OsControl)
+                PhoneNotice("message", L"Scufy OS", cfg_.os.enabled ? L10n::Pick(L"Scufy OS startet mit der Z\u00fcndung", L"Scufy OS starts with the ignition", en)
+                                                                   : L10n::Pick(L"Scufy OS ist aus", L"Scufy OS is off", en),
+                            cfg_.os.enabled ? L10n::Pick(L"Und: Einstellungsmen\u00fc \u2192 Navi-Bildschirm \u2192 Anzeige auf dem Navi", L"And: settings menu \u2192 Navigation screen \u2192 Show on the screen", en)
+                                            : L10n::Pick(L"Einstellungsmen\u00fc \u2192 Scufy OS", L"Settings menu \u2192 Scufy OS", en));
+            return;
+        }
+        if (a == Action::OsControl) { if (!phone_.IsOpen() && !menu_.IsOpen()) os_.SetControl(!os_.Control()); }
+        else os_.OnAction(a);
+        if (auto img = os_.TakeImage()) overlay_.SetOsImage(img);
+        return;
+    }
     if (a == Action::Menu) {
+        // 1.8.0: the menu key held / pressed very fast: at most one open or close per 400 ms
+        static ULONGLONG lastMenuKey = 0;
+        if (GetTickCount64() - lastMenuKey < 400) return;
+        lastMenuKey = GetTickCount64();
+        os_.SetControl(false);
         overlay_.PrepareMenu();
         menu_.Open(cfg_);
-        menuOpenAt_ = GetTickCount64(); menuFrames_ = D3D11Overlay::D3D11Frames();
+        menuChecked_ = false; menuOpenAt_ = GetTickCount64(); menuFrames_ = overlay_.WindowMode() ? D3D11Overlay::D3D11Frames() : D3D11Overlay::ImageFrames();
         menu_.SetTruck(truckId_, truckName_);
         menu_.SetLogos(overlay_.StartLogoFiles(truckId_, brandId_));
         if (cfg_.media.enabled) {   // music folders for the media type rows (read again: files may have been added)
@@ -1224,12 +1248,24 @@ void RadioManager::OnAction(Action a, bool hold) {
         return;
     }
     if (a == Action::Phone) { if (phone_.IsOpen()) { phone_.Close(); overlay_.HideMenu(); } else OpenPhone(); return; }
+    if (a == Action::ScreenPage && os_.Active()) { os_.ToggleNavi(); return; }   // Scufy OS: Navigation <-> the app before
     if (a == Action::ScreenPage) {   // in-cab screen: navigation <-> radio page
         bool page = cfg_.screenPage != "radio";
         cfg_.screenPage = page ? "radio" : "navi";
         Log::Write(page ? "Screen: radio page" : "Screen: navigation");
         overlay_.Update(CurrentInfo());
-        overlay_.SetScreenPinned(page && powered_);
+        UpdatePinned();
+        if (page) {   // 1.8.0: say how to get the navigation back (the page is remembered for the next start)
+            const bool en = cfg_.menuLanguage != "de";
+            const KeyBinding& k = cfg_.keys[(int)Action::ScreenPage];
+            std::wstring key = k.vk == VK_INSERT && !k.ctrl && !k.shift && !k.alt ? L10n::Pick(L"Einfg", L"Insert", en) : Utf8ToWide(KeyBindingName(k));
+            OverlayInfo i;
+            i.notice = true; i.noticeIcon = "message"; i.noticeApp = L"Realistic Radio"; i.noticeTime = L10n::Pick(L"jetzt", L"now", en);
+            i.noticeTitle = L10n::Pick(L"Radio-Seite bleibt an", L"Radio page stays on", en);
+            i.noticeText = L10n::Fill(L10n::Pick(L"{key}: zur\u00fcck zur Navigation", L"{key}: back to the navigation", en), {{L"{key}", key}});
+            i.headline = i.noticeApp; i.title = i.noticeTitle; i.subtitle = i.noticeText; i.lcd = i.noticeTitle + L": " + i.noticeText;
+            overlay_.Show(i, "", 5.0);
+        }
         return;
     }
     if (!powered_ && a != Action::VolumeUp && a != Action::VolumeDown && a != Action::Mute) {
@@ -1533,6 +1569,81 @@ void RadioManager::InitPhone() {
     phone_.Init(dir_ + L"phone-" + Utf8ToWide(game_) + L".json", h);
 }
 
+// ---------------------------------------------------------------------------------------------
+// Scufy OS (1.8.0)
+void RadioManager::InitOs() {
+    ScufyHost h;
+    h.english = [this] { return cfg_.menuLanguage != "de"; };
+    h.gameTime = [this] { return gameTime_; };
+    h.now = [this] { return CurrentInfo(); };
+    h.logo = [this] { return overlay_.CurrentLogo(); };
+    h.playing = [this] { return powered_ && (source_ == Source::Media ? !mediaPaused_ && audio_.Track().active : playing_); };
+    h.action = [this](Action a) { OnAction(a, false); };
+    h.discs = [this] {
+        std::vector<std::pair<std::wstring, int>> d;
+        for (auto& x : lib_.Discs()) d.push_back({x.name, (int)x.count});
+        return d;
+    };
+    h.discPlaying = [this] { return source_ == Source::Media ? disc_ : -1; };
+    h.playDisc = [this](int i) {
+        if (!powered_) return;
+        if (source_ == Source::Media && i == disc_) return;
+        EnterMedia(i, false);
+    };
+    h.route = [this](float& m, float& s) { m = navDist_; s = navTime_; };
+    h.cfg = [this]() -> ScufyOsConfig& { return cfg_.os; };
+    h.saveCfg = [this] { cfg_.SaveMenuSettings(cfgPath_); };
+    h.phoneOpen = [this] { return phone_.IsOpen(); };
+    h.controlKey = [this] { return cfg_.keys[(int)Action::OsControl]; };
+    h.otherKey = [this](const KeyBinding& k) {
+        if (k.vk && k == cfg_.keys[(int)Action::Phone]) { OnAction(Action::Phone); return true; }
+        if (k.vk && (k == cfg_.keys[(int)Action::Menu] || k == cfg_.keys[(int)Action::MenuAlt])) { OnAction(Action::Menu); return true; }
+        return false;
+    };
+    os_.Init(std::move(h));
+}
+
+void RadioManager::UpdatePinned() {
+    overlay_.SetScreenPinned(powered_ && (os_.Active() || cfg_.screenPage == "radio"));
+}
+
+void RadioManager::OsFrame() {
+    int w = 0, h = 0;
+    const bool usable = overlay_.ScreenPixels(w, h);
+    const bool on = cfg_.os.enabled && powered_ && usable;
+    if (on != os_.Active()) {
+        os_.SetActive(on, on && cfg_.os.boot && osBootDue_);
+        if (on) {
+            osBootDue_ = false;
+            os_.Tick(w, h, overlay_.SplashActive());
+            overlay_.SetOsImage(os_.TakeImage());
+        } else overlay_.SetOsImage(nullptr);
+        UpdatePinned();
+    }
+    if (!powered_) osBootDue_ = true;   // the next ignition on starts it again
+    if (!on) { osCheckAt_ = 0; return; }
+    os_.Tick(w, h, overlay_.SplashActive());
+    if (auto img = os_.TakeImage()) overlay_.SetOsImage(img);
+    // control mode: the screen must really be drawn (else the mouse and keyboard would be gone for nothing)
+    if (os_.Control()) {
+        ULONGLONG now = GetTickCount64();
+        if (!osCheckAt_) { osCheckAt_ = now + 3000; osFrames_ = D3D11Overlay::ScreenFrames(); }
+        else if (now >= osCheckAt_) {
+            long long f = D3D11Overlay::ScreenFrames();
+            if (f == osFrames_) {
+                Log::Write("Scufy OS: the navigation screen was not drawn for 3 s (%lld D3D11 frames) - control mode off", D3D11Overlay::D3D11Frames());
+                os_.SetControl(false);
+            }
+            osFrames_ = f; osCheckAt_ = now + 3000;
+        }
+    } else osCheckAt_ = 0;
+}
+
+void RadioManager::OsUiTick() {
+    os_.UiTick();
+    if (auto img = os_.TakeImage()) overlay_.SetOsImage(img);
+}
+
 void RadioManager::OpenPhone() {
     const bool en = cfg_.menuLanguage != "de";
     if (menu_.IsOpen()) return;
@@ -1541,15 +1652,31 @@ void RadioManager::OpenPhone() {
                     L10n::Pick(L"Einstellungsmenü → Handy → Virtuelles Handy", L"Settings menu → Phone → Virtual mobile device", en));
         return;
     }
+    os_.SetControl(false);
     overlay_.PrepareMenu();
     phone_.Open();
     if (auto img = phone_.TakeImage()) overlay_.ShowPhone(img);
+    phoneCheckAt_ = GetTickCount64() + 2500; phoneFrames_ = phoneOpenFrames_ = D3D11Overlay::ImageFrames();
 }
 
 void RadioManager::PhoneUiTick(InputManager& input) {
     phone_.Tick(input);
     if (!phone_.IsOpen()) { overlay_.HideMenu(); return; }
     if (auto img = phone_.TakeImage()) overlay_.ShowPhone(img);
+    // 1.8.0: while the phone is open it has the mouse and the keyboard. If it is not drawn (another tool presents the
+    // picture, the game hangs or is minimised), the game would look frozen - so it closes again by itself.
+    ULONGLONG now = GetTickCount64();
+    if (!overlay_.WindowMode() && now >= phoneCheckAt_) {
+        long long f = D3D11Overlay::ImageFrames();
+        if (f == phoneFrames_) {
+            Log::Write("Phone: not drawn for %s (%lld D3D11 / %lld other frames) - closed again so the game can be used. "
+                       "Another graphics tool may be presenting the picture differently; please send this log.",
+                       phoneFrames_ == phoneOpenFrames_ ? "2.5 s since it opened" : "3 s", D3D11Overlay::D3D11Frames(), D3D11Overlay::OtherFrames());
+            phone_.Close(); overlay_.HideMenu();   // the radio thread resyncs the keys
+            return;
+        }
+        phoneFrames_ = f; phoneCheckAt_ = now + 3000;
+    }
 }
 
 std::wstring RadioManager::Money(long long amount) const {

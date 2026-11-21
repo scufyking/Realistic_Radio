@@ -3,6 +3,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "Overlay.h"
+#include "InputBlock.h"
 #include "ExternalMedia.h"
 #include "CardStyles.h"
 #include "D3D11Overlay.h"
@@ -315,19 +316,7 @@ DWORD WINAPI Overlay::LogoThread(LPVOID p) {
     FreeLibraryAndExitThread(self, 0);
 }
 
-HWND Overlay::FindGameWindow() {
-    struct Ctx { DWORD pid; HWND best; long area; } c{GetCurrentProcessId(), nullptr, 0};
-    EnumWindows([](HWND h, LPARAM lp) -> BOOL {
-        auto* c = (Ctx*)lp; DWORD pid = 0; GetWindowThreadProcessId(h, &pid);
-        if (pid != c->pid || !IsWindowVisible(h)) return TRUE;
-        wchar_t cls[64]; GetClassNameW(h, cls, 64);
-        if (wcscmp(cls, L"RealisticRadioOverlay") == 0) return TRUE;
-        RECT r; GetClientRect(h, &r); long a = (r.right - r.left) * (r.bottom - r.top);
-        if (a > c->area) { c->area = a; c->best = h; }
-        return TRUE;
-    }, (LPARAM)&c);
-    return c.best;
-}
+HWND Overlay::FindGameWindow() { return InputBlock::GameWindow(); }   // 1.8.0: the game's window, not a helper window (Web-App)
 
 void Overlay::Rerender() {
     int h = D3D11Overlay::ScreenHeight();
@@ -453,12 +442,35 @@ std::wstring Overlay::LcdText() const {
 
 // ---------------------------------------------------------------------------------------------
 // In-cab screen (experimental)
+bool Overlay::ScreenPixels(int& w, int& h) const {
+    w = std::max(64, (int)std::lround(scfg_.width * std::clamp(scfg_.areaW, 0.01, 1.0)));
+    h = std::max(64, (int)std::lround(scfg_.height * std::clamp(scfg_.areaH, 0.01, 1.0)));
+    return ScreenUsable() && !detectPhase_;
+}
+void Overlay::SetOsImage(std::shared_ptr<OverlayImage> img) {
+    const bool had = os_ != nullptr;
+    os_ = std::move(img);
+    if (!ScreenUsable() || !pinned_ || Splashing(GetTickCount64())) return;
+    if (os_ || had) RenderScreen();
+}
+
 void Overlay::RenderScreen() {
     if (Splashing(GetTickCount64())) return;   // the start logo is on the screen: the card follows afterwards
     std::shared_ptr<OverlayImage> logo = (cfg_.showLogos && !Transient(scrInfo_)) ? logo_ : nullptr;
     // render at the pixel size of the visible area, so the card is not stretched
     int w = std::max(64, (int)std::lround(scfg_.width * std::clamp(scfg_.areaW, 0.01, 1.0)));
     int h = std::max(64, (int)std::lround(scfg_.height * std::clamp(scfg_.areaH, 0.01, 1.0)));
+    if (os_ && pinned_) {   // Scufy OS: its picture; volume and notifications as a banner over it
+        std::shared_ptr<OverlayImage> out = os_;
+        if (Transient(scrInfo_) && GetTickCount64() < scrUntil_) {
+            if (scrInfo_.notice) out = RenderScreenNotice(scrInfo_, w, h, scfg_.design, (float)scfg_.scale, os_.get());
+            else if (scrInfo_.volume >= 0) out = RenderScreenVolumeBar(scrInfo_, w, h, scfg_.design, (float)scfg_.scale, os_.get());
+        }
+        scrCard_.reset(); scrSong_ = SongLine{};
+        D3D11Overlay::SetScreenImage(out);
+        D3D11Overlay::SetScreenTarget(scfg_.width, scfg_.height, scfg_.format);
+        return;
+    }
     if (scrInfo_.notice) {   // phone notification: a banner at the top, over the navigation or the pinned radio page
         std::shared_ptr<OverlayImage> under;
         if (pinned_ && !Transient(pageInfo_)) {

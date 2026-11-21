@@ -30,7 +30,8 @@ static json PhoneJson(const PhoneConfig& c) {
 
 static const char* kActionNames[] = {"next", "previous", "stop", "volumeUp", "volumeDown", "makeFavourite", "goToFavourite", "mute", "showOverlay", "source", "nextDisc", "previousDisc", "screenPage", "menu",
                                      "band", "memory1", "memory2", "memory3", "memory4", "memory5", "memory6", "memory7", "memory8", "memory9",
-                                     "tuneUp", "tuneDown", "menu2", "tunnelMark", "phone"};
+                                     "tuneUp", "tuneDown", "menu2", "tunnelMark", "phone",
+                                     "osControl", "osHome", "osUp", "osDown", "osLeft", "osRight", "osOk", "osBack"};
 static_assert(sizeof(kActionNames) / sizeof(kActionNames[0]) == (size_t)Action::Count, "every action needs a name");
 const char* ActionName(Action a) { return kActionNames[(int)a]; }
 
@@ -51,6 +52,7 @@ Config::Config() {
     keys[(int)Action::TuneUp] = ParseKeyBinding("Shift+Right");   // frequency radio: 0.1 MHz steps
     keys[(int)Action::TuneDown] = ParseKeyBinding("Shift+Left");
     keys[(int)Action::MenuAlt] = ParseKeyBinding("Ctrl+F1");
+    keys[(int)Action::OsControl] = ParseKeyBinding("Ctrl+Insert");   // Scufy OS: mouse / keyboard on the navigation screen
     keys[(int)Action::Phone] = ParseKeyBinding("Shift+Insert");   // virtual phone   // second menu key: Ctrl+0 can be taken by the free camera (developer mode)
 }
 
@@ -225,6 +227,19 @@ bool Config::Load(const std::wstring& path) {
         source = j.value("source", source);
         mediaTrack = j.value("mediaTrack", mediaTrack);
         screenPage = j.value("screenPage", screenPage);
+        if (screenPage == "radio" && !j.value("screenPageChecked", false)) {
+            // 1.8.0: up to 1.7.1 letting go of Shift before Insert (phone key) also pinned the radio page, and it stayed
+            // there from start to start. Back to the navigation once; pinning it again on purpose stays as it is.
+            screenPage = "navi";
+            Log::Write("Screen: radio page from an older version switched back to the navigation once (Insert pins it again)");
+        }
+        if (j.contains("scufyOs") && j["scufyOs"].is_object()) {
+            const json& o = j["scufyOs"];
+            os.enabled = o.value("enabled", os.enabled); os.accent = o.value("accent", os.accent); os.dock = o.value("dock", os.dock);
+            if (os.dock != "right") os.dock = "left";
+            os.boot = o.value("boot", os.boot); os.mouseSpeed = std::clamp(o.value("mouseSpeed", os.mouseSpeed), 0.3, 3.0);
+            os.app = o.value("app", os.app);
+        }
         band = j.value("band", band); if (band != "dab") band = "fm";
         dabRange = std::clamp(j.value("dabRange", dabRange), 1.0, 3.0);
         switchMode = j.value("switchMode", switchMode); if (switchMode != "better") switchMode = "lost";
@@ -453,7 +468,7 @@ static json MenuJsonObj(const Config& c) {
     json j;
     j["radius"] = c.radius; j["threshold"] = c.threshold; j["whitenoise"] = c.whitenoise; j["transitionWhitenoise"] = c.transitionWhitenoise;
     j["volume"] = c.volume; j["muted"] = c.muted; j["autoVolume"] = c.autoVolume; j["autoPlay"] = c.autoPlay; j["powerSource"] = c.powerSource;
-    j["menuLanguage"] = c.menuLanguage; j["screenPage"] = c.screenPage;
+    j["menuLanguage"] = c.menuLanguage; j["screenPage"] = c.screenPage; j["screenPageChecked"] = true;
     j["activePreset"] = c.activePreset; j["presetAuto"] = c.presetAuto; j["truckMemory"] = c.truckMemory;
     j["band"] = c.band; j["dabRange"] = c.dabRange; j["switchMode"] = c.switchMode;
     j["memoryButtons"] = c.memoryButtons; j["memoryHoldSeconds"] = c.memoryHoldSeconds;
@@ -467,6 +482,7 @@ static json MenuJsonObj(const Config& c) {
         o["phone"] = PhoneJson(p.phone);
         j["presets"].push_back(o);
     }
+    j["scufyOs"] = {{"enabled", c.os.enabled}, {"accent", c.os.accent}, {"dock", c.os.dock}, {"boot", c.os.boot}, {"mouseSpeed", R6(c.os.mouseSpeed)}, {"app", c.os.app}};
     j["phone"] = PhoneJson(c.screen.phone);
     j["screen"]["enabled"] = c.screen.enabled; j["screen"]["durationSeconds"] = c.screen.durationSeconds;
     j["screen"]["areaX"] = R6(c.screen.areaX); j["screen"]["areaY"] = R6(c.screen.areaY); j["screen"]["areaW"] = R6(c.screen.areaW); j["screen"]["areaH"] = R6(c.screen.areaH);
@@ -509,6 +525,7 @@ void CopyMenuSettings(Config& d, const Config& s) {
     d.radius = s.radius; d.threshold = s.threshold; d.whitenoise = s.whitenoise; d.transitionWhitenoise = s.transitionWhitenoise;
     d.volume = s.volume; d.muted = s.muted; d.autoVolume = s.autoVolume; d.autoPlay = s.autoPlay; d.powerSource = s.powerSource;
     d.menuLanguage = s.menuLanguage; d.screenPage = s.screenPage;
+    d.os = s.os;
     d.presets = s.presets; d.activePreset = s.activePreset; d.presetAuto = s.presetAuto; d.truckMemory = s.truckMemory;
     d.band = s.band; d.dabRange = s.dabRange; d.switchMode = s.switchMode; d.memoryButtons = s.memoryButtons; d.memoryHoldSeconds = s.memoryHoldSeconds;
     d.tuning = s.tuning; d.rdsAf = s.rdsAf; d.tunnelSignal = s.tunnelSignal; d.songTitle = s.songTitle; d.audioOutput = s.audioOutput; d.muteGameRadio = s.muteGameRadio; d.outsideFade = s.outsideFade; d.outsideDistance = s.outsideDistance;
@@ -637,7 +654,8 @@ void Config::SaveVolume(const std::wstring& path) const {
         json j = f ? json::parse(f, nullptr, true, true) : json::object();
         j["volume"] = volume; j["muted"] = muted; j["band"] = band; j["tunedFreq"] = tunedFreq;
         j["stationButtons"] = stationButtons;
-        j["source"] = source; j["mediaTrack"] = mediaTrack; j["screenPage"] = screenPage;
+        j["source"] = source; j["mediaTrack"] = mediaTrack; j["screenPage"] = screenPage; j["screenPageChecked"] = true;
+        j["scufyOs"]["app"] = os.app;
         json r = json::object();
         for (auto& [k, v] : mediaResume) r[k] = v;
         j["mediaResume"] = r;

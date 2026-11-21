@@ -14,7 +14,7 @@ By **ScufyKing**. The whole radio runs inside the game:
 
 Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ETS2, and the radio plays. Station data and sounds are built into the DLL.
 
-> **Version 1.7.1** · [Changes](CHANGELOG.md)
+> **Version 1.8.0** · [Changes](CHANGELOG.md)
 >
 > **Status:** Tested in ETS2 1.61 (Windows x64) with several MAN and Scania models and mod trucks: the plugin loads, reads the truck position, switches stations by region, plays audio and shows station and volume on the navigation screen. American Truck Simulator data is included but ATS is untested.
 
@@ -25,6 +25,7 @@ Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ET
 - [Features](#features)
 - [Installation](#installation)
 - [Controls](#controls)
+- [Scufy OS](#scufy-os)
 - [Settings menu (Ctrl + 0)](#settings-menu-ctrl--0)
 - [Configuration](#configuration)
 - [USB / CD: your own music](#usb--cd-your-own-music)
@@ -48,6 +49,7 @@ Copy one file, `realistic-radio.dll`, into the game's `plugins` folder, start ET
 - **Station buttons 1–9** on the numpad like on a car radio: hold to save, tap to select – pre-stored with the stations received where you start.
 - **Reception and static.** The further you are from a region, the more static you hear, and weak signals drop out now and then.
 - **Smooth transitions** with a tuning sound.
+- **Scufy OS (new in 1.8.0):** an infotainment system on the navigation screen like CarPlay in a car – home screen with apps, a dock with clock and route, apps for navigation, radio, music, settings and the add-ons. Controlled with steering wheel buttons or with the mouse right on the screen (see [Scufy OS](#scufy-os)).
 - **Radio page on the navigation screen.** Press **Insert** to switch between the navigation and a permanent radio page that shows the station or track live.
 - **Display on the truck's navigation screen.** On every station change the logo, station name, country, signal and "station 3 / 12" appear on the in-cab navigation screen for a few seconds, on volume changes a speaker symbol, a large percentage and a 20-segment bar; then the navigation is back. Works in trucks with a modern infotainment/navigation screen (tested: several MAN and Scania models and mod trucks; see "In-cab screen").
 - **Live song title.** Artist and title of the song the station is playing right now appear on the navigation screen – switched exactly when the song changes in what you hear, and scrolling when the title is long (settings menu → Radio → **Live song title**).
@@ -195,11 +197,51 @@ Like the preset buttons of a car radio: **hold** a numpad key (1–9) for 1.5 se
 
 The buttons come **pre-stored**: on the first start they are filled with the nine best received stations where you are (one per programme). Settings menu → Radio → **Store station buttons again** fills them anew with the stations in range – handy in a new country.
 
-You can still enter keys in the file as well. **Key names** use the .NET key names: letters `A`–`Z`, digits `0`–`9`, `F1`–`F24`, `NumPad0`–`NumPad9`, `PageUp`, `Next` (= Page Down), `Home`, `End`, `Insert`, `Delete`, `Up`, `Down`, `Left`, `Right`, `Pause`, `Space`, `Oemplus`, `OemMinus`, `Add`, `Subtract`, `MediaNextTrack`, `MediaPlayPause` and more. Combinations work too, e.g. `"Ctrl+Shift+R"`. An empty value `""` disables a key.
+You can still enter keys in the file as well. **Key names** use the .NET key names: letters `A`–`Z`, digits `0`–`9`, `F1`–`F24`, `NumPad0`–`NumPad9`, `PageUp`, `Next` (= Page Down), `Home`, `End`, `Insert`, `Delete`, `Up`, `Down`, `Left`, `Right`, `Pause`, `Space`, `Oemplus`, `OemMinus`, `Add`, `Subtract`, `MediaNextTrack`, `MediaPlayPause` and more. Combinations work too, e.g. `"Ctrl+Shift+R"`; press Ctrl / Shift / Alt first, then the key. An empty value `""` disables a key.
 
 **Controller:** every connected controller works – steering wheels (also with several devices such as Moza or Fanatec: base, wheel, button box), pads and button boxes, with up to 128 buttons and the hat switch (POV). Easiest in the settings menu: Keys page, click the **Controller** column and press the button. In the file, `buttons` holds `"Device name/12"` (button 12 of that controller, `"Device name/POV1 up"` for the hat switch), a plain number (counted from 0, any controller; older files) or `-1` (none). The log lists the controllers found (`Controller: … found`).
 
+## Scufy OS
+
+**Scufy OS** turns the truck's navigation screen into an infotainment system like CarPlay or Android Auto in a car. Switch it on: settings menu (**Ctrl + 0**) → page **Scufy OS** → **Scufy OS** on. It needs the in-cab display (page Navigation screen) and runs with the ignition.
+
+- **Start:** after the truck's start logo, "Scufy OS" shows for a moment, then the home screen (can be switched off: **Start animation**).
+- **Dock** at the side (left or right):
+  - the game's time and weekday,
+  - with a route, the distance and time to the destination,
+  - four buttons: Home, Navigation, Radio, Music,
+  - at the bottom, what plays (tap it to open the radio).
+- **Apps:**
+
+| App | What it shows |
+|---|---|
+| Navigation | the game's navigation, only the dock lies over it |
+| Radio | station logo, name, song title, country, frequency; previous / pause / next, source, FM / DAB+, volume; station buttons 1–9 to tap. USB / CD: track, cover and progress |
+| Music | your USB / CD folders to choose from, with controls for the track that plays |
+| Settings | accent colour, side of the dock, start animation, mouse speed, switch Scufy OS off |
+| Add-ons | Bus+, Jobs+, Web-App (Spotify, YouTube …) and other add-on apps, in landscape |
+
+- **Navigation key (Insert):** switches between the navigation and the app before it. The last app comes back at the next start.
+- **Volume and notifications** (phone, customer, police) show as a bar at the top over Scufy OS.
+
+### Control
+
+> **Important: do not quit the game while the phone, the settings menu or the Scufy OS control mode is open.** During that time Realistic Radio keeps mouse and keyboard from the game. If the game hangs while closing (e.g. because of another plugin), Windows may otherwise not react to mouse and keyboard for a while. So close the phone / menu or end the control mode with **Ctrl + Insert** first, then quit the game. From 1.8.0 the radio also gives mouse and keyboard back by itself when the game closes or stops responding. And **Ctrl + Alt + Del** always works.
+
+- **Steering wheel / keys:** up, down, left, right, OK, back and home are actions of their own. Put them on buttons of the wheel or a button box (settings menu → page Scufy OS or Keys). The highlight jumps from button to button, OK opens or presses.
+- **Mouse / control (Ctrl + Insert):** then the mouse moves a cursor on the truck's screen instead of the camera:
+  - left click taps, right click goes back, the wheel scrolls lists;
+  - the keyboard works too (arrows, Enter, Backspace, Home), and typing goes into search fields of add-ons;
+  - a coloured frame shows that control is on.
+  - **Ctrl + Insert** or **Esc** gives mouse and keyboard back to the game.
+  - The radio's steering wheel buttons keep working.
+- **Control mode ends by itself** when the screen is not drawn for 3 seconds (e.g. when you get out). Alt + Tab and the Task Manager always work.
+
+Scufy OS replaces the radio page; the normal station card on the screen does not appear with Scufy OS. Switch it off in its Settings app or in the settings menu.
+
 ## Settings menu (Ctrl + 0)
+
+> **Important: do not quit the game while the phone, the settings menu or the Scufy OS control mode is open.** During that time Realistic Radio keeps mouse and keyboard from the game. If the game hangs while closing (e.g. because of another plugin), Windows may otherwise not react to mouse and keyboard for a while. So close the phone / menu or end the control mode with **Ctrl + Insert** first, then quit the game. From 1.8.0 the radio also gives mouse and keyboard back by itself when the game closes or stops responding. And **Ctrl + Alt + Del** always works.
 
 The most important settings can be changed right in the game. **Ctrl + 0** (or **Ctrl + F1**) opens the menu in the middle of the screen; it works with mouse and keyboard.
 
@@ -208,6 +250,7 @@ The most important settings can be changed right in the game. **Ctrl + 0** (or *
 | Radio | Volume, mute, radio on with (ignition / engine running / always), start automatically, menu language, **band FM / DAB+** and its key, **station buttons** on/off and hold time, **tuning: station list or frequency**, **RDS AF** |
 | Reception | Broadcast range, switch threshold, **change region** (only when the station is lost / on better reception), **DAB+ range**, auto volume, static, tuning sound, **no reception in tunnels**, key to mark an own tunnel |
 | Navigation screen | Display on/off, display time, **design** (built-in and own styles, button to open the styles folder), **start logo** on/off, time and size, **size of text and pictures**, **size of the station logo**, **drawing surface** (if the display appears twice), keep the radio page on, key for navigation ↔ radio page, **test mode**, **automatic detection (beta)** and the position of the display (area X / Y / width / height, flip, mirror) |
+| Scufy OS | **Scufy OS** on/off, accent colour, side of the dock, start animation, mouse speed, key for mouse / control and the keys / wheel buttons for up, down, left, right, OK, back, home |
 | Phone | **Virtual mobile device** on/off, name of the phone, tone, phone key, **dispatcher calls** on/off, caller name, voice on/off, fines as messages, test call, **messages from the customer** on/off, when (game minutes before the delivery time ends), sender, message text, test message. Text fields: click or Enter, type, Enter applies (Ctrl + V pastes) |
 | Trucks | Current truck (from the telemetry), **radio memory per truck**, **start logo** (choice, preview, logo folder), new preset, active preset, change automatically per truck, link / unlink, delete, load a saved preset |
 | Pop-up overlay | Mode, style, position, size, display time, station logos |
@@ -351,6 +394,8 @@ Every JSON file in `realistic-radio\styles\` is a style of its own and appears i
 The design is stored as `"design": "style:<file name>"` (also in the truck presets). If the file is missing, the display shows *Modern*.
 
 ### Virtual phone (`"phone": { … }`)
+
+> **Important: do not quit the game while the phone, the settings menu or the Scufy OS control mode is open.** During that time Realistic Radio keeps mouse and keyboard from the game. If the game hangs while closing (e.g. because of another plugin), Windows may otherwise not react to mouse and keyboard for a while. So close the phone / menu or end the control mode with **Ctrl + Insert** first, then quit the game. From 1.8.0 the radio also gives mouse and keyboard back by itself when the game closes or stops responding. And **Ctrl + Alt + Del** always works.
 
 After the radio starts, a notification "Connected" with the name of the phone appears at the top of the navigation screen. When the delivery time of the current job is about to run out, the customer sends a message. Both look like notifications on a smartphone (banner at the top, the navigation or the radio page stays visible below) and come with a short tone; with the pop-up overlay on, they appear there too. When the customer gets in touch is worked out from the telemetry (end of the delivery window minus the game time), once per job.
 

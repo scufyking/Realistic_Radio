@@ -143,6 +143,32 @@ struct PhoneView {
 // The phone picture (portrait, about 60 % of the screen height); spots: where to click (image pixels)
 std::shared_ptr<OverlayImage> RenderPhone(const PhoneView& v, int screenHeight, std::vector<PhoneSpot>* spots);
 
+// ---- Scufy OS (1.8.0): infotainment system on the navigation screen (dock + apps), drawn at the screen area's size ----
+enum class OsScreen { Home, Navi, Radio, Music, Settings, AddonList, AddonCanvas };
+enum OsAct { OA_None, OA_Dock, OA_App, OA_Prev, OA_PlayPause, OA_Next, OA_Source, OA_Band, OA_Station, OA_Disc, OA_Setting, OA_Item,
+             OA_AppArea, OA_Back, OA_VolDown, OA_VolUp, OA_Search };
+struct OsSpot { RECT r{}; int action = OA_None; int index = -1; };
+struct OsTile { std::wstring label; int icon = 0; float color[3] = {0.5f, 0.5f, 0.5f}; std::shared_ptr<const OverlayImage> img; };   // icon: 0 letter / picture, 1 navigation, 2 radio, 3 music, 4 settings
+struct OsRow { std::string type = "row"; std::wstring title, text, value; bool arrow = false, enabled = true, active = false; };   // type: row | button | section | text | search
+struct ScufyView {
+    OsScreen screen = OsScreen::Home;
+    bool en = false, dockRight = false;
+    float accent[3] = {0.24f, 0.55f, 1.f};
+    std::wstring clock, day;
+    int hoverAct = OA_None, hoverIdx = -1;      // highlighted element (keyboard focus or mouse)
+    OverlayInfo now;                             // what plays (dock, Radio, Music)
+    std::shared_ptr<const OverlayImage> logo;    // station logo / cover
+    bool playing = false;
+    std::wstring navDist, navTime;               // remaining route (empty: no route)
+    std::vector<OsTile> apps;                    // home screen
+    std::wstring title, hint, search;            // list screens / add-on apps
+    std::vector<OsRow> rows; int scroll = 0;
+    bool appHasFrame = false;
+};
+// spots: where to click (image pixels); appArea: where an add-on's own picture goes (AddonCanvas); visibleRows: list rows that fit
+std::shared_ptr<OverlayImage> RenderScufyOS(const ScufyView& v, int W, int H, std::vector<OsSpot>* spots, RECT* appArea, int* visibleRows);
+std::shared_ptr<OverlayImage> RenderScufyBoot(int W, int H, float t, const float accent[3]);   // start animation, t = 0..1
+
 // Coordinate grid (10 x 10 cells labelled with their x/y position in tenths) for finding the visible area
 std::shared_ptr<OverlayImage> RenderScreenGrid(int width, int height, bool flipX = false, bool flipY = false);
 // Test mode: grid plus the area the card is drawn into (target coordinates 0..1), with its values in the corners

@@ -40,6 +40,11 @@ public:
     const std::wstring& LogoDir() const { return logoDir_; }   // settings menu: style, position, size, times
     void HideMenu();
     bool ScreenPinned() const { return pinned_; }
+    bool WindowMode() const { return window_; }   // the pop-up is a window of its own (no D3D11 drawing)
+    // Scufy OS (1.8.0): its picture is the page of the in-cab screen while pinned (nullptr = the radio page)
+    void SetOsImage(std::shared_ptr<OverlayImage> img);
+    bool ScreenPixels(int& w, int& h) const;   // size of the screen area in pixels; false = no in-cab screen
+    bool SplashActive() const { return Splashing(GetTickCount64()); }   // the truck's start logo is on the screen
     bool Visible() const { return visibleUntil_ > GetTickCount64() || cfg_.alwaysVisible; }
     const OverlayConfig& Cfg() const { return cfg_; }
     std::shared_ptr<const OverlayImage> CurrentLogo() const { return logo_; }
@@ -86,6 +91,7 @@ private:
     ULONGLONG styleCheckAt_ = 0;
     OverlayInfo pageInfo_;              // latest station/track info: content of the radio page
     bool pinned_ = false;
+    std::shared_ptr<OverlayImage> os_;   // Scufy OS picture
     ULONGLONG splashAt_ = 0, splashUntil_ = 0;
     std::shared_ptr<OverlayImage> splash_;
     std::wstring dataDir_;
