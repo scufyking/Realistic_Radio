@@ -52,10 +52,23 @@ typedef void(STDMETHODCALLTYPE* OMSetRTUAVFn)(ID3D11DeviceContext*, UINT, ID3D11
 // one entry per context vtable we patched (the runtime may use more than one context class)
 struct VtHook { void** vt; OMSetRTFn rt; OMSetRTUAVFn rtuav; };
 VtHook g_vts[8]; std::atomic<int> g_nVts{0};
+// 1.8.0: the Direct3D table last seen on the game's context. Another tool may put a method table of its own over it (TM Real
+// Walk in the cab, Shift + R) and forward each call through Direct3D's table - which holds the radio's hook: that call
+// goes on to this table's original function.
+std::atomic<int> g_baseVt{0};
+thread_local int t_rtDepth = 0;
+thread_local const VtHook* t_rtOuter = nullptr;
 inline const VtHook* FindVt(ID3D11DeviceContext* c) {
     void** vt = *(void***)c; int n = g_nVts.load();
     for (int i = 0; i < n; ++i) if (g_vts[i].vt == vt) return &g_vts[i];
-    return n ? &g_vts[0] : nullptr;
+    return n ? &g_vts[g_baseVt.load()] : nullptr;
+}
+// the function to chain to; called again from inside our own chain (a tool in front of us forwards through Direct3D's
+// table, which holds this hook again): straight on to Direct3D's original, never round the same circle (stack overflow)
+inline const VtHook* ChainVt(ID3D11DeviceContext* c) {
+    const VtHook* h = FindVt(c);
+    if (t_rtDepth > 0) { const VtHook* base = &g_vts[g_baseVt.load()]; if (base != t_rtOuter) h = base; }
+    return h;
 }
 bool g_wantScreenHook = false;
 std::atomic<bool> g_screenHooked{false};
@@ -434,7 +447,10 @@ void OnRenderTargetChange(ID3D11DeviceContext* ctx, UINT num, ID3D11RenderTarget
 void STDMETHODCALLTYPE HookOMSetRT(ID3D11DeviceContext* ctx, UINT num, ID3D11RenderTargetView* const* views, ID3D11DepthStencilView* dsv) {
     if (!t_inHook && !t_chainRt && ctx->GetType() == D3D11_DEVICE_CONTEXT_IMMEDIATE) { t_inHook = true; OnRenderTargetChange(ctx, num, views); t_inHook = false; }
     bool was = t_chainRt; t_chainRt = true;
-    FindVt(ctx)->rt(ctx, num, views, dsv);
+    const VtHook* h = ChainVt(ctx); const VtHook* outer = t_rtOuter;
+    t_rtOuter = h; ++t_rtDepth;
+    h->rt(ctx, num, views, dsv);
+    --t_rtDepth; t_rtOuter = outer;
     t_chainRt = was;
 }
 void STDMETHODCALLTYPE HookOMSetRTUAV(ID3D11DeviceContext* ctx, UINT num, ID3D11RenderTargetView* const* views, ID3D11DepthStencilView* dsv,
@@ -443,7 +459,10 @@ void STDMETHODCALLTYPE HookOMSetRTUAV(ID3D11DeviceContext* ctx, UINT num, ID3D11
         t_inHook = true; OnRenderTargetChange(ctx, num, views); t_inHook = false;
     }
     bool was = t_chainRt; t_chainRt = true;
-    FindVt(ctx)->rtuav(ctx, num, views, dsv, uavStart, numUav, uavs, counts);
+    const VtHook* h = ChainVt(ctx); const VtHook* outer = t_rtOuter;
+    t_rtOuter = h; ++t_rtDepth;
+    h->rtuav(ctx, num, views, dsv, uavStart, numUav, uavs, counts);
+    --t_rtDepth; t_rtOuter = outer;
     t_chainRt = was;
 }
 // code hooks on the render-target functions of the game's immediate context (fallback, see g_detours)
@@ -626,11 +645,31 @@ void HookGameContext(IDXGISwapChain* sc) {
     if (c) {
         void** cvt = *(void***)c;
         bool known = false;
-        for (int i = 0; i < g_nVts.load(); ++i) if (g_vts[i].vt == cvt) known = true;
-        if (!known && cvt[33] != (void*)&HookOMSetRT && g_nVts.load() < 8) {   // new context class: hook it (checked every frame)
+        for (int i = 0; i < g_nVts.load(); ++i) if (g_vts[i].vt == cvt) { known = true; g_baseVt = i; }
+        // 1.8.0: only Direct3D's own tables (in a d3d11.dll). A table of another tool (TM Real Walk puts its own over
+        // Direct3D's in the cab) forwards its calls through Direct3D's table and our hook there: hooking it, too, made
+        // the two call each other without end - the game crashed (stack overflow).
+        static void* foreignVt[8] = {}; static int nForeign = 0;   // tables of other tools seen (checked once each)
+        bool foreign = false;
+        for (int i = 0; i < nForeign && !known; ++i) if (foreignVt[i] == cvt) foreign = true;
+        if (!known && !foreign) {
+            std::wstring mod = ModulePathOf(cvt);
+            size_t slash = mod.find_last_of(L"\\/");
+            std::wstring base = slash == std::wstring::npos ? mod : mod.substr(slash + 1);
+            foreign = _wcsicmp(base.c_str(), L"d3d11.dll") != 0 &&
+                      !(g_nVts.load() > 0 && ModulePathOf(g_vts[0].vt) == mod);
+            if (foreign) {
+                if (nForeign < 8) foreignVt[nForeign++] = cvt;
+                Log::Write("Screen: the game's render context uses a method table of another tool now (%s, its OMSetRenderTargets in %s, "
+                           "e.g. TM Real Walk in the cab) - left to it: it forwards to Direct3D's table and the radio's hook there",
+                           mod == L"?" ? "in its own memory" : Narrow(mod).c_str(), Narrow(ModulePathOf(cvt[33])).c_str());
+            }
+        }
+        if (!known && !foreign && cvt[33] != (void*)&HookOMSetRT && g_nVts.load() < 8) {   // new context class: hook it (checked every frame)
             VtHook h{cvt, nullptr, nullptr};
             if (PatchSlot(cvt, 33, (void*)&HookOMSetRT, (void**)&h.rt) && PatchSlot(cvt, 34, (void*)&HookOMSetRTUAV, (void**)&h.rtuav)) {
-                g_vts[g_nVts.load()] = h; ++g_nVts; g_screenHooked = true;
+                const int idx = g_nVts.load();
+                g_vts[idx] = h; ++g_nVts; g_baseVt = idx; g_screenHooked = true;
                 Log::Write("Screen: hooked the game's render context #%d (device flags 0x%x)", g_nVts.load(), d->GetCreationFlags());
                 if (g_detours && !g_presentBehind && !g_detRtTarget && h.rt && h.rtuav) {   // the graphics tool may call these directly, too
                     g_detRtTarget = (void*)h.rt;
