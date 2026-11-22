@@ -50,25 +50,29 @@ typedef void(STDMETHODCALLTYPE* OMSetRTFn)(ID3D11DeviceContext*, UINT, ID3D11Ren
 typedef void(STDMETHODCALLTYPE* OMSetRTUAVFn)(ID3D11DeviceContext*, UINT, ID3D11RenderTargetView* const*, ID3D11DepthStencilView*,
                                               UINT, UINT, ID3D11UnorderedAccessView* const*, const UINT*);
 // one entry per context vtable we patched (the runtime may use more than one context class)
-struct VtHook { void** vt; OMSetRTFn rt; OMSetRTUAVFn rtuav; };
+struct VtHook { void** vt; OMSetRTFn rt; OMSetRTUAVFn rtuav; bool raw; };   // raw: rt / rtuav are Direct3D's own functions
 VtHook g_vts[8]; std::atomic<int> g_nVts{0};
 // 1.8.1: the Direct3D table last seen on the game's context. Another tool may put a method table of its own over it (TM Real
 // Walk in the cab, Shift + R) and forward each call through Direct3D's table - which holds the radio's hook: that call
 // goes on to this table's original function.
 std::atomic<int> g_baseVt{0};
 thread_local int t_rtDepth = 0;
-thread_local const VtHook* t_rtOuter = nullptr;
-inline const VtHook* FindVt(ID3D11DeviceContext* c) {
+thread_local unsigned t_rtUsed = 0;   // 1.8.3: the tables whose original this thread is inside right now (bit = index)
+inline int FindVt(ID3D11DeviceContext* c) {
     void** vt = *(void***)c; int n = g_nVts.load();
-    for (int i = 0; i < n; ++i) if (g_vts[i].vt == vt) return &g_vts[i];
-    return n ? &g_vts[g_baseVt.load()] : nullptr;
+    for (int i = 0; i < n; ++i) if (g_vts[i].vt == vt) return i;
+    return n ? g_baseVt.load() : -1;
 }
-// the function to chain to; called again from inside our own chain (a tool in front of us forwards through Direct3D's
-// table, which holds this hook again): straight on to Direct3D's original, never round the same circle (stack overflow)
-inline const VtHook* ChainVt(ID3D11DeviceContext* c) {
-    const VtHook* h = FindVt(c);
-    if (t_rtDepth > 0) { const VtHook* base = &g_vts[g_baseVt.load()]; if (base != t_rtOuter) h = base; }
-    return h;
+// The table entry to chain to. 1.8.3: called again from inside our own chain (a tool in front of us forwards through a
+// table that holds this hook again) the same original would close a circle without end (stack overflow): then the
+// oldest entry not used in this chain yet, Direct3D's own functions first.
+inline int ChainVt(ID3D11DeviceContext* c) {
+    int i = FindVt(c);
+    if (i < 0 || !(t_rtUsed & (1u << i))) return i;
+    const int n = g_nVts.load();
+    for (int k = 0; k < n; ++k) if (!(t_rtUsed & (1u << k)) && g_vts[k].raw) return k;
+    for (int k = 0; k < n; ++k) if (!(t_rtUsed & (1u << k))) return k;
+    return 0;   // every one already used: Direct3D's first table (nothing better is left)
 }
 bool g_wantScreenHook = false;
 std::atomic<bool> g_screenHooked{false};
@@ -447,10 +451,10 @@ void OnRenderTargetChange(ID3D11DeviceContext* ctx, UINT num, ID3D11RenderTarget
 void STDMETHODCALLTYPE HookOMSetRT(ID3D11DeviceContext* ctx, UINT num, ID3D11RenderTargetView* const* views, ID3D11DepthStencilView* dsv) {
     if (!t_inHook && !t_chainRt && ctx->GetType() == D3D11_DEVICE_CONTEXT_IMMEDIATE) { t_inHook = true; OnRenderTargetChange(ctx, num, views); t_inHook = false; }
     bool was = t_chainRt; t_chainRt = true;
-    const VtHook* h = ChainVt(ctx); const VtHook* outer = t_rtOuter;
-    t_rtOuter = h; ++t_rtDepth;
+    const int idx = ChainVt(ctx); const VtHook* h = &g_vts[idx < 0 ? 0 : idx];
+    const unsigned used = t_rtUsed; t_rtUsed |= 1u << (idx < 0 ? 0 : idx); ++t_rtDepth;
     h->rt(ctx, num, views, dsv);
-    --t_rtDepth; t_rtOuter = outer;
+    --t_rtDepth; t_rtUsed = used;
     t_chainRt = was;
 }
 void STDMETHODCALLTYPE HookOMSetRTUAV(ID3D11DeviceContext* ctx, UINT num, ID3D11RenderTargetView* const* views, ID3D11DepthStencilView* dsv,
@@ -459,10 +463,10 @@ void STDMETHODCALLTYPE HookOMSetRTUAV(ID3D11DeviceContext* ctx, UINT num, ID3D11
         t_inHook = true; OnRenderTargetChange(ctx, num, views); t_inHook = false;
     }
     bool was = t_chainRt; t_chainRt = true;
-    const VtHook* h = ChainVt(ctx); const VtHook* outer = t_rtOuter;
-    t_rtOuter = h; ++t_rtDepth;
+    const int idx = ChainVt(ctx); const VtHook* h = &g_vts[idx < 0 ? 0 : idx];
+    const unsigned used = t_rtUsed; t_rtUsed |= 1u << (idx < 0 ? 0 : idx); ++t_rtDepth;
     h->rtuav(ctx, num, views, dsv, uavStart, numUav, uavs, counts);
-    --t_rtDepth; t_rtOuter = outer;
+    --t_rtDepth; t_rtUsed = used;
     t_chainRt = was;
 }
 // code hooks on the render-target functions of the game's immediate context (fallback, see g_detours)
@@ -516,6 +520,11 @@ std::wstring ModulePathOf(const void* addr) {
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)addr, &m) || !m) return L"?";
     GetModuleFileNameW(m, p, MAX_PATH);
     return p;
+}
+bool IsD3d11Path(const std::wstring& path) {   // a d3d11.dll (Windows', DXVK's ...)
+    size_t slash = path.find_last_of(L"\\/");
+    std::wstring base = slash == std::wstring::npos ? path : path.substr(slash + 1);
+    return _wcsicmp(base.c_str(), L"d3d11.dll") == 0;
 }
 bool InModule(const void* addr, HMODULE mod) {
     HMODULE m = nullptr;
@@ -655,13 +664,9 @@ void HookGameContext(IDXGISwapChain* sc) {
         for (int i = 0; i < nForeign && !known; ++i) if (foreignVt[i] == cvt) foreign = true;
         bool outside = false;   // a table outside d3d11.dll, but with Direct3D's own functions in our two slots
         if (!known && !foreign) {
-            auto isD3d11 = [](const std::wstring& path) {
-                size_t slash = path.find_last_of(L"\\/");
-                std::wstring base = slash == std::wstring::npos ? path : path.substr(slash + 1);
-                return _wcsicmp(base.c_str(), L"d3d11.dll") == 0;
-            };
+            auto isD3d11 = IsD3d11Path;
             std::wstring mod = ModulePathOf(cvt);
-            outside = !isD3d11(mod) && !(g_nVts.load() > 0 && ModulePathOf(g_vts[0].vt) == mod);
+            outside = !isD3d11(mod);   // 1.8.3: not "the same module as the first table" - both in memory of their own matched
             // 1.8.1: such a table is hooked only when OMSetRenderTargets in it is still Direct3D's own function (then
             // our hook goes straight on to Direct3D). A function of another tool there (one that forwards through
             // Direct3D's table and our hook in it) is left alone - hooking it made the two call each other without end.
@@ -674,9 +679,10 @@ void HookGameContext(IDXGISwapChain* sc) {
             }
         }
         if (!known && !foreign && cvt[33] != (void*)&HookOMSetRT && g_nVts.load() < 8) {   // new context class: hook it (checked every frame)
-            VtHook h{cvt, nullptr, nullptr};
+            VtHook h{cvt, nullptr, nullptr, false};
             if (PatchSlot(cvt, 33, (void*)&HookOMSetRT, (void**)&h.rt) && PatchSlot(cvt, 34, (void*)&HookOMSetRTUAV, (void**)&h.rtuav)) {
                 const int idx = g_nVts.load();
+                h.raw = IsD3d11Path(ModulePathOf((void*)h.rt)) && IsD3d11Path(ModulePathOf((void*)h.rtuav));
                 g_vts[idx] = h; ++g_nVts; g_baseVt = idx; g_screenHooked = true;
                 Log::Write("Screen: hooked the game's render context #%d (device flags 0x%x)%s", g_nVts.load(), d->GetCreationFlags(),
                            outside ? " - its method table lies outside d3d11.dll (e.g. TM Real Walk's own), but OMSetRenderTargets in it is Direct3D's" : "");

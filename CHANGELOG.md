@@ -2,6 +2,15 @@
 
 **English** · [Deutsch](#changelog-deutsch)
 
+## 1.8.3 – Shift + R with TM Real Walk again
+
+### Fixed
+- **Crash with TM Real Walk (Shift + R) came back in 1.8.2:** on some PCs Direct3D keeps the method table of the game's render context in memory of its own, not in d3d11.dll - just like TM Real Walk's own table. 1.8.2 took "the same place as the first table" for Direct3D, so it hooked TM Real Walk's table again and the game crashed. Now only what is in the table counts: a table is hooked only where OMSetRenderTargets in it is Direct3D's own function.
+- **The guard against a circle works in every order now:** a call that comes back into the radio's hook inside its own chain always goes on to a table not used yet in this chain (Direct3D's own functions first) - before, it could pick the same one again.
+
+### Upgrade notes
+- Replace `realistic-radio.dll` in the `plugins` folder. The add-ons stay as they are (no change since 1.8.0).
+
 ## 1.8.2 – In-cab screen with TM Real Walk
 
 ### Fixed
@@ -366,6 +375,15 @@
 
 <a id="changelog-deutsch"></a>
 # Changelog (Deutsch)
+
+## 1.8.3 – Shift + R mit TM Real Walk, nochmal
+
+### Behoben
+- **Der Absturz mit TM Real Walk (Shift + R) war in 1.8.2 wieder da:** Auf manchen PCs legt Direct3D die Funktionstabelle des Spiels nicht in d3d11.dll ab, sondern in eigenem Speicher – genau wie TM Real Walk seine eigene Tabelle. 1.8.2 hat „am selben Ort wie die erste Tabelle“ für Direct3D gehalten, sich also wieder in die Tabelle von TM Real Walk eingehängt, und das Spiel stürzte ab. Jetzt zählt nur noch, was in der Tabelle steht: Eingehängt wird nur, wo für OMSetRenderTargets die Funktion von Direct3D selbst steht.
+- **Der Schutz gegen einen Kreis greift jetzt in jeder Reihenfolge:** Ein Aufruf, der innerhalb der eigenen Kette wieder beim Radio ankommt, geht immer an eine Tabelle weiter, die in dieser Kette noch nicht benutzt wurde (die Funktionen von Direct3D zuerst) – vorher konnte er wieder dieselbe erwischen.
+
+### Update-Hinweise
+- `realistic-radio.dll` im Ordner `plugins` ersetzen. Die Add-ons bleiben, wie sie sind (seit 1.8.0 unverändert).
 
 ## 1.8.2 – In-Cab-Display mit TM Real Walk
 
