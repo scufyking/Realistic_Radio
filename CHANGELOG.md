@@ -2,6 +2,14 @@
 
 **English** · [Deutsch](#changelog-deutsch)
 
+## 1.8.2 – In-cab screen with TM Real Walk
+
+### Fixed
+- **The in-cab screen stayed empty with TM Real Walk (1.8.1):** when TM Real Walk puts its own method table over Direct3D's right at the start of the game, 1.8.1 left that table alone completely - the radio's page, the phone and Scufy OS were not drawn on the navigation screen. The radio now hooks such a table whenever OMSetRenderTargets in it is still Direct3D's own function (then nothing can go round in a circle); only a function of another tool there is left alone, as in 1.8.1.
+
+### Upgrade notes
+- Replace `realistic-radio.dll` in the `plugins` folder. The add-ons stay as they are (no change since 1.8.0).
+
 ## 1.8.1 – Crash with TM Real Walk
 
 ### Fixed
@@ -358,6 +366,14 @@
 
 <a id="changelog-deutsch"></a>
 # Changelog (Deutsch)
+
+## 1.8.2 – In-Cab-Display mit TM Real Walk
+
+### Behoben
+- **Das In-Cab-Display blieb mit TM Real Walk leer (1.8.1):** Legt TM Real Walk seine eigene Funktionstabelle gleich beim Spielstart über die von Direct3D, hat 1.8.1 diese Tabelle ganz in Ruhe gelassen – Radio-Seite, Handy und Scufy OS wurden dann nicht aufs Navi gezeichnet. Das Radio hängt sich jetzt in so eine Tabelle ein, wenn dort für OMSetRenderTargets noch die Funktion von Direct3D selbst steht (dann kann sich kein Kreis bilden); nur eine Funktion eines anderen Tools dort bleibt wie in 1.8.1 unberührt.
+
+### Update-Hinweise
+- `realistic-radio.dll` im Ordner `plugins` ersetzen. Die Add-ons bleiben, wie sie sind (seit 1.8.0 unverändert).
 
 ## 1.8.1 – Absturz mit TM Real Walk
 

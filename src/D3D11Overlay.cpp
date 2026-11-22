@@ -646,18 +646,26 @@ void HookGameContext(IDXGISwapChain* sc) {
         void** cvt = *(void***)c;
         bool known = false;
         for (int i = 0; i < g_nVts.load(); ++i) if (g_vts[i].vt == cvt) { known = true; g_baseVt = i; }
-        // 1.8.1: only Direct3D's own tables (in a d3d11.dll). A table of another tool (TM Real Walk puts its own over
-        // Direct3D's in the cab) forwards its calls through Direct3D's table and our hook there: hooking it, too, made
-        // the two call each other without end - the game crashed (stack overflow).
+        // 1.8.1: Direct3D's own tables (in a d3d11.dll), and tables of other tools only where our two slots still hold
+        // Direct3D's functions. A tool's own function there (TM Real Walk puts its own table over Direct3D's in the cab)
+        // forwards through Direct3D's table and our hook in it: hooking that, too, made the two call each other without
+        // end - the game crashed (stack overflow).
         static void* foreignVt[8] = {}; static int nForeign = 0;   // tables of other tools seen (checked once each)
         bool foreign = false;
         for (int i = 0; i < nForeign && !known; ++i) if (foreignVt[i] == cvt) foreign = true;
+        bool outside = false;   // a table outside d3d11.dll, but with Direct3D's own functions in our two slots
         if (!known && !foreign) {
+            auto isD3d11 = [](const std::wstring& path) {
+                size_t slash = path.find_last_of(L"\\/");
+                std::wstring base = slash == std::wstring::npos ? path : path.substr(slash + 1);
+                return _wcsicmp(base.c_str(), L"d3d11.dll") == 0;
+            };
             std::wstring mod = ModulePathOf(cvt);
-            size_t slash = mod.find_last_of(L"\\/");
-            std::wstring base = slash == std::wstring::npos ? mod : mod.substr(slash + 1);
-            foreign = _wcsicmp(base.c_str(), L"d3d11.dll") != 0 &&
-                      !(g_nVts.load() > 0 && ModulePathOf(g_vts[0].vt) == mod);
+            outside = !isD3d11(mod) && !(g_nVts.load() > 0 && ModulePathOf(g_vts[0].vt) == mod);
+            // 1.8.1: such a table is hooked only when OMSetRenderTargets in it is still Direct3D's own function (then
+            // our hook goes straight on to Direct3D). A function of another tool there (one that forwards through
+            // Direct3D's table and our hook in it) is left alone - hooking it made the two call each other without end.
+            foreign = outside && !(isD3d11(ModulePathOf(cvt[33])) && isD3d11(ModulePathOf(cvt[34])));
             if (foreign) {
                 if (nForeign < 8) foreignVt[nForeign++] = cvt;
                 Log::Write("Screen: the game's render context uses a method table of another tool now (%s, its OMSetRenderTargets in %s, "
@@ -670,7 +678,8 @@ void HookGameContext(IDXGISwapChain* sc) {
             if (PatchSlot(cvt, 33, (void*)&HookOMSetRT, (void**)&h.rt) && PatchSlot(cvt, 34, (void*)&HookOMSetRTUAV, (void**)&h.rtuav)) {
                 const int idx = g_nVts.load();
                 g_vts[idx] = h; ++g_nVts; g_baseVt = idx; g_screenHooked = true;
-                Log::Write("Screen: hooked the game's render context #%d (device flags 0x%x)", g_nVts.load(), d->GetCreationFlags());
+                Log::Write("Screen: hooked the game's render context #%d (device flags 0x%x)%s", g_nVts.load(), d->GetCreationFlags(),
+                           outside ? " - its method table lies outside d3d11.dll (e.g. TM Real Walk's own), but OMSetRenderTargets in it is Direct3D's" : "");
                 if (g_detours && !g_presentBehind && !g_detRtTarget && h.rt && h.rtuav) {   // the graphics tool may call these directly, too
                     g_detRtTarget = (void*)h.rt;
                     if (Detour((void*)h.rt, (void*)&DetOMSetRT, g_trampRt, "OMSetRenderTargets") &&
