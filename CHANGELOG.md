@@ -2,6 +2,17 @@
 
 **English** · [Deutsch](#changelog-deutsch)
 
+## 1.8.4 – In-cab screen with Snowymoon / ReShade
+
+### Fixed
+- **The in-cab screen stayed empty with Snowymoon / ReShade as `dxgi.dll` (1.8.3):** such a graphics tool puts a method table of its own over the game's render context before the game's first picture. 1.8.3 left every table of another tool alone (because of TM Real Walk) - here it was the only one, so the radio's page, the phone and Scufy OS were never drawn on the navigation screen (log: "screen hook off, 0 render-target changes seen"). Now a tool's table is hooked when it is the first one the radio sees; the guard of 1.8.3 keeps every call from going round in a circle. TM Real Walk on top of it is still left alone.
+
+### Web-App 1.1.0
+- New app **Browser** with an address bar: back, forward, reload, home, search (Ctrl + L, Alt + ← / →, F5). Spotify keeps playing while you browse. Up to 6 apps in `webapp.json`.
+
+### Upgrade notes
+- Replace `realistic-radio.dll` (and `realistic-radio-webapp.dll` for the browser) in the `plugins` folder.
+
 ## 1.8.3 – Shift + R with TM Real Walk again
 
 ### Fixed
@@ -375,6 +386,17 @@
 
 <a id="changelog-deutsch"></a>
 # Changelog (Deutsch)
+
+## 1.8.4 – In-Cab-Display mit Snowymoon / ReShade
+
+### Behoben
+- **Das In-Cab-Display blieb mit Snowymoon / ReShade als `dxgi.dll` leer (1.8.3):** So ein Grafik-Tool legt seine eigene Funktionstabelle über die des Spiels, noch bevor das erste Bild kommt. 1.8.3 hat Tabellen anderer Tools wegen TM Real Walk immer in Ruhe gelassen – hier war es aber die einzige, also wurden Radio-Seite, Handy und Scufy OS nie aufs Navi gezeichnet (Log: „screen hook off, 0 render-target changes seen“). Jetzt hängt sich das Radio in die Tabelle eines Tools ein, wenn sie die erste ist, die es sieht; der Schutz aus 1.8.3 verhindert jeden Kreis. TM Real Walk obendrauf bleibt weiter unberührt.
+
+### Web-App 1.1.0
+- Neue App **Browser** mit Adressleiste: Zurück, Vor, Neu laden, Startseite, Suche (Strg + L, Alt + ← / →, F5). Spotify spielt beim Surfen weiter. Bis zu 6 Apps in `webapp.json`.
+
+### Update-Hinweise
+- `realistic-radio.dll` (und für den Browser `realistic-radio-webapp.dll`) im Ordner `plugins` ersetzen.
 
 ## 1.8.3 – Shift + R mit TM Real Walk, nochmal
 

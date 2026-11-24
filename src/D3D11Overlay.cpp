@@ -662,7 +662,8 @@ void HookGameContext(IDXGISwapChain* sc) {
         static void* foreignVt[8] = {}; static int nForeign = 0;   // tables of other tools seen (checked once each)
         bool foreign = false;
         for (int i = 0; i < nForeign && !known; ++i) if (foreignVt[i] == cvt) foreign = true;
-        bool outside = false;   // a table outside d3d11.dll, but with Direct3D's own functions in our two slots
+        bool outside = false;        // a table outside d3d11.dll, but with Direct3D's own functions in our two slots
+        bool firstForeign = false;   // 1.8.4: a tool's table, and no table of Direct3D hooked yet
         if (!known && !foreign) {
             auto isD3d11 = IsD3d11Path;
             std::wstring mod = ModulePathOf(cvt);
@@ -670,7 +671,11 @@ void HookGameContext(IDXGISwapChain* sc) {
             // 1.8.1: such a table is hooked only when OMSetRenderTargets in it is still Direct3D's own function (then
             // our hook goes straight on to Direct3D). A function of another tool there (one that forwards through
             // Direct3D's table and our hook in it) is left alone - hooking it made the two call each other without end.
-            foreign = outside && !(isD3d11(ModulePathOf(cvt[33])) && isD3d11(ModulePathOf(cvt[34])));
+            // 1.8.4: but only while a table of Direct3D is hooked already - the tool forwards to it. Is a tool's table
+            // the first one the radio sees (Snowymoon / ReShade as dxgi.dll puts its own over the context before the
+            // game's first picture), nothing else ever gets the calls: hook it (the guard in ChainVt ends any circle).
+            firstForeign = outside && !(isD3d11(ModulePathOf(cvt[33])) && isD3d11(ModulePathOf(cvt[34]))) && g_nVts.load() == 0;
+            foreign = outside && !(isD3d11(ModulePathOf(cvt[33])) && isD3d11(ModulePathOf(cvt[34]))) && !firstForeign;
             if (foreign) {
                 if (nForeign < 8) foreignVt[nForeign++] = cvt;
                 Log::Write("Screen: the game's render context uses a method table of another tool now (%s, its OMSetRenderTargets in %s, "
@@ -685,7 +690,8 @@ void HookGameContext(IDXGISwapChain* sc) {
                 h.raw = IsD3d11Path(ModulePathOf((void*)h.rt)) && IsD3d11Path(ModulePathOf((void*)h.rtuav));
                 g_vts[idx] = h; ++g_nVts; g_baseVt = idx; g_screenHooked = true;
                 Log::Write("Screen: hooked the game's render context #%d (device flags 0x%x)%s", g_nVts.load(), d->GetCreationFlags(),
-                           outside ? " - its method table lies outside d3d11.dll (e.g. TM Real Walk's own), but OMSetRenderTargets in it is Direct3D's" : "");
+                           firstForeign ? (" - the method table of another tool (" + Narrow(ModulePathOf((void*)h.rt)) + ", e.g. Snowymoon / ReShade) is the first one: hooked, guarded against circles").c_str()
+                           : outside ? " - its method table lies outside d3d11.dll (e.g. TM Real Walk's own), but OMSetRenderTargets in it is Direct3D's" : "");
                 if (g_detours && !g_presentBehind && !g_detRtTarget && h.rt && h.rtuav) {   // the graphics tool may call these directly, too
                     g_detRtTarget = (void*)h.rt;
                     if (Detour((void*)h.rt, (void*)&DetOMSetRT, g_trampRt, "OMSetRenderTargets") &&
